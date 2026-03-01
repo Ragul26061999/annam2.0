@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Authentication</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Debug Authentication</h1>
+    <div id="output"></div>
+    
+    <script>
+        const supabaseUrl = 'https://zusheijhebsmjiyyeiqq.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1c2hlaWpoZWJzbWppeXllaXFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE4MjI0NDAsImV4cCI6MjA2NzM5ODQ0MH0.iwGPaOJPa6OvwX_iA1xvRt5cM72DWfd8Br1pwRTemRc';
+        
+        const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        
+        async function debugAuth() {
+            const output = document.getElementById('output');
+            
+            try {
+                // Check current user
+                const { data: { user }, error: authError } = await supabase.auth.getUser();
+                output.innerHTML += `<p><strong>Auth User:</strong> ${JSON.stringify(user, null, 2)}</p>`;
+                output.innerHTML += `<p><strong>Auth Error:</strong> ${JSON.stringify(authError, null, 2)}</p>`;
+                
+                if (user) {
+                    // Try to get user profile
+                    const { data: userProfile, error: profileError } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('auth_id', user.id)
+                        .single();
+                    
+                    output.innerHTML += `<p><strong>User Profile:</strong> ${JSON.stringify(userProfile, null, 2)}</p>`;
+                    output.innerHTML += `<p><strong>Profile Error:</strong> ${JSON.stringify(profileError, null, 2)}</p>`;
+                }
+                
+            } catch (error) {
+                output.innerHTML += `<p><strong>Error:</strong> ${error.message}</p>`;
+            }
+        }
+        
+        debugAuth();
+    </script>
+</body>
+</html>

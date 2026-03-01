@@ -1,0 +1,293 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── shadcn/ui CSS variable tokens ───────────────────────────────────── */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 199 89% 48%;
+    --radius: 0.75rem;
+  }
+}
+
+/* ─── Base typography — exact match with web app ───────────────────────── */
+@layer base {
+  html {
+    font-family: 'Inter', sans-serif;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    @apply text-gray-900;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1 {
+    @apply text-2xl font-semibold tracking-tight text-gray-900;
+  }
+
+  h2 {
+    @apply text-xl font-semibold tracking-tight text-gray-900;
+  }
+
+  h3 {
+    @apply text-lg font-semibold tracking-tight text-gray-900;
+  }
+}
+
+/* ─── Component classes — exact match with web app ─────────────────────── */
+@layer components {
+
+  /* Buttons */
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700
+           text-white px-4 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300
+           font-medium text-sm backdrop-blur-sm;
+  }
+
+  .btn-secondary {
+    @apply bg-white/80 hover:bg-white/90 text-hospital-700 px-4 py-2 rounded-xl shadow-lg hover:shadow-xl
+           transition-all duration-300 font-medium text-sm border border-hospital-200/50 backdrop-blur-sm;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white/90 rounded-2xl p-6 shadow-lg border border-hospital-100/50 backdrop-blur-sm;
+  }
+
+  .glass-card {
+    @apply bg-white/80 rounded-2xl p-6 shadow-xl border border-white/20 backdrop-blur-md;
+  }
+
+  /* Stat cards */
+  .stat-card {
+    @apply bg-gradient-to-br from-white/90 to-hospital-50/30 rounded-2xl shadow-xl p-6
+           border border-hospital-100/50 backdrop-blur-md hover:shadow-2xl transition-all duration-300;
+  }
+
+  .stat-card:hover {
+    @apply shadow-md transform scale-105 transition-all duration-200;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply bg-white/90 border border-hospital-200/50 rounded-xl px-4 py-3 w-full
+           focus:outline-none focus:ring-2 focus:ring-primary-300/50 focus:border-primary-400/50
+           transition-all duration-300 text-sm backdrop-blur-sm;
+  }
+
+  /* Badges */
+  .badge {
+    @apply px-2 py-1 rounded-md text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-primary-50 text-primary-700;
+  }
+
+  .badge-success {
+    @apply bg-medical-50 text-medical-700;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-50 text-yellow-700;
+  }
+
+  /* Table rows */
+  .table-row {
+    @apply border-b border-hospital-100 hover:bg-hospital-50 transition-colors;
+  }
+
+  /* Nav links (used in topbar dropdowns) */
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl
+           hover:bg-gradient-to-r hover:from-primary-50/80 hover:to-primary-100/60
+           text-hospital-600 hover:text-primary-700 transition-all duration-300 text-sm font-medium
+           backdrop-blur-sm;
+  }
+
+  .nav-link.active {
+    @apply bg-gradient-to-r from-primary-100/90 to-primary-200/70
+           text-primary-700 shadow-lg border border-primary-200/50 backdrop-blur-md;
+  }
+
+  /* Sidebar item (kept for dropdowns inside topbar) */
+  .sidebar-item {
+    @apply flex items-center space-x-3 px-4 py-3 text-hospital-700
+           hover:bg-gradient-to-r hover:from-primary-50/80 hover:to-primary-100/60
+           hover:text-primary-700 rounded-xl transition-all duration-300 backdrop-blur-sm;
+  }
+
+  .sidebar-item.active {
+    @apply bg-gradient-to-r from-primary-100/90 to-primary-200/70
+           text-primary-700 font-semibold shadow-lg border border-primary-200/50 backdrop-blur-md;
+  }
+
+  /* Glassmorphism helpers */
+  .glass-bg {
+    @apply bg-gradient-to-br from-hospital-50/40 to-white/60 backdrop-blur-xl;
+  }
+
+  .glass-sidebar {
+    @apply bg-gradient-to-b from-white/95 to-hospital-50/80 backdrop-blur-xl border-r border-hospital-100/50;
+  }
+
+  /* Gradient helpers */
+  .gradient-primary {
+    @apply bg-gradient-to-r from-primary-400 to-primary-500;
+  }
+
+  .gradient-medical {
+    @apply bg-gradient-to-r from-medical-400 to-medical-500;
+  }
+
+  .gradient-primary-soft {
+    @apply bg-gradient-to-r from-primary-100/80 to-primary-200/60;
+  }
+
+  .gradient-primary-hover {
+    @apply hover:bg-gradient-to-r hover:from-primary-500 hover:to-primary-600;
+  }
+
+  /* Neu icon */
+  .neu-icon {
+    @apply h-10 w-10 rounded-xl flex items-center justify-center
+           bg-gradient-to-br from-white/90 to-gray-50/80 shadow-lg transition-all duration-300
+           backdrop-blur-sm;
+  }
+
+  /* Hide scrollbar util */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Premium login */
+  .premium-input {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .premium-button {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .premium-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+
+  .premium-button:hover::before {
+    left: 100%;
+  }
+
+  .premium-button:active {
+    transform: scale(0.98);
+  }
+}
+
+/* ─── Custom Animations ─────────────────────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.6; }
+  50%       { transform: translateY(-20px) rotate(180deg); opacity: 1; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80%      { transform: translateX(5px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.05); }
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float        { animation: float 3s ease-in-out infinite; }
+.animate-shake        { animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+.animate-pulse-glow   { animation: pulse-glow 2s ease-in-out infinite; }
+.animate-gradient     { background-size: 400% 400%; animation: gradient-shift 3s ease infinite; }
+.animate-slide-down   { animation: slide-down 0.15s ease-out; }
+
+/* ─── Custom scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(241, 245, 249, 0.8); border-radius: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.6); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.8); }
+
+/* ─── Print styles ──────────────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+}
+
+/* ─── Topbar-specific styles ────────────────────────────────────────────── */
+/* The topbar dropdown menu animation */
+.topbar-menu {
+  @apply absolute top-full left-0 mt-1 min-w-[200px] rounded-xl border border-hospital-200/50
+         bg-white/95 backdrop-blur-xl shadow-xl z-50 py-1.5 animate-slide-down;
+}
+
+.topbar-menu-item {
+  @apply flex items-center gap-2.5 px-3.5 py-2 text-sm text-hospital-700
+         hover:bg-gradient-to-r hover:from-primary-50/80 hover:to-primary-100/50
+         hover:text-primary-700 cursor-pointer transition-all duration-150 mx-1 rounded-lg;
+}
+
+.topbar-menu-item.active {
+  @apply bg-gradient-to-r from-primary-100/90 to-primary-200/60 text-primary-700 font-medium;
+}
+
+/* Topbar sync status dot */
+.sync-dot {
+  @apply h-2 w-2 rounded-full;
+}
+.sync-dot-synced  { @apply bg-success-500; }
+.sync-dot-syncing { @apply bg-warning-400 animate-pulse; }
+.sync-dot-offline { @apply bg-danger-400; }

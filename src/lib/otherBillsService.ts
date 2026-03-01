@@ -1,0 +1,658 @@
+import { supabase } from './supabase';
+import type { OtherBills, OtherBillPayments } from '../types/database';
+
+export type ChargeCategory = string;
+
+export type PatientType = 'IP' | 'OP' | 'Emergency' | 'General';
+
+export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'cancelled';
+
+export interface OtherBillChargeCategory {
+  value: string;
+  label: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface OtherBillItem {
+  id?: string;
+  charge_category: ChargeCategory;
+  charge_description: string;
+  quantity: number;
+  unit_price: number;
+  discount_percent?: number;
+  tax_percent?: number;
+  sort_order?: number;
+}
+
+export interface OtherBillFormData {
+  patient_id?: string;
+  patient_type: PatientType;
+  patient_name: string;
+  patient_phone?: string;
+  items: OtherBillItem[];
+  reference_number?: string;
+  remarks?: string;
+  bed_allocation_id?: string;
+  encounter_id?: string;
+}
+
+export type OtherBillWithPatient = OtherBills['Row'] & {
+  patient?: {
+    id: string;
+    patient_id: string;
+    name: string;
+    phone: string;
+  } | null;
+  created_by_user?: {
+    name: string;
+    employee_id: string;
+  } | null;
+  items?: OtherBillItem[];
+};
+
+export const CHARGE_CATEGORIES: { value: string; label: string; description: string }[] = [
+  { value: 'nursing_charges', label: 'Nursing Charges', description: 'Nursing care and monitoring fees' },
+  { value: 'attendant_charges', label: 'Attendant Charges', description: 'Patient attendant service fees' },
+  { value: 'medical_equipment', label: 'Medical Equipment', description: 'Equipment rental or usage charges' },
+  { value: 'ambulance_service', label: 'Ambulance Service', description: 'Ambulance transportation charges' },
+  { value: 'special_procedures', label: 'Special Procedures', description: 'Special medical procedure charges' },
+  { value: 'dietary_charges', label: 'Dietary Charges', description: 'Special diet and meal charges' },
+  { value: 'laundry_service', label: 'Laundry Service', description: 'Linen and laundry charges' },
+  { value: 'accommodation_extra', label: 'Extra Accommodation', description: 'Additional room/bed charges' },
+  { value: 'mortuary_charges', label: 'Mortuary Charges', description: 'Mortuary and preservation charges' },
+  { value: 'certificate_charges', label: 'Certificate Fees', description: 'Medical certificate and report fees' },
+  { value: 'photocopying', label: 'Photocopying', description: 'Document photocopying charges' },
+  { value: 'misc_supplies', label: 'Miscellaneous Supplies', description: 'Other medical supplies' },
+  { value: 'other', label: 'Other', description: 'Other miscellaneous charges' },
+];
+
+export async function getOtherBillChargeCategories(): Promise<OtherBillChargeCategory[]> {
+  try {
+    const { data, error } = await supabase
+      .from('other_bill_charge_categories')
+      .select('value,label,description,is_active,sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('label', { ascending: true });
+
+    if (error) {
+      console.warn('Error fetching other bill charge categories from DB, using fallback:', error);
+      return CHARGE_CATEGORIES.map((c, idx) => ({
+        value: c.value,
+        label: c.label,
+        description: c.description,
+        is_active: true,
+        sort_order: idx + 1,
+      }));
+    }
+
+    if (!data || data.length === 0) {
+      return CHARGE_CATEGORIES.map((c, idx) => ({
+        value: c.value,
+        label: c.label,
+        description: c.description,
+        is_active: true,
+        sort_order: idx + 1,
+      }));
+    }
+
+    return data as OtherBillChargeCategory[];
+  } catch (error) {
+    console.warn('Exception fetching other bill charge categories, using fallback:', error);
+    return CHARGE_CATEGORIES.map((c, idx) => ({
+      value: c.value,
+      label: c.label,
+      description: c.description,
+      is_active: true,
+      sort_order: idx + 1,
+    }));
+  }
+}
+
+export async function getActiveBedAllocationForPatient(patientId: string): Promise<{ id: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('bed_allocations')
+      .select('id')
+      .eq('patient_id', patientId)
+      .eq('status', 'active')
+      .is('discharge_date', null)
+      .order('admission_date', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.warn('Error fetching active bed allocation:', error);
+      return null;
+    }
+
+    if (!data || data.length === 0) return null;
+    return { id: data[0].id };
+  } catch (error) {
+    console.warn('Exception fetching active bed allocation:', error);
+    return null;
+  }
+}
+
+export async function generateOtherBillNumber(): Promise<string> {
+  try {
+    const { data, error } = await supabase.rpc('generate_other_bill_number');
+    
+    if (error) {
+      console.error('Error generating other bill number:', error);
+      const yearShort = new Date().getFullYear().toString().slice(-2);
+      const randomNum = Math.floor(Math.random() * 90000) + 10000;
+      return `OB${yearShort}${randomNum}`;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Exception generating other bill number:', error);
+    const yearShort = new Date().getFullYear().toString().slice(-2);
+    const randomNum = Math.floor(Math.random() * 90000) + 10000;
+    return `OB${yearShort}${randomNum}`;
+  }
+}
+
+function calculateBillAmounts(formData: OtherBillFormData) {
+  let totalSubtotal = 0;
+  let totalDiscountAmount = 0;
+  let totalTaxAmount = 0;
+  let totalAmount = 0;
+
+  formData.items.forEach((item) => {
+    const quantity = item.quantity || 1;
+    const unitPrice = item.unit_price || 0;
+    const discountPercent = item.discount_percent || 0;
+    const taxPercent = item.tax_percent || 0;
+
+    const subtotal = quantity * unitPrice;
+    const discountAmount = (subtotal * discountPercent) / 100;
+    const afterDiscount = subtotal - discountAmount;
+    const taxAmount = (afterDiscount * taxPercent) / 100;
+    const itemTotal = afterDiscount + taxAmount;
+
+    totalSubtotal += subtotal;
+    totalDiscountAmount += discountAmount;
+    totalTaxAmount += taxAmount;
+    totalAmount += itemTotal;
+  });
+
+  const balanceAmount = totalAmount;
+
+  return {
+    subtotal: totalSubtotal,
+    discount_amount: totalDiscountAmount,
+    tax_amount: totalTaxAmount,
+    total_amount: totalAmount,
+    balance_amount: balanceAmount,
+  };
+}
+
+function calculateItemAmounts(item: OtherBillItem) {
+  const quantity = item.quantity || 1;
+  const unitPrice = item.unit_price || 0;
+  const discountPercent = item.discount_percent || 0;
+  const taxPercent = item.tax_percent || 0;
+
+  const subtotal = quantity * unitPrice;
+  const discountAmount = (subtotal * discountPercent) / 100;
+  const afterDiscount = subtotal - discountAmount;
+  const taxAmount = (afterDiscount * taxPercent) / 100;
+  const totalAmount = afterDiscount + taxAmount;
+
+  return {
+    subtotal,
+    discount_amount: discountAmount,
+    tax_amount: taxAmount,
+    total_amount: totalAmount,
+  };
+}
+
+export async function createOtherBill(
+  formData: OtherBillFormData,
+  userId?: string
+): Promise<OtherBills['Row']> {
+  try {
+    let normalizedFormData = { ...formData };
+    if (normalizedFormData.patient_id) {
+      const activeAllocation = await getActiveBedAllocationForPatient(normalizedFormData.patient_id);
+      if (activeAllocation) {
+        normalizedFormData = {
+          ...normalizedFormData,
+          patient_type: 'IP',
+          bed_allocation_id: activeAllocation.id,
+        };
+      }
+    }
+
+    const billNumber = await generateOtherBillNumber();
+    const amounts = calculateBillAmounts(normalizedFormData);
+
+    const billData: any = {
+      bill_number: billNumber,
+      bill_date: new Date().toISOString(),
+      patient_id: normalizedFormData.patient_id || null,
+      patient_type: normalizedFormData.patient_type,
+      patient_name: normalizedFormData.patient_name,
+      patient_phone: normalizedFormData.patient_phone || null,
+      // Set main bill fields from first item for backward compatibility
+      charge_category: normalizedFormData.items[0]?.charge_category || 'other',
+      charge_description: normalizedFormData.items[0]?.charge_description || 'Multiple items',
+      quantity: normalizedFormData.items.length,
+      unit_price: amounts.total_amount / normalizedFormData.items.length,
+      discount_percent: 0,
+      discount_amount: amounts.discount_amount,
+      subtotal: amounts.subtotal,
+      tax_percent: 0,
+      tax_amount: amounts.tax_amount,
+      total_amount: amounts.total_amount,
+      payment_status: 'pending',
+      paid_amount: 0,
+      balance_amount: amounts.balance_amount,
+      reference_number: normalizedFormData.reference_number || null,
+      remarks: normalizedFormData.remarks || null,
+      bed_allocation_id: normalizedFormData.bed_allocation_id || null,
+      encounter_id: normalizedFormData.encounter_id || null,
+      status: 'active',
+      // Remove created_by and updated_by to avoid foreign key constraints
+    };
+
+    const { data, error } = await supabase
+      .from('other_bills')
+      .insert([billData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating other bill:', error);
+      throw new Error(`Failed to create other bill: ${error.message}`);
+    }
+
+    // Insert bill items
+    const itemsToInsert = normalizedFormData.items.map((item, index) => ({
+      bill_id: data.id,
+      charge_category: item.charge_category,
+      charge_description: item.charge_description,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      discount_percent: item.discount_percent || 0,
+      tax_percent: item.tax_percent || 0,
+      sort_order: index,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('other_bill_items')
+      .insert(itemsToInsert);
+
+    if (itemsError) {
+      console.error('Error creating bill items:', itemsError);
+      // Rollback the bill creation
+      await supabase.from('other_bills').delete().eq('id', data.id);
+      throw new Error(`Failed to create bill items: ${itemsError.message}`);
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Exception creating other bill:', error);
+    throw error;
+  }
+}
+
+export async function getOtherBills(filters?: {
+  patient_id?: string;
+  patient_type?: PatientType;
+  payment_status?: PaymentStatus;
+  charge_category?: ChargeCategory;
+  from_date?: string;
+  to_date?: string;
+  status?: string;
+}): Promise<OtherBillWithPatient[]> {
+  try {
+    console.log('getOtherBills called with filters:', filters);
+    
+    let query = supabase
+      .from('other_bills')
+      .select(`
+        *,
+        patient:patients(id, patient_id, name, phone),
+        created_by_user:created_by(name, employee_id),
+        items:other_bill_items(*)
+      `)
+      .order('bill_date', { ascending: false });
+
+    if (filters?.patient_id) {
+      query = query.eq('patient_id', filters.patient_id);
+    }
+
+    if (filters?.patient_type) {
+      query = query.eq('patient_type', filters.patient_type);
+    }
+
+    if (filters?.payment_status) {
+      query = query.eq('payment_status', filters.payment_status);
+    }
+
+    if (filters?.charge_category) {
+      query = query.eq('charge_category', filters.charge_category);
+    }
+
+    if (filters?.status) {
+      query = query.eq('status', filters.status);
+    } else {
+      query = query.eq('status', 'active');
+    }
+
+    if (filters?.from_date) {
+      query = query.gte('bill_date', filters.from_date);
+    }
+
+    if (filters?.to_date) {
+      query = query.lte('bill_date', filters.to_date);
+    }
+
+    console.log('Executing Supabase query...');
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Supabase error fetching other bills:', error);
+      throw new Error(`Failed to fetch other bills: ${error.message}`);
+    }
+
+    console.log('Successfully fetched other bills:', data);
+    return data as OtherBillWithPatient[];
+  } catch (error) {
+    console.error('Exception fetching other bills:', error);
+    throw error;
+  }
+}
+
+export async function getOtherBillById(billId: string): Promise<OtherBillWithPatient | null> {
+  try {
+    const { data, error } = await supabase
+      .from('other_bills')
+      .select(`
+        *,
+        patient:patients(id, patient_id, name, phone),
+        created_by_user:created_by(name, employee_id),
+        items:other_bill_items(*)
+      `)
+      .eq('id', billId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching other bill:', error);
+      throw new Error(`Failed to fetch other bill: ${error.message}`);
+    }
+
+    return data as OtherBillWithPatient;
+  } catch (error) {
+    console.error('Exception fetching other bill:', error);
+    return null;
+  }
+}
+
+export async function updateOtherBill(
+  billId: string,
+  updates: Partial<OtherBillFormData>,
+  userId?: string
+): Promise<OtherBills['Row']> {
+  try {
+    const currentBill = await getOtherBillById(billId);
+    if (!currentBill) {
+      throw new Error('Bill not found');
+    }
+
+    // For now, we only support updating patient info and remarks, not items
+    // Items updates would require more complex logic
+    const updateData: any = {
+      patient_id: updates.patient_id ?? currentBill.patient_id,
+      patient_type: updates.patient_type ?? currentBill.patient_type,
+      patient_name: updates.patient_name ?? currentBill.patient_name,
+      patient_phone: updates.patient_phone ?? currentBill.patient_phone,
+      reference_number: updates.reference_number ?? currentBill.reference_number,
+      remarks: updates.remarks ?? currentBill.remarks,
+      bed_allocation_id: updates.bed_allocation_id ?? currentBill.bed_allocation_id,
+      encounter_id: updates.encounter_id ?? currentBill.encounter_id,
+    };
+
+    // If items are provided, recalculate totals
+    if (updates.items) {
+      const tempFormData: OtherBillFormData = {
+        patient_id: updateData.patient_id || undefined,
+        patient_type: updateData.patient_type,
+        patient_name: updateData.patient_name,
+        patient_phone: updateData.patient_phone || undefined,
+        items: updates.items,
+        reference_number: updateData.reference_number || undefined,
+        remarks: updateData.remarks || undefined,
+        bed_allocation_id: updateData.bed_allocation_id || undefined,
+        encounter_id: updateData.encounter_id || undefined,
+      };
+      
+      const amounts = calculateBillAmounts(tempFormData);
+      
+      Object.assign(updateData, {
+        discount_amount: amounts.discount_amount,
+        subtotal: amounts.subtotal,
+        tax_amount: amounts.tax_amount,
+        total_amount: amounts.total_amount,
+        balance_amount: amounts.total_amount - currentBill.paid_amount,
+        // Update main bill fields for backward compatibility
+        charge_category: updates.items[0]?.charge_category || currentBill.charge_category,
+        charge_description: updates.items[0]?.charge_description || currentBill.charge_description,
+        quantity: updates.items.length,
+        unit_price: amounts.total_amount / updates.items.length,
+      });
+
+      // Update items
+      await supabase.from('other_bill_items').delete().eq('bill_id', billId);
+      
+      const itemsToInsert = updates.items.map((item, index) => ({
+        bill_id: billId,
+        charge_category: item.charge_category,
+        charge_description: item.charge_description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_percent: item.discount_percent || 0,
+        tax_percent: item.tax_percent || 0,
+        sort_order: index,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('other_bill_items')
+        .insert(itemsToInsert);
+
+      if (itemsError) {
+        console.error('Error updating bill items:', itemsError);
+        throw new Error(`Failed to update bill items: ${itemsError.message}`);
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('other_bills')
+      .update(updateData)
+      .eq('id', billId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating other bill:', error);
+      throw new Error(`Failed to update other bill: ${error.message}`);
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Exception updating other bill:', error);
+    throw error;
+  }
+}
+
+export async function recordPayment(
+  billId: string,
+  paymentData: {
+    payment_method: OtherBillPayments['Row']['payment_method'];
+    payment_amount: number;
+    transaction_reference?: string;
+    bank_name?: string;
+    cheque_number?: string;
+    cheque_date?: string;
+    notes?: string;
+  },
+  userId?: string
+): Promise<void> {
+  try {
+    const bill = await getOtherBillById(billId);
+    if (!bill) {
+      throw new Error('Bill not found');
+    }
+
+    const paymentRecord: any = {
+      bill_id: billId,
+      payment_date: new Date().toISOString(),
+      payment_method: paymentData.payment_method,
+      payment_amount: paymentData.payment_amount,
+      transaction_reference: paymentData.transaction_reference || null,
+      bank_name: paymentData.bank_name || null,
+      cheque_number: paymentData.cheque_number || null,
+      cheque_date: paymentData.cheque_date || null,
+      notes: paymentData.notes || null,
+      // Remove received_by to avoid foreign key constraints
+    };
+
+    const { error: paymentError } = await supabase
+      .from('other_bill_payments')
+      .insert([paymentRecord]);
+
+    if (paymentError) {
+      console.error('Error recording payment:', paymentError);
+      throw new Error(`Failed to record payment: ${paymentError.message}`);
+    }
+
+    const newPaidAmount = bill.paid_amount + paymentData.payment_amount;
+    const newBalanceAmount = bill.total_amount - newPaidAmount;
+    
+    let newPaymentStatus: PaymentStatus = 'pending';
+    if (newPaidAmount >= bill.total_amount) {
+      newPaymentStatus = 'paid';
+    } else if (newPaidAmount > 0) {
+      newPaymentStatus = 'partial';
+    }
+
+    const { error: updateError } = await supabase
+      .from('other_bills')
+      .update({
+        paid_amount: newPaidAmount,
+        balance_amount: Math.max(0, newBalanceAmount),
+        payment_status: newPaymentStatus,
+        // Remove updated_by to avoid foreign key constraints
+      })
+      .eq('id', billId);
+
+    if (updateError) {
+      console.error('Error updating bill payment status:', updateError);
+      throw new Error(`Failed to update bill: ${updateError.message}`);
+    }
+  } catch (error) {
+    console.error('Exception recording payment:', error);
+    throw error;
+  }
+}
+
+export async function getPaymentHistory(billId: string): Promise<OtherBillPayments['Row'][]> {
+  try {
+    const { data, error } = await supabase
+      .from('other_bill_payments')
+      .select(`
+        *,
+        received_by_user:received_by(name, employee_id)
+      `)
+      .eq('bill_id', billId)
+      .order('payment_date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching payment history:', error);
+      throw new Error(`Failed to fetch payment history: ${error.message}`);
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Exception fetching payment history:', error);
+    return [];
+  }
+}
+
+export async function cancelOtherBill(billId: string, userId?: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('other_bills')
+      .update({
+        status: 'cancelled',
+        payment_status: 'cancelled',
+        // Remove updated_by to avoid foreign key constraints
+      })
+      .eq('id', billId);
+
+    if (error) {
+      console.error('Error cancelling bill:', error);
+      throw new Error(`Failed to cancel bill: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Exception cancelling bill:', error);
+    throw error;
+  }
+}
+
+export async function getOtherBillsStats(): Promise<{
+  total_bills: number;
+  total_amount: number;
+  paid_amount: number;
+  pending_amount: number;
+  by_category: Record<string, { count: number; amount: number }>;
+  by_patient_type: Record<string, { count: number; amount: number }>;
+}> {
+  try {
+    const { data: bills, error } = await supabase
+      .from('other_bills')
+      .select('*')
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('Error fetching stats:', error);
+      throw new Error(`Failed to fetch stats: ${error.message}`);
+    }
+
+    const stats = {
+      total_bills: bills?.length || 0,
+      total_amount: 0,
+      paid_amount: 0,
+      pending_amount: 0,
+      by_category: {} as Record<string, { count: number; amount: number }>,
+      by_patient_type: {} as Record<string, { count: number; amount: number }>,
+    };
+
+    bills?.forEach((bill: any) => {
+      stats.total_amount += bill.total_amount;
+      stats.paid_amount += bill.paid_amount;
+      stats.pending_amount += bill.balance_amount;
+
+      if (!stats.by_category[bill.charge_category]) {
+        stats.by_category[bill.charge_category] = { count: 0, amount: 0 };
+      }
+      stats.by_category[bill.charge_category].count += 1;
+      stats.by_category[bill.charge_category].amount += bill.total_amount;
+
+      if (!stats.by_patient_type[bill.patient_type]) {
+        stats.by_patient_type[bill.patient_type] = { count: 0, amount: 0 };
+      }
+      stats.by_patient_type[bill.patient_type].count += 1;
+      stats.by_patient_type[bill.patient_type].amount += bill.total_amount;
+    });
+
+    return stats;
+  } catch (error) {
+    console.error('Exception fetching stats:', error);
+    throw error;
+  }
+}
