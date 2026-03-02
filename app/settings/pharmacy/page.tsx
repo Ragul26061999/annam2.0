@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, Edit3, Package, ArrowLeft, CheckSquare, Trash2, Loader2, FileSpreadsheet, Users } from 'lucide-react';
+import { Upload, Edit3, Package, ArrowLeft, CheckSquare, Trash2, Loader2, FileSpreadsheet, Users, LayoutGrid } from 'lucide-react';
 
 const PharmacySettingsPage = () => {
   const router = useRouter();
@@ -16,6 +16,14 @@ const PharmacySettingsPage = () => {
       icon: Users,
       color: 'from-teal-500 to-cyan-500',
       href: '/settings/pharmacy/suppliers'
+    },
+    {
+      id: 'overview',
+      title: 'Overview',
+      description: 'Master overview of all medicines with collapsible batch details',
+      icon: LayoutGrid,
+      color: 'from-fuchsia-500 to-pink-500',
+      href: '/settings/pharmacy/overview'
     },
     {
       id: 'upload-medications',
