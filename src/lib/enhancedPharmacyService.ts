@@ -1204,6 +1204,7 @@ export async function getPharmacyBillForReturn(billId: string): Promise<{
         payment_status,
         created_at
       `)
+      .is('bill_type', null)
       .eq('id', billId)
       .single()
 
@@ -1294,6 +1295,7 @@ export async function searchPharmacyBills(searchTerm: string): Promise<any[]> {
         patient_id,
         customer_type
       `)
+      .is('bill_type', null)
       .or(`bill_number.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%,customer_phone.ilike.%${searchTerm}%`)
       .order('created_at', { ascending: false })
       .limit(20)
@@ -1325,6 +1327,7 @@ export async function getRecentBills(limit: number = 5): Promise<any[]> {
         patient_id,
         customer_type
       `)
+      .is('bill_type', null)
       .order('created_at', { ascending: false })
       .limit(limit)
 
