@@ -114,6 +114,15 @@ export default function PharmacyOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  const [editingBatchMedicationId, setEditingBatchMedicationId] = useState<string | null>(null);
+  const [batchDraft, setBatchDraft] = useState<Partial<MedicineBatch> | null>(null);
+  const [batchUnitPriceDraft, setBatchUnitPriceDraft] = useState<{
+    purchase_unit: string;
+    selling_unit: string;
+  } | null>(null);
+  const [savingBatchId, setSavingBatchId] = useState<string | null>(null);
+
   const [medications, setMedications] = useState<Medication[]>([]);
   const [expandedMedicationId, setExpandedMedicationId] = useState<string | null>(null);
   const [batchesByMedicationId, setBatchesByMedicationId] = useState<Record<string, MedicineBatch[]>>({});
@@ -185,6 +194,99 @@ export default function PharmacyOverviewPage() {
   const beginEdit = (m: Medication) => {
     setEditingMedicationId(m.id);
     setDraft({ ...m });
+  };
+
+  const beginBatchEdit = (medicationId: string, b: MedicineBatch) => {
+    setEditingBatchId(b.id);
+    setEditingBatchMedicationId(medicationId);
+    setBatchDraft({ ...b });
+
+    const receivedQty = b.received_quantity || 0;
+    const purchaseUnit =
+      b.purchase_price === null
+        ? ''
+        : receivedQty > 0
+          ? (b.purchase_price / receivedQty).toFixed(2)
+          : String(b.purchase_price);
+    const sellingUnit =
+      b.selling_price === null
+        ? ''
+        : receivedQty > 0
+          ? (b.selling_price / receivedQty).toFixed(2)
+          : String(b.selling_price);
+
+    setBatchUnitPriceDraft({ purchase_unit: purchaseUnit, selling_unit: sellingUnit });
+  };
+
+  const cancelBatchEdit = () => {
+    setEditingBatchId(null);
+    setEditingBatchMedicationId(null);
+    setBatchDraft(null);
+    setBatchUnitPriceDraft(null);
+  };
+
+  const saveBatchEdit = async () => {
+    if (!editingBatchId || !editingBatchMedicationId || !batchDraft) return;
+    if (!batchDraft.batch_number || !String(batchDraft.batch_number).trim()) {
+      alert('Batch number is required.');
+      return;
+    }
+
+    try {
+      setSavingBatchId(editingBatchId);
+
+      const receivedQty = Number(batchDraft.received_quantity || 0);
+      const purchaseUnitRaw = batchUnitPriceDraft?.purchase_unit ?? '';
+      const sellingUnitRaw = batchUnitPriceDraft?.selling_unit ?? '';
+      const purchaseUnit = purchaseUnitRaw === '' ? null : Number(purchaseUnitRaw);
+      const sellingUnit = sellingUnitRaw === '' ? null : Number(sellingUnitRaw);
+
+      if (purchaseUnit !== null && (Number.isNaN(purchaseUnit) || purchaseUnit < 0)) {
+        alert('Purchase unit price must be a valid non-negative number.');
+        return;
+      }
+      if (sellingUnit !== null && (Number.isNaN(sellingUnit) || sellingUnit < 0)) {
+        alert('MRP unit price must be a valid non-negative number.');
+        return;
+      }
+
+      const purchaseTotal =
+        purchaseUnit === null ? null : (receivedQty > 0 ? purchaseUnit * receivedQty : purchaseUnit);
+      const sellingTotal =
+        sellingUnit === null ? null : (receivedQty > 0 ? sellingUnit * receivedQty : sellingUnit);
+
+      const payload = {
+        batch_number: String(batchDraft.batch_number).trim(),
+        purchase_price: purchaseTotal,
+        selling_price: sellingTotal,
+        manufacturing_date: batchDraft.manufacturing_date ?? null,
+        expiry_date: batchDraft.expiry_date ?? null,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('medicine_batches')
+        .update(payload)
+        .eq('id', editingBatchId);
+      if (error) throw error;
+
+      setBatchesByMedicationId((prev) => {
+        const current = prev[editingBatchMedicationId] || [];
+        return {
+          ...prev,
+          [editingBatchMedicationId]: current.map((row) =>
+            row.id === editingBatchId ? ({ ...(row as any), ...(payload as any) } as MedicineBatch) : row
+          )
+        };
+      });
+
+      cancelBatchEdit();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update batch. Please try again.');
+    } finally {
+      setSavingBatchId(null);
+    }
   };
 
   const cancelEdit = () => {
@@ -305,6 +407,7 @@ export default function PharmacyOverviewPage() {
               const stockLoaded = m.id in batchesByMedicationId;
               const stockStatus = stockLoaded ? getStockStatus(totalStock, m.minimum_stock_level) : null;
               const dosageColor = m.dosage_form ? (DOSAGE_FORM_COLORS[m.dosage_form] ?? DOSAGE_FORM_COLORS['Other']) : null;
+              const hasAnyBatchEditing = Boolean(editingBatchId);
 
               return (
                 <div
@@ -320,6 +423,7 @@ export default function PharmacyOverviewPage() {
                       {/* Expand toggle */}
                       <button
                         onClick={() => toggleExpand(m.id)}
+                        disabled={hasAnyBatchEditing}
                         className={`mt-0.5 shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
                           expanded ? 'bg-fuchsia-100 text-fuchsia-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                         }`}
@@ -514,7 +618,7 @@ export default function PharmacyOverviewPage() {
                           <table className="min-w-full text-sm">
                             <thead>
                               <tr className="border-b border-gray-100">
-                                {['Batch No', 'Legacy Code', 'Supplier', 'Received Qty', 'Current Qty', 'Purchase Price', 'MRP', 'Mfg Date', 'Expiry Date', 'Verified', 'Status'].map((h) => (
+                                {['Batch No', 'Legacy Code', 'Supplier', 'Received Qty', 'Current Qty', 'Purchase Price', 'MRP', 'Mfg Date', 'Expiry Date', 'Verified', 'Status', 'Actions'].map((h) => (
                                   <th
                                     key={h}
                                     className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 whitespace-nowrap"
@@ -531,6 +635,8 @@ export default function PharmacyOverviewPage() {
                                   ? Math.min((b.current_quantity / b.received_quantity) * 100, 100)
                                   : 0;
                                 const isExpired = b.expiry_date && new Date(b.expiry_date) < new Date();
+                                const isBatchEditing = editingBatchId === b.id && editingBatchMedicationId === m.id;
+                                const currentDraft = isBatchEditing ? batchDraft : null;
                                 return (
                                   <tr
                                     key={b.id}
@@ -538,7 +644,15 @@ export default function PharmacyOverviewPage() {
                                   >
                                     {/* Batch No */}
                                     <td className="px-4 py-3 font-mono font-semibold text-gray-800 whitespace-nowrap">
-                                      {b.batch_number || '—'}
+                                      {isBatchEditing ? (
+                                        <input
+                                          value={String(currentDraft?.batch_number ?? '')}
+                                          onChange={(e) => setBatchDraft((p) => ({ ...(p || {}), batch_number: e.target.value }))}
+                                          className="w-32 px-2 py-1 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+                                        />
+                                      ) : (
+                                        b.batch_number || '—'
+                                      )}
                                     </td>
 
                                     {/* Legacy code */}
@@ -579,38 +693,101 @@ export default function PharmacyOverviewPage() {
 
                                     {/* Purchase Price */}
                                     <td className="px-4 py-3 whitespace-nowrap text-gray-700">
-                                      {b.purchase_price !== null && b.received_quantity > 0
-                                        ? <span className="font-medium">₹{(b.purchase_price / b.received_quantity).toFixed(2)}</span>
-                                        : b.purchase_price !== null
-                                          ? <span className="font-medium">₹{b.purchase_price.toFixed(2)}</span>
-                                          : <span className="text-gray-300">—</span>
-                                      }
+                                      {isBatchEditing ? (
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={batchUnitPriceDraft?.purchase_unit ?? ''}
+                                          onChange={(e) =>
+                                            setBatchUnitPriceDraft((p) => ({
+                                              purchase_unit: e.target.value,
+                                              selling_unit: p?.selling_unit ?? ''
+                                            }))
+                                          }
+                                          onBlur={(e) => {
+                                            const v = e.target.value;
+                                            if (v && !Number.isNaN(Number(v))) {
+                                              setBatchUnitPriceDraft((p) => ({
+                                                purchase_unit: Number(v).toFixed(2),
+                                                selling_unit: p?.selling_unit ?? ''
+                                              }));
+                                            }
+                                          }}
+                                          className="w-28 px-2 py-1 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+                                        />
+                                      ) : (
+                                        b.purchase_price !== null && b.received_quantity > 0
+                                          ? <span className="font-medium">₹{(b.purchase_price / b.received_quantity).toFixed(2)}</span>
+                                          : b.purchase_price !== null
+                                            ? <span className="font-medium">₹{b.purchase_price.toFixed(2)}</span>
+                                            : <span className="text-gray-300">—</span>
+                                      )}
                                     </td>
 
                                     {/* Selling / MRP */}
                                     <td className="px-4 py-3 whitespace-nowrap">
-                                      {b.selling_price !== null && b.received_quantity > 0
-                                        ? <span className="font-semibold text-emerald-700">₹{(b.selling_price / b.received_quantity).toFixed(2)}</span>
-                                        : b.selling_price !== null
-                                          ? <span className="font-semibold text-emerald-700">₹{b.selling_price.toFixed(2)}</span>
-                                          : <span className="text-gray-300">—</span>
-                                      }
+                                      {isBatchEditing ? (
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={batchUnitPriceDraft?.selling_unit ?? ''}
+                                          onChange={(e) =>
+                                            setBatchUnitPriceDraft((p) => ({
+                                              purchase_unit: p?.purchase_unit ?? '',
+                                              selling_unit: e.target.value
+                                            }))
+                                          }
+                                          onBlur={(e) => {
+                                            const v = e.target.value;
+                                            if (v && !Number.isNaN(Number(v))) {
+                                              setBatchUnitPriceDraft((p) => ({
+                                                purchase_unit: p?.purchase_unit ?? '',
+                                                selling_unit: Number(v).toFixed(2)
+                                              }));
+                                            }
+                                          }}
+                                          className="w-28 px-2 py-1 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+                                        />
+                                      ) : (
+                                        b.selling_price !== null && b.received_quantity > 0
+                                          ? <span className="font-semibold text-emerald-700">₹{(b.selling_price / b.received_quantity).toFixed(2)}</span>
+                                          : b.selling_price !== null
+                                            ? <span className="font-semibold text-emerald-700">₹{b.selling_price.toFixed(2)}</span>
+                                            : <span className="text-gray-300">—</span>
+                                      )}
                                     </td>
 
                                     {/* Mfg Date */}
                                     <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">
-                                      {b.manufacturing_date
-                                        ? new Date(b.manufacturing_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                        : <span className="text-gray-300">—</span>
-                                      }
+                                      {isBatchEditing ? (
+                                        <input
+                                          type="date"
+                                          value={(currentDraft?.manufacturing_date ?? '') || ''}
+                                          onChange={(e) => setBatchDraft((p) => ({ ...(p || {}), manufacturing_date: e.target.value || null }))}
+                                          className="w-[140px] px-2 py-1 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+                                        />
+                                      ) : (
+                                        b.manufacturing_date
+                                          ? new Date(b.manufacturing_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                          : <span className="text-gray-300">—</span>
+                                      )}
                                     </td>
 
                                     {/* Expiry */}
                                     <td className="px-4 py-3 whitespace-nowrap">
-                                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${expiry.color}`}>
-                                        {expiry.icon}
-                                        {expiry.label}
-                                      </span>
+                                      {isBatchEditing ? (
+                                        <input
+                                          type="date"
+                                          value={(currentDraft?.expiry_date ?? '') || ''}
+                                          onChange={(e) => setBatchDraft((p) => ({ ...(p || {}), expiry_date: e.target.value || null }))}
+                                          className="w-[140px] px-2 py-1 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+                                        />
+                                      ) : (
+                                        <span className={`inline-flex items-center gap-1 text-xs font-medium ${expiry.color}`}>
+                                          {expiry.icon}
+                                          {expiry.label}
+                                        </span>
+                                      )}
                                     </td>
 
                                     {/* Verified */}
@@ -631,6 +808,40 @@ export default function PharmacyOverviewPage() {
                                           }`}>{b.status}</span>
                                         : <span className="text-gray-300">—</span>
                                       }
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      {isBatchEditing ? (
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={cancelBatchEdit}
+                                            disabled={savingBatchId === b.id}
+                                            className="h-7 px-2.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            onClick={saveBatchEdit}
+                                            disabled={savingBatchId === b.id}
+                                            className="h-7 px-2.5 text-xs rounded-md bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-60 inline-flex items-center gap-1.5"
+                                          >
+                                            {savingBatchId === b.id
+                                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                              : <Save className="w-3.5 h-3.5" />
+                                            }
+                                            Save
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => beginBatchEdit(m.id, b)}
+                                          disabled={hasAnyBatchEditing}
+                                          className="h-7 px-2.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 inline-flex items-center gap-1.5 disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:border-gray-200"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" /> Edit
+                                        </button>
+                                      )}
                                     </td>
                                   </tr>
                                 );
