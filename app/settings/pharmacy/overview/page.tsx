@@ -23,7 +23,8 @@ import {
   ShieldAlert,
   CheckCircle2,
   XCircle,
-  Info
+  Info,
+  Printer
 } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
 
@@ -160,6 +161,19 @@ export default function PharmacyOverviewPage() {
       }
     };
     fetchAllMedications();
+
+    // Auto-hide sidebar on mount
+    const sidebar = document.querySelector('[class*="sidebar"]') || document.querySelector('aside') || document.querySelector('nav[class*="side"]')
+    if (sidebar && sidebar instanceof HTMLElement) {
+      sidebar.style.display = 'none'
+    }
+    
+    // Restore sidebar on unmount
+    return () => {
+      if (sidebar && sidebar instanceof HTMLElement) {
+        sidebar.style.display = ''
+      }
+    }
   }, []);
 
   const fetchBatches = async (medicationId: string) => {
@@ -257,6 +271,8 @@ export default function PharmacyOverviewPage() {
 
       const payload = {
         batch_number: String(batchDraft.batch_number).trim(),
+        legacy_code: batchDraft.legacy_code ?? null,
+        current_quantity: batchDraft.current_quantity ?? 0,
         purchase_price: purchaseTotal,
         selling_price: sellingTotal,
         manufacturing_date: batchDraft.manufacturing_date ?? null,
@@ -333,6 +349,163 @@ export default function PharmacyOverviewPage() {
     }
     return result;
   }, [batchesByMedicationId]);
+
+  // ─── Print Barcode for Batch ────────────────────────────────────────────────────
+
+  const printBatchBarcode = async (batch: MedicineBatch, medicineName: string) => {
+    try {
+      // Helper function to format expiry date safely
+      const formatExpiryDate = (dateStr: string | null) => {
+        if (!dateStr) return 'N/A'
+        try {
+          // Handle DD-MM-YYYY format
+          if (dateStr.includes('-') && dateStr.split('-').length === 3) {
+            const [day, month, year] = dateStr.split('-')
+            const date = new Date(`${year}-${month}-${day}`)
+            if (isNaN(date.getTime())) return dateStr
+            return date.toLocaleDateString('en-GB')
+          }
+          // Handle ISO format or other formats
+          const date = new Date(dateStr)
+          if (isNaN(date.getTime())) return dateStr
+          return date.toLocaleDateString('en-GB')
+        } catch {
+          return dateStr
+        }
+      }
+
+      const expiryDate = formatExpiryDate(batch.expiry_date)
+      const printDate = new Date().toLocaleDateString('en-GB')
+      const printTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
+      
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) return
+
+      const labelContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Medicine Batch Label</title>
+            <style>
+              @page { 
+                size: 50mm 25mm; 
+                margin: 1mm; 
+              }
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+              body { 
+                font-family: 'Arial', sans-serif;
+                width: 48mm;
+                height: 23mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                padding: 1mm;
+                font-size: 8px;
+                line-height: 1.1;
+                background: white;
+              }
+              .header {
+                text-align: center;
+                font-size: 10px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 1mm;
+              }
+              .batch-info {
+                display: flex;
+                justify-content: space-between;
+                font-size: 6px;
+                color: #000;
+                margin-bottom: 0.8mm;
+              }
+              .barcode-section {
+                text-align: center;
+                margin: 1mm 0;
+                height: 10mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                border: 0.5px solid #ddd;
+                background: #f9f9f9;
+              }
+              #barcode {
+                width: 30mm;
+                height: 10mm;
+                display: block;
+              }
+              .footer {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 6px;
+                color: #000;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">ANNAM HOSPITAL</div>
+            
+            <div class="batch-info">
+              <span>Batch: ${batch.batch_number}</span>
+              <span>Qty: ${batch.current_quantity}</span>
+            </div>
+            
+            <div class="barcode-section">
+              <svg id="barcode"></svg>
+            </div>
+            
+            <div class="footer">
+              <span>Exp: ${expiryDate}</span>
+              <span>Printed: ${printDate} ${printTime}</span>
+            </div>
+
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+            <script>
+              (function() {
+                function render() {
+                  try {
+                    var value = ${JSON.stringify(batch.batch_number)};
+                    var isNumeric = /^\\d+$/.test(value);
+                    var fmt = (isNumeric && value.length === 13) ? 'EAN13' : 'CODE128';
+                    JsBarcode('#barcode', value, {
+                      format: fmt,
+                      displayValue: true,
+                      fontSize: 8,
+                      textMargin: 1,
+                      margin: 2,
+                      lineColor: '#000',
+                      background: '#f9f9f9'
+                    });
+                    setTimeout(function(){ window.print(); window.close(); }, 200);
+                  } catch (e) {
+                    console.error('Barcode render error', e);
+                    setTimeout(function(){ window.print(); window.close(); }, 200);
+                  }
+                }
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                  render();
+                } else {
+                  window.addEventListener('load', render);
+                }
+              })();
+            </script>
+          </body>
+        </html>
+      `
+
+      printWindow.document.write(labelContent)
+      printWindow.document.close()
+      printWindow.focus()
+    } catch (error) {
+      console.error('Error printing batch barcode:', error)
+      alert('Failed to print barcode. Please try again.')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#f8f8fb] p-4 md:p-8">
@@ -618,7 +791,7 @@ export default function PharmacyOverviewPage() {
                           <table className="min-w-full text-sm">
                             <thead>
                               <tr className="border-b border-gray-100">
-                                {['Batch No', 'Legacy Code', 'Supplier', 'Received Qty', 'Current Qty', 'Purchase Price', 'MRP', 'Mfg Date', 'Expiry Date', 'Verified', 'Status', 'Actions'].map((h) => (
+                                {['Batch No', 'Legacy Code', 'Received Qty', 'Current Qty', 'Purchase Price', 'MRP', 'Expiry Date', 'Actions'].map((h) => (
                                   <th
                                     key={h}
                                     className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 whitespace-nowrap"
@@ -657,15 +830,16 @@ export default function PharmacyOverviewPage() {
 
                                     {/* Legacy code */}
                                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">
-                                      {b.legacy_code || '—'}
-                                    </td>
-
-                                    {/* Supplier */}
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                      {b.supplier_name
-                                        ? <span className="inline-flex items-center gap-1 text-gray-700"><Building2 className="w-3 h-3 text-gray-400" />{b.supplier_name}</span>
-                                        : <span className="text-gray-300">—</span>
-                                      }
+                                      {isBatchEditing ? (
+                                        <input
+                                          value={String(currentDraft?.legacy_code ?? '')}
+                                          onChange={(e) => setBatchDraft((p) => ({ ...(p || {}), legacy_code: e.target.value }))}
+                                          className="w-32 px-2 py-1 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+                                          placeholder="Enter legacy code"
+                                        />
+                                      ) : (
+                                        b.legacy_code || '—'
+                                      )}
                                     </td>
 
                                     {/* Received Qty */}
@@ -673,22 +847,32 @@ export default function PharmacyOverviewPage() {
 
                                     {/* Current Qty with mini bar */}
                                     <td className="px-4 py-3 min-w-[100px]">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`font-semibold ${b.current_quantity === 0 ? 'text-red-500' : 'text-gray-800'}`}>
-                                          {b.current_quantity}
-                                        </span>
-                                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden w-12">
-                                          <div
-                                            className={`h-full rounded-full ${
-                                              stockPct === 0 ? 'bg-red-400'
-                                              : stockPct < 30 ? 'bg-orange-400'
-                                              : stockPct < 60 ? 'bg-amber-400'
-                                              : 'bg-emerald-400'
-                                            }`}
-                                            style={{ width: `${stockPct}%` }}
-                                          />
+                                      {isBatchEditing ? (
+                                        <input
+                                          type="number"
+                                          value={currentDraft?.current_quantity ?? ''}
+                                          onChange={(e) => setBatchDraft((p) => ({ ...(p || {}), current_quantity: Number(e.target.value) || 0 }))}
+                                          className="w-20 px-2 py-1 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400 text-center"
+                                          min="0"
+                                        />
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className={`font-semibold ${b.current_quantity === 0 ? 'text-red-500' : 'text-gray-800'}`}>
+                                            {b.current_quantity}
+                                          </span>
+                                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden w-12">
+                                            <div
+                                              className={`h-full rounded-full ${
+                                                stockPct === 0 ? 'bg-red-400'
+                                                : stockPct < 30 ? 'bg-orange-400'
+                                                : stockPct < 60 ? 'bg-amber-400'
+                                                : 'bg-emerald-400'
+                                              }`}
+                                              style={{ width: `${stockPct}%` }}
+                                            />
+                                          </div>
                                         </div>
-                                      </div>
+                                      )}
                                     </td>
 
                                     {/* Purchase Price */}
@@ -757,22 +941,6 @@ export default function PharmacyOverviewPage() {
                                       )}
                                     </td>
 
-                                    {/* Mfg Date */}
-                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">
-                                      {isBatchEditing ? (
-                                        <input
-                                          type="date"
-                                          value={(currentDraft?.manufacturing_date ?? '') || ''}
-                                          onChange={(e) => setBatchDraft((p) => ({ ...(p || {}), manufacturing_date: e.target.value || null }))}
-                                          className="w-[140px] px-2 py-1 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
-                                        />
-                                      ) : (
-                                        b.manufacturing_date
-                                          ? new Date(b.manufacturing_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                          : <span className="text-gray-300">—</span>
-                                      )}
-                                    </td>
-
                                     {/* Expiry */}
                                     <td className="px-4 py-3 whitespace-nowrap">
                                       {isBatchEditing ? (
@@ -788,26 +956,6 @@ export default function PharmacyOverviewPage() {
                                           {expiry.label}
                                         </span>
                                       )}
-                                    </td>
-
-                                    {/* Verified */}
-                                    <td className="px-4 py-3 text-center">
-                                      {b.verified === true
-                                        ? <BadgeCheck className="w-4 h-4 text-emerald-500 mx-auto" />
-                                        : <span className="text-gray-300 text-xs">—</span>
-                                      }
-                                    </td>
-
-                                    {/* Status */}
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                      {b.status
-                                        ? <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                                            b.status.toLowerCase() === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                            : b.status.toLowerCase() === 'expired' ? 'bg-red-50 text-red-700 border-red-200'
-                                            : 'bg-gray-50 text-gray-600 border-gray-200'
-                                          }`}>{b.status}</span>
-                                        : <span className="text-gray-300">—</span>
-                                      }
                                     </td>
 
                                     {/* Actions */}
@@ -834,13 +982,22 @@ export default function PharmacyOverviewPage() {
                                           </button>
                                         </div>
                                       ) : (
-                                        <button
-                                          onClick={() => beginBatchEdit(m.id, b)}
-                                          disabled={hasAnyBatchEditing}
-                                          className="h-7 px-2.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 inline-flex items-center gap-1.5 disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:border-gray-200"
-                                        >
-                                          <Edit className="w-3.5 h-3.5" /> Edit
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => beginBatchEdit(m.id, b)}
+                                            disabled={hasAnyBatchEditing}
+                                            className="h-7 px-2.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 inline-flex items-center gap-1.5 disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:border-gray-200"
+                                          >
+                                            <Edit className="w-3.5 h-3.5" /> Edit
+                                          </button>
+                                          <button
+                                            onClick={() => printBatchBarcode(b, m.name)}
+                                            className="h-7 px-2.5 text-xs rounded-md bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-1.5"
+                                            title="Print barcode label"
+                                          >
+                                            <Printer className="w-3.5 h-3.5" /> Print
+                                          </button>
+                                        </div>
                                       )}
                                     </td>
                                   </tr>
