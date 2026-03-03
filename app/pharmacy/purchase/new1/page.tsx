@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Save, Plus, Trash2, Search, Package,
-  Receipt, FileText, Calculator, RotateCcw
+  Receipt, FileText, Calculator, RotateCcw, Printer
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { getSuppliers, Supplier } from '@/src/lib/enhancedPharmacyService'
@@ -399,6 +399,217 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
     setDrugSearchTerm('')
   }
 
+  // ─── Print Barcode for Batches ────────────────────────────────────────────────────
+
+  const printBarcodeForBatches = async () => {
+    const validItems = items.filter(i => i.medication_id && i.quantity > 0 && i.batch_number && i.expiry_date)
+    
+    if (validItems.length === 0) {
+      alert('No valid batches found to print barcodes. Please add items with batch numbers and expiry dates.')
+      return
+    }
+
+    try {
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) return
+
+      // Generate HTML content for all batch labels - matching exact inventory page format
+      let allLabelsContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Purchase Batch Barcodes</title>
+            <style>
+              @page { 
+                size: 50mm 25mm; 
+                margin: 1mm; 
+              }
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+              body { 
+                font-family: 'Arial', sans-serif;
+                width: 48mm;
+                height: 23mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                padding: 1mm;
+                font-size: 8px;
+                line-height: 1.1;
+                background: white;
+              }
+              .header {
+                text-align: center;
+                font-size: 10px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 1mm;
+              }
+              .medicine-name {
+                text-align: center;
+                font-size: 10px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 1mm;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+              .medicine-name-full {
+                text-align: center;
+                font-size: 7px;
+                color: #333;
+                margin-top: -0.5mm;
+                margin-bottom: 0.5mm;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+              .batch-info {
+                display: flex;
+                justify-content: space-between;
+                font-size: 6px;
+                color: #000;
+                margin-bottom: 0.8mm;
+              }
+              .barcode-section {
+                text-align: center;
+                margin: 1mm 0;
+                height: 10mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                border: 0.5px solid #ddd;
+                background: #f9f9f9;
+              }
+              #barcode {
+                width: 30mm;
+                height: 10mm;
+                display: block;
+              }
+              .footer {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 6px;
+                color: #000;
+              }
+              .label-page {
+                page-break-after: always;
+              }
+              .label-page:last-child {
+                page-break-after: auto;
+              }
+            </style>
+          </head>
+          <body>
+      `
+
+      // Add labels for each batch - each on separate page matching inventory format
+      validItems.forEach((item, index) => {
+        const safeMedicineName = (item.medication_name || '').trim() || 'Unknown Medicine'
+        const shortMedicineName = safeMedicineName.length > 20
+          ? safeMedicineName.substring(0, 20) + '...'
+          : safeMedicineName
+        
+        // Helper function to format expiry date safely
+        const formatExpiryDate = (dateStr: string) => {
+          if (!dateStr) return 'N/A'
+          try {
+            // Handle DD-MM-YYYY format (common in purchase form)
+            if (dateStr.includes('-') && dateStr.split('-').length === 3) {
+              const [day, month, year] = dateStr.split('-')
+              const date = new Date(`${year}-${month}-${day}`)
+              if (isNaN(date.getTime())) return dateStr // Return original if parsing fails
+              return date.toLocaleDateString('en-GB')
+            }
+            // Handle ISO format or other formats
+            const date = new Date(dateStr)
+            if (isNaN(date.getTime())) return dateStr // Return original if parsing fails
+            return date.toLocaleDateString('en-GB')
+          } catch {
+            return dateStr // Return original on any error
+          }
+        }
+        
+        const expiryDate = formatExpiryDate(item.expiry_date)
+        const printDate = new Date().toLocaleDateString('en-GB')
+        const printTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
+        const totalQuantity = (item.quantity || 0) + (item.free_quantity || 0)
+        
+        allLabelsContent += `
+          <div class="label-page">
+            <div class="header">ANNAM HOSPITAL</div>
+            
+            <div class="batch-info">
+              <span>Batch: ${item.batch_number}</span>
+              <span>Qty: ${totalQuantity}</span>
+            </div>
+            
+            <div class="barcode-section">
+              <svg id="barcode-${index}"></svg>
+            </div>
+            
+            <div class="footer">
+              <span>Exp: ${expiryDate}</span>
+              <span>Printed: ${printDate} ${printTime}</span>
+            </div>
+          </div>
+        `
+      })
+
+      allLabelsContent += `
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+            <script>
+              (function() {
+                function renderAll() {
+                  ${validItems.map((item, index) => `
+                    try {
+                      var value${index} = ${JSON.stringify(item.batch_number)};
+                      var isNumeric${index} = /^\\d+$/.test(value${index});
+                      var fmt${index} = (isNumeric${index} && value${index}.length === 13) ? 'EAN13' : 'CODE128';
+                      JsBarcode('#barcode-${index}', value${index}, {
+                        format: fmt${index},
+                        displayValue: true,
+                        fontSize: 8,
+                        textMargin: 1,
+                        margin: 2,
+                        lineColor: '#000',
+                        background: '#f9f9f9'
+                      });
+                    } catch (e) {
+                      console.error('Barcode render error for item ${index}', e);
+                    }
+                  `).join('')}
+                  
+                  // Wait a tick for layout, then print
+                  setTimeout(function(){ window.print(); window.close(); }, 200);
+                }
+                
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                  renderAll();
+                } else {
+                  window.addEventListener('load', renderAll);
+                }
+              })();
+            </script>
+          </body>
+        </html>
+      `
+
+      printWindow.document.write(allLabelsContent)
+      printWindow.document.close()
+      printWindow.focus()
+    } catch (error) {
+      console.error('Error printing batch barcodes:', error)
+      alert('Failed to print barcodes. Please try again.')
+    }
+  }
+
   // ─── Summary calculations ──────────────────────────────────────────────────
 
   const summary = React.useMemo(() => {
@@ -550,6 +761,15 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
           <div className="flex gap-2">
             <button onClick={() => router.back()} className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50 text-sm">
               Cancel
+            </button>
+            <button
+              onClick={printBarcodeForBatches}
+              disabled={items.filter(i => i.medication_id && i.quantity > 0 && i.batch_number && i.expiry_date).length === 0}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2 hover:bg-green-700 disabled:opacity-50 text-sm font-medium shadow-sm"
+              title="Print barcodes for all batches"
+            >
+              <Printer className="w-4 h-4" />
+              Print Barcode
             </button>
             <button
               onClick={handleSubmit}
