@@ -34,8 +34,9 @@ export const SearchableSelect = forwardRef<SearchableSelectRef, SearchableSelect
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredOptions, setFilteredOptions] = useState<Option[]>(options);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [isKeyboardNavigating, setIsKeyboardNavigating] = useState(false);
+  const lastOpenedRef = useRef<number>(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const optionsListRef = useRef<HTMLDivElement>(null);
@@ -51,22 +52,30 @@ export const SearchableSelect = forwardRef<SearchableSelectRef, SearchableSelect
   }));
 
   // Get selected option details
-  const selectedOption = options.find(opt => opt.value === value);
+  const selectedOption = React.useMemo(() => 
+    options.find(opt => opt.value === value),
+  [options, value]);
 
   // Update filtered options when search term or options change
-  useEffect(() => {
+  const filteredOptions = React.useMemo(() => {
     const lowerSearch = searchTerm.toLowerCase();
-    const filtered = searchTerm
+    return searchTerm
       ? options.filter(opt =>
         opt.label.toLowerCase().includes(lowerSearch) ||
         opt.subLabel?.toLowerCase().includes(lowerSearch) ||
         opt.group?.toLowerCase().includes(lowerSearch)
       )
       : options;
-
-    setFilteredOptions(filtered);
-    setActiveIndex(filtered.length > 0 ? 0 : -1);
   }, [searchTerm, options]);
+
+  // Update active index when filtered options change
+  useEffect(() => {
+    if (filteredOptions.length > 0) {
+      setActiveIndex(0);
+    } else {
+      setActiveIndex(-1);
+    }
+  }, [filteredOptions]);
 
   // Handle click outside to close
   useEffect(() => {
@@ -111,10 +120,12 @@ export const SearchableSelect = forwardRef<SearchableSelectRef, SearchableSelect
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
+        setIsKeyboardNavigating(true);
         setActiveIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
         break;
       case 'ArrowUp':
         e.preventDefault();
+        setIsKeyboardNavigating(true);
         setActiveIndex(prev => (prev > 0 ? prev - 1 : 0));
         break;
       case 'Enter':
@@ -148,19 +159,25 @@ export const SearchableSelect = forwardRef<SearchableSelectRef, SearchableSelect
           const elementTop = activeElement.offsetTop;
           const elementHeight = activeElement.offsetHeight;
 
-          const padding = 2; // Safety margin
+          const padding = 8; // Increased padding for better visibility
 
           if (elementTop < containerTop + padding) {
             // Scroll up to show item at top
-            container.scrollTo({ top: elementTop - padding, behavior: 'auto' });
+            container.scrollTo({ 
+              top: elementTop - padding, 
+              behavior: isKeyboardNavigating ? 'auto' : 'smooth' 
+            });
           } else if (elementTop + elementHeight > containerTop + containerHeight - padding) {
             // Scroll down to show item at bottom
-            container.scrollTo({ top: elementTop + elementHeight - containerHeight + padding, behavior: 'auto' });
+            container.scrollTo({ 
+              top: elementTop + elementHeight - containerHeight + padding, 
+              behavior: isKeyboardNavigating ? 'auto' : 'smooth' 
+            });
           }
         }
       }
     }
-  }, [activeIndex, isOpen]);
+  }, [activeIndex, isOpen, isKeyboardNavigating]);
 
   // Clear selection
   const handleClear = (e: React.MouseEvent) => {
@@ -170,20 +187,36 @@ export const SearchableSelect = forwardRef<SearchableSelectRef, SearchableSelect
   };
 
   // Toggle dropdown
-  const toggleOpen = () => {
+  const toggleOpen = (e?: React.MouseEvent) => {
     if (disabled) return;
+    if (e) e.stopPropagation();
+    
+    // If it was opened by focus in the last 200ms, don't toggle it off
+    const now = Date.now();
+    if (isOpen && (now - lastOpenedRef.current < 300)) {
+      return;
+    }
+
     if (!isOpen) {
       setIsOpen(true);
-      // Focus input on open
+      lastOpenedRef.current = now;
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
       setIsOpen(false);
     }
   };
 
-  const handleGlobalFocus = () => {
-    if (!isOpen && !disabled) {
+  const handleGlobalFocus = (e: React.FocusEvent) => {
+    if (disabled) return;
+    
+    // Check if focus is already inside
+    if (wrapperRef.current?.contains(e.relatedTarget as Node)) {
+      return;
+    }
+
+    if (!isOpen) {
       setIsOpen(true);
+      lastOpenedRef.current = Date.now();
       setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
@@ -257,17 +290,21 @@ export const SearchableSelect = forwardRef<SearchableSelectRef, SearchableSelect
                 No results found for "{searchTerm}"
               </div>
             ) : (
-              <div className="py-1 options-wrapper">
-                {filteredOptions.map((option, index) => (
-                  <div
-                    key={option.value}
-                    onClick={() => handleSelect(option.value)}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    className={`
-                      px-4 py-3 cursor-pointer flex items-center justify-between mx-1 rounded-lg transition-colors
-                      ${activeIndex === index ? 'bg-teal-600 text-white shadow-md' : value === option.value ? 'bg-teal-50 text-teal-900' : 'text-slate-700 hover:bg-slate-50'}
-                    `}
-                  >
+                  <div className="py-1 options-wrapper" onMouseMove={() => setIsKeyboardNavigating(false)}>
+                    {filteredOptions.map((option, index) => (
+                      <div
+                        key={option.value}
+                        onClick={() => handleSelect(option.value)}
+                        onMouseEnter={() => {
+                          if (!isKeyboardNavigating) {
+                            setActiveIndex(index);
+                          }
+                        }}
+                        className={`
+                          px-4 py-3 cursor-pointer flex items-center justify-between mx-1 rounded-lg transition-all duration-200
+                          ${activeIndex === index ? 'bg-teal-600 text-white shadow-md' : value === option.value ? 'bg-teal-50 text-teal-900 border border-teal-100' : 'text-slate-700 hover:bg-slate-50'}
+                        `}
+                      >
                     <div>
                       <div className="font-bold">{option.label}</div>
                       <div className={`text-xs mt-0.5 flex gap-2 font-medium ${activeIndex === index ? 'text-teal-100' : 'text-slate-500'}`}>

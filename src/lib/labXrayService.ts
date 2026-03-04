@@ -2348,6 +2348,26 @@ export async function createGroupedLabOrder(params: CreateGroupedLabOrderParams)
 
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+    // Ensure we have a diagnostic_groups row (group_id is a FK and NOT NULL on diagnostic_group_orders)
+    let groupId = params.group_id || null;
+    if (!groupId) {
+      const { data: newGroup, error: groupErr } = await supabase
+        .from('diagnostic_groups')
+        .insert({
+          name: params.group_name || `Lab Order - ${new Date().toLocaleDateString()}`,
+          category: 'Lab',
+          is_active: true
+        })
+        .select('id')
+        .single();
+
+      if (groupErr || !newGroup?.id) {
+        safeLog('Failed to create diagnostic group:', groupErr || new Error('No group id returned'));
+        throw groupErr || new Error('Failed to create diagnostic group');
+      }
+      groupId = newGroup.id;
+    }
+
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const { data, error } = await supabase.rpc('create_grouped_lab_order', {
@@ -2360,7 +2380,7 @@ export async function createGroupedLabOrder(params: CreateGroupedLabOrderParams)
         p_service_items: params.service_items,
         p_is_ip: params.is_ip || false,
         p_bed_allocation_id: params.bed_allocation_id || null,
-        p_group_id: params.group_id || null,
+        p_group_id: groupId,
         p_group_name: params.group_name || null
       });
 
