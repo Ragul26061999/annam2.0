@@ -16,6 +16,7 @@ export interface BillingRecord {
   updated_at: string;
   source: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills';
   patient: {
+    id: string;
     name: string;
     patient_id: string;
     phone: string;
@@ -186,7 +187,7 @@ export async function getFinanceStats(dateRange?: { from: string; to: string }):
     const outpatientData = outpatientResult.data || [];
     const otherBillsData = otherBillsResult.data || [];
     const ipPaymentData = ipPaymentResult.data || [];
-    
+
     console.log('Outpatient query result:', outpatientResult);
     console.log('Outpatient data length:', outpatientData.length);
     console.log('Other bills data length:', otherBillsData.length);
@@ -239,7 +240,7 @@ export async function getFinanceStats(dateRange?: { from: string; to: string }):
       ...diagnosticData.filter((b: any) => ['pending', 'partial', 'overdue'].includes(b.billing_status)),
       ...otherBillsData.filter((b: any) => ['pending', 'partial', 'overdue'].includes(b.payment_status))
     ];
-    const outstandingAmount = outstandingRecords.reduce((sum: number, r: any) => 
+    const outstandingAmount = outstandingRecords.reduce((sum: number, r: any) =>
       sum + (Number(r.total) || Number(r.total_amount) || Number(r.amount) || 0), 0);
 
     // Estimate expenses (35% of revenue as operating costs - can be replaced with actual expenses table)
@@ -296,22 +297,22 @@ export async function getBillingRecords(
 ): Promise<{ records: BillingRecord[]; total: number }> {
   try {
     console.log('getBillingRecords called with:', { limit, offset, filters });
-    
+
     // Fetch from ALL finance tables and combine results using correct joins
     const [
-      billingResult, 
-      pharmacyResult, 
-      labResult, 
-      radiologyResult, 
-      diagnosticResult, 
-      outpatientResult, 
-      otherBillsResult, 
+      billingResult,
+      pharmacyResult,
+      labResult,
+      radiologyResult,
+      diagnosticResult,
+      outpatientResult,
+      otherBillsResult,
       ipPaymentResult
     ] = await Promise.allSettled([
       // Main billing - use correct column names and patient join
       supabase
         .from('billing')
-        .select('*, patients!patient_id(name, patient_id, phone)', { count: 'exact' })
+        .select('*, patients!patient_id(id, name, patient_id, phone)', { count: 'exact' })
         .order('created_at', { ascending: false }),
       // Pharmacy bills - no patient join needed, data is stored directly
       supabase
@@ -321,17 +322,17 @@ export async function getBillingRecords(
       // Lab test orders - use correct patient join
       supabase
         .from('lab_test_orders')
-        .select('*, patients!patient_id(name, patient_id)', { count: 'exact' })
+        .select('*, patients!patient_id(id, name, patient_id, phone)', { count: 'exact' })
         .order('created_at', { ascending: false }),
       // Radiology test orders - use correct patient join
       supabase
         .from('radiology_test_orders')
-        .select('*, patients!patient_id(name, patient_id)', { count: 'exact' })
+        .select('*, patients!patient_id(id, name, patient_id, phone)', { count: 'exact' })
         .order('created_at', { ascending: false }),
       // Diagnostic billing items - use correct patient join
       supabase
         .from('diagnostic_billing_items')
-        .select('*, patients!patient_id(name, patient_id, phone)', { count: 'exact' })
+        .select('*, patients!patient_id(id, name, patient_id, phone)', { count: 'exact' })
         .order('created_at', { ascending: false }),
       // Outpatient billing from patients table
       supabase
@@ -342,13 +343,13 @@ export async function getBillingRecords(
       // Other bills
       supabase
         .from('other_bills')
-        .select('*, patients!patient_id(name, patient_id, phone)', { count: 'exact' })
+        .select('*, patients!patient_id(id, name, patient_id, phone)', { count: 'exact' })
         .eq('status', 'active')
         .order('created_at', { ascending: false }),
       // IP Payment Receipts - join with patients table
       supabase
         .from('ip_payment_receipts')
-        .select('*, patients!patient_id(name, patient_id, phone)', { count: 'exact' })
+        .select('*, patients!patient_id(id, name, patient_id, phone)', { count: 'exact' })
         .order('created_at', { ascending: false })
     ]);
 
@@ -386,18 +387,18 @@ export async function getBillingRecords(
     // Transform and combine all records with correct field mapping
     console.log('getBillingRecords - Outpatient result:', outpatientResult);
     console.log('getBillingRecords - Outpatient data:', outpatientData.data);
-    
+
     const billingRecords = (billingData.data || []).map((b: any) => {
       // Determine source based on bill_type or other indicators
       let source = 'billing'; // Default to consultation
-      
+
       // Check bill_type first
       if (b.bill_type === 'lab') source = 'lab';
       else if (b.bill_type === 'radiology') source = 'radiology';
       else if (b.bill_type === 'pharmacy') source = 'pharmacy';
       else if (b.bill_type === 'diagnostic') source = 'diagnostic';
       else if (b.bill_type === 'outpatient') source = 'outpatient';
-      
+
       // If no bill_type, try to identify from other fields
       else if (!b.bill_type) {
         // Check if it's a pharmacy bill by looking for pharmacy-specific patterns
@@ -414,7 +415,7 @@ export async function getBillingRecords(
           source = 'pharmacy';
         }
       }
-      
+
       return {
         id: b.id,
         bill_id: b.bill_number || b.bill_no || `BILL-${b.id.substring(0, 8)}`,
@@ -430,6 +431,7 @@ export async function getBillingRecords(
         updated_at: b.updated_at || b.created_at,
         source: source as any,
         patient: b.patients || {
+          id: b.patient_id || '',
           name: b.customer_name || 'Unknown Customer',
           patient_id: b.customer_phone || 'N/A',
           phone: b.customer_phone || ''
@@ -452,6 +454,7 @@ export async function getBillingRecords(
       updated_at: b.updated_at || b.created_at,
       source: 'pharmacy' as const,
       patient: {
+        id: b.patient_id || '',
         name: b.patient_name || 'Unknown Patient',
         patient_id: b.patient_uhid || 'N/A',
         phone: b.patient_phone || ''
@@ -473,6 +476,7 @@ export async function getBillingRecords(
       updated_at: b.updated_at || b.created_at,
       source: 'diagnostic' as const,
       patient: b.patients || {
+        id: b.patient_id || '',
         name: 'Unknown Patient',
         patient_id: 'N/A',
         phone: ''
@@ -494,6 +498,7 @@ export async function getBillingRecords(
       updated_at: b.updated_at || b.created_at,
       source: 'radiology' as const,
       patient: b.patients || {
+        id: b.patient_id || '',
         name: 'Unknown Patient',
         patient_id: 'N/A',
         phone: ''
@@ -515,6 +520,7 @@ export async function getBillingRecords(
       updated_at: b.updated_at || b.created_at,
       source: 'lab' as const,
       patient: b.patients || {
+        id: b.patient_id || '',
         name: 'Unknown Patient',
         patient_id: 'N/A',
         phone: ''
@@ -538,6 +544,7 @@ export async function getBillingRecords(
         updated_at: p.updated_at || p.created_at,
         source: 'outpatient' as const,
         patient: {
+          id: p.id,
           name: p.name || 'Unknown Patient',
           patient_id: p.patient_id || 'N/A',
           phone: p.phone || '',
@@ -580,6 +587,7 @@ export async function getBillingRecords(
       updated_at: ip.updated_at || ip.created_at,
       source: 'billing' as const, // Show as regular billing in finance
       patient: ip.patients || {
+        id: ip.patient_id || '',
         name: 'Unknown Patient',
         patient_id: 'N/A',
         phone: ''
@@ -686,29 +694,29 @@ export async function getRevenueBreakdown(dateRange?: { from: string; to: string
     const grandTotal = billingTotal + pharmacyTotal + labTotal + radiologyTotal;
 
     const breakdown: RevenueBreakdown[] = [
-      { 
-        category: 'Consultations & Billing', 
-        amount: billingTotal, 
-        percentage: grandTotal > 0 ? Math.round((billingTotal / grandTotal) * 100) : 0, 
-        color: 'bg-blue-500' 
+      {
+        category: 'Consultations & Billing',
+        amount: billingTotal,
+        percentage: grandTotal > 0 ? Math.round((billingTotal / grandTotal) * 100) : 0,
+        color: 'bg-blue-500'
       },
-      { 
-        category: 'Pharmacy', 
-        amount: pharmacyTotal, 
-        percentage: grandTotal > 0 ? Math.round((pharmacyTotal / grandTotal) * 100) : 0, 
-        color: 'bg-green-500' 
+      {
+        category: 'Pharmacy',
+        amount: pharmacyTotal,
+        percentage: grandTotal > 0 ? Math.round((pharmacyTotal / grandTotal) * 100) : 0,
+        color: 'bg-green-500'
       },
-      { 
-        category: 'Lab Tests', 
-        amount: labTotal, 
-        percentage: grandTotal > 0 ? Math.round((labTotal / grandTotal) * 100) : 0, 
-        color: 'bg-purple-500' 
+      {
+        category: 'Lab Tests',
+        amount: labTotal,
+        percentage: grandTotal > 0 ? Math.round((labTotal / grandTotal) * 100) : 0,
+        color: 'bg-purple-500'
       },
-      { 
-        category: 'Radiology & Scans', 
-        amount: radiologyTotal, 
-        percentage: grandTotal > 0 ? Math.round((radiologyTotal / grandTotal) * 100) : 0, 
-        color: 'bg-orange-500' 
+      {
+        category: 'Radiology & Scans',
+        amount: radiologyTotal,
+        percentage: grandTotal > 0 ? Math.round((radiologyTotal / grandTotal) * 100) : 0,
+        color: 'bg-orange-500'
       }
     ];
 
@@ -791,17 +799,17 @@ export async function getMonthlyRevenueTrend(months: number = 12): Promise<{
     // Mock implementation - you can create a proper query with date functions
     const trendData = [];
     const currentDate = new Date();
-    
+
     for (let i = months - 1; i >= 0; i--) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
       const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      
+
       // Mock data with some variation
       const baseRevenue = 1000000 + Math.random() * 500000;
       const revenue = baseRevenue;
       const expenses = revenue * (0.3 + Math.random() * 0.1); // 30-40% expenses
       const profit = revenue - expenses;
-      
+
       trendData.push({
         month: monthName,
         revenue: Math.round(revenue),
@@ -809,7 +817,7 @@ export async function getMonthlyRevenueTrend(months: number = 12): Promise<{
         profit: Math.round(profit)
       });
     }
-    
+
     return trendData;
   } catch (error) {
     console.error('Error fetching monthly revenue trend:', error);
@@ -821,7 +829,7 @@ export async function getMonthlyRevenueTrend(months: number = 12): Promise<{
 export async function exportFinancialData(type: 'billing' | 'payments' | 'receipts', filters?: any): Promise<any[]> {
   try {
     let data: any[] = [];
-    
+
     switch (type) {
       case 'billing':
         const billingResult = await getBillingRecords(1000, 0, filters);
@@ -839,20 +847,20 @@ export async function exportFinancialData(type: 'billing' | 'payments' | 'receip
 
     // Convert to CSV
     if (data.length === 0) return [];
-    
+
     const headers = Object.keys(data[0]);
     const csvContent = [
       headers.join(','),
-      ...data.map(row => 
+      ...data.map(row =>
         headers.map(header => {
           const value = row[header];
-          return typeof value === 'string' && value.includes(',') 
-            ? `"${value}"` 
+          return typeof value === 'string' && value.includes(',')
+            ? `"${value}"`
             : value;
         }).join(',')
       )
     ].join('\n');
-    
+
     return csvContent.split('\n').map(line => line.split(','));
   } catch (error) {
     console.error('Error exporting financial data:', error);

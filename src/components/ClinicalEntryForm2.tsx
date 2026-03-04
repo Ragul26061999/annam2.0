@@ -378,7 +378,7 @@ export default function ClinicalEntryForm2({
         .eq('is_active', true)
         .gt('available_stock', 0)
         .order('name');
-      
+
       if (!error && data) {
         setMedications(data);
       }
@@ -458,8 +458,8 @@ export default function ClinicalEntryForm2({
       setSearchResults([]);
       return;
     }
-    
-    const filtered = medications.filter(med => 
+
+    const filtered = medications.filter(med =>
       med.name.toLowerCase().includes(term.toLowerCase()) ||
       (med.generic_name && med.generic_name.toLowerCase().includes(term.toLowerCase()))
     );
@@ -480,7 +480,7 @@ export default function ClinicalEntryForm2({
       auto_calculate_quantity: true,
       stock_quantity: medication.available_stock || 0
     };
-    
+
     setPrescriptions((prev) => {
       const next = [...prev, newItem];
       const newIndex = next.length - 1;
@@ -535,16 +535,16 @@ export default function ClinicalEntryForm2({
   const updatePrescriptionItem = (index: number, field: keyof PrescriptionItem, value: any) => {
     const updatedItems = [...prescriptions];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
-    
-    if (updatedItems[index].auto_calculate_quantity && 
-        (field === 'frequency_times' || field === 'duration_days')) {
+
+    if (updatedItems[index].auto_calculate_quantity &&
+      (field === 'frequency_times' || field === 'duration_days')) {
       const autoQuantity = calculateAutoQuantity(
-        updatedItems[index].frequency_times, 
+        updatedItems[index].frequency_times,
         updatedItems[index].duration_days
       );
       updatedItems[index].quantity = autoQuantity;
     }
-    
+
     setPrescriptions(updatedItems);
   };
 
@@ -675,6 +675,18 @@ export default function ClinicalEntryForm2({
         testName: test.test_name,
         groupName: test.category || 'N/A'
       };
+
+      // Automatically add a new row if this is the last row
+      if (index === prev.length - 1) {
+        next.push({
+          testId: '',
+          testName: '',
+          groupName: '',
+          clinicalIndication: '',
+          specialInstructions: ''
+        });
+      }
+
       return next;
     });
   };
@@ -751,7 +763,7 @@ export default function ClinicalEntryForm2({
 
     setCreatingPrescriptionGroup(true);
     setError(null);
-    
+
     try {
       // Create the group
       const group = await createDiagnosticGroup({
@@ -792,7 +804,7 @@ export default function ClinicalEntryForm2({
         items: []
       });
       setShowNewPrescriptionGroupModal(false);
-      
+
       // Auto-select the newly created group
       setSelectedPrescriptionGroupId(group.id);
       await applyPrescriptionGroupToSelection(group.id);
@@ -891,6 +903,19 @@ export default function ClinicalEntryForm2({
         groupName: test.modality || 'X-Ray',
         bodyPart: test.body_part || ''
       };
+
+      // Automatically add a new row if this is the last row
+      if (index === prev.length - 1) {
+        next.push({
+          testId: '',
+          testName: '',
+          groupName: '',
+          bodyPart: '',
+          clinicalIndication: '',
+          specialInstructions: ''
+        });
+      }
+
       return next;
     });
   };
@@ -998,7 +1023,7 @@ export default function ClinicalEntryForm2({
                 sort_order: index
               })),
               group_id: selectedLabGroupId || crypto.randomUUID(),
-              group_name: useLabGroup && selectedLabGroupId 
+              group_name: useLabGroup && selectedLabGroupId
                 ? availableLabGroups.find((g: any) => g.id === selectedLabGroupId)?.name || `Lab Group - ${new Date().toLocaleDateString()}`
                 : `Lab Order - ${new Date().toLocaleDateString()}`
             });
@@ -1086,7 +1111,7 @@ export default function ClinicalEntryForm2({
           // If a prescription group is selected, save as a single grouped prescription
           if (usePrescriptionGroup && selectedPrescriptionGroupId) {
             const groupName = availablePrescriptionGroups.find((g: any) => g.id === selectedPrescriptionGroupId)?.name || `Prescription Group - ${new Date().toLocaleDateString()}`;
-            
+
             const prescriptionData: PrescriptionData = {
               patient_id: patientId,
               doctor_id: doctorId,
@@ -1222,7 +1247,7 @@ export default function ClinicalEntryForm2({
       // Guaranteed fallback logging
       console.error('Raw error object:', supabaseError);
       console.dir(supabaseError, { depth: 5 });
-      
+
       try {
         console.error('Error saving clinical data:', {
           message: supabaseError?.message,
@@ -1298,11 +1323,10 @@ export default function ClinicalEntryForm2({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-6 py-4 border-b-2 transition-all whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600 bg-white font-semibold'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
+                className={`flex items-center space-x-2 px-6 py-4 border-b-2 transition-all whitespace-nowrap ${activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600 bg-white font-semibold'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
               >
                 <Icon size={18} />
                 <span>{tab.label}</span>
@@ -1486,11 +1510,11 @@ export default function ClinicalEntryForm2({
                   <FileText className="h-5 w-5 text-blue-600" />
                   <h3 className="text-lg font-bold text-gray-800">Case Sheet</h3>
                   <p className="text-sm text-gray-500 ml-auto">
-                    Date: {new Date().toLocaleDateString('en-IN', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
+                    Date: {new Date().toLocaleDateString('en-IN', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
                     })}
                   </p>
                 </div>
@@ -1505,9 +1529,9 @@ export default function ClinicalEntryForm2({
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
                         rows={section.rows}
                         value={clinicalNotes[section.key as keyof ClinicalNotes]}
-                        onChange={(e) => setClinicalNotes({ 
-                          ...clinicalNotes, 
-                          [section.key]: e.target.value 
+                        onChange={(e) => setClinicalNotes({
+                          ...clinicalNotes,
+                          [section.key]: e.target.value
                         })}
                         placeholder={`Enter ${section.label.toLowerCase()}...`}
                         data-allow-enter="true"
@@ -1701,12 +1725,11 @@ export default function ClinicalEntryForm2({
                               {test.groupName}
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${
-                            labUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${labUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
                             labUrgency === 'stat' ? 'bg-orange-100 text-orange-700' :
-                            labUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
+                              labUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-blue-100 text-blue-700'
+                            }`}>
                             {labUrgency}
                           </span>
                         </div>
@@ -1921,12 +1944,11 @@ export default function ClinicalEntryForm2({
                           <span className="px-2 py-0.5 text-xs rounded-full bg-teal-100 text-teal-700 uppercase">
                             {xray.groupName || 'IMAGE'}
                           </span>
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${
-                            xrayUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${xrayUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
                             xrayUrgency === 'stat' ? 'bg-orange-100 text-orange-700' :
-                            xrayUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
+                              xrayUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-blue-100 text-blue-700'
+                            }`}>
                             {xrayUrgency}
                           </span>
                         </div>
@@ -2024,7 +2046,7 @@ export default function ClinicalEntryForm2({
                         placeholder="Search medications by name, generic name, or category..."
                       />
                     </div>
-                    
+
                     {searchResults.length > 0 && (
                       <div className="mt-3 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white">
                         {searchResults.map((medication) => (
@@ -2073,13 +2095,12 @@ export default function ClinicalEntryForm2({
                               </div>
                               <div className="flex items-center gap-2">
                                 <span
-                                  className={`px-2 py-0.5 text-xs rounded-full border ${
-                                    item.stock_quantity > 10
-                                      ? 'bg-green-50 border-green-200 text-green-700'
-                                      : item.stock_quantity > 0
-                                        ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                                        : 'bg-red-50 border-red-200 text-red-700'
-                                  }`}
+                                  className={`px-2 py-0.5 text-xs rounded-full border ${item.stock_quantity > 10
+                                    ? 'bg-green-50 border-green-200 text-green-700'
+                                    : item.stock_quantity > 0
+                                      ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                                      : 'bg-red-50 border-red-200 text-red-700'
+                                    }`}
                                 >
                                   Stock: {item.stock_quantity}
                                 </span>
@@ -2114,7 +2135,7 @@ export default function ClinicalEntryForm2({
 
                         {expandedPrescriptionIndexes.includes(index) && (
                           <div className="p-4 border-t border-gray-200">
-                        
+
                             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-blue-800">Current Stock:</span>
@@ -2124,99 +2145,99 @@ export default function ClinicalEntryForm2({
                               </div>
                             </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Duration (Days) *</label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.duration_days}
-                              onChange={(e) => updatePrescriptionItem(index, 'duration_days', parseInt(e.target.value) || 1)}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Frequency Times */}
-                        <div className="mb-4">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Frequency Times *</label>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                            {['Morning', 'Afternoon', 'Evening', 'Night'].map((time) => (
-                              <label key={time} className="flex items-center space-x-2 p-2 border border-gray-200 rounded hover:bg-gray-50">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Duration (Days) *</label>
                                 <input
-                                  type="checkbox"
-                                  checked={item.frequency_times.includes(time)}
-                                  onChange={(e) => {
-                                    const newTimes = e.target.checked
-                                      ? [...item.frequency_times, time]
-                                      : item.frequency_times.filter(t => t !== time);
-                                    updatePrescriptionItem(index, 'frequency_times', newTimes);
-                                  }}
-                                  className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                  type="number"
+                                  min="1"
+                                  value={item.duration_days}
+                                  onChange={(e) => updatePrescriptionItem(index, 'duration_days', parseInt(e.target.value) || 1)}
+                                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                 />
-                                <span className="text-sm text-gray-700">{time}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Meal Timing */}
-                        <div className="mb-4">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Meal Timing</label>
-                          <select
-                            value={item.meal_timing}
-                            onChange={(e) => updatePrescriptionItem(index, 'meal_timing', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          >
-                            <option value="">Select meal timing</option>
-                            <option value="before_meal">Before Meal</option>
-                            <option value="after_meal">After Meal</option>
-                            <option value="with_meal">With Meal</option>
-                            <option value="empty_stomach">Empty Stomach</option>
-                          </select>
-                        </div>
-
-                        {/* Quantity Section */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <label className="flex items-center space-x-2 mb-2">
-                              <input
-                                type="checkbox"
-                                checked={item.auto_calculate_quantity}
-                                onChange={(e) => updatePrescriptionItem(index, 'auto_calculate_quantity', e.target.checked)}
-                                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                              />
-                              <span className="text-xs font-medium text-gray-700">Auto Calculate Quantity</span>
-                            </label>
-                            {item.auto_calculate_quantity ? (
-                              <div className="px-3 py-2 text-sm bg-green-50 border border-green-300 rounded font-medium text-green-600">
-                                Auto: {calculateAutoQuantity(item.frequency_times, item.duration_days)} units
                               </div>
-                            ) : (
-                              <input
-                                type="number"
-                                min="1"
-                                max={item.stock_quantity}
-                                value={item.quantity}
-                                onChange={(e) => updatePrescriptionItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                            </div>
+
+                            {/* Frequency Times */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-medium text-gray-700 mb-2">Frequency Times *</label>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {['Morning', 'Afternoon', 'Evening', 'Night'].map((time) => (
+                                  <label key={time} className="flex items-center space-x-2 p-2 border border-gray-200 rounded hover:bg-gray-50">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.frequency_times.includes(time)}
+                                      onChange={(e) => {
+                                        const newTimes = e.target.checked
+                                          ? [...item.frequency_times, time]
+                                          : item.frequency_times.filter(t => t !== time);
+                                        updatePrescriptionItem(index, 'frequency_times', newTimes);
+                                      }}
+                                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                    />
+                                    <span className="text-sm text-gray-700">{time}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Meal Timing */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-medium text-gray-700 mb-2">Meal Timing</label>
+                              <select
+                                value={item.meal_timing}
+                                onChange={(e) => updatePrescriptionItem(index, 'meal_timing', e.target.value)}
                                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                placeholder="Custom quantity"
+                              >
+                                <option value="">Select meal timing</option>
+                                <option value="before_meal">Before Meal</option>
+                                <option value="after_meal">After Meal</option>
+                                <option value="with_meal">With Meal</option>
+                                <option value="empty_stomach">Empty Stomach</option>
+                              </select>
+                            </div>
+
+                            {/* Quantity Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <label className="flex items-center space-x-2 mb-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.auto_calculate_quantity}
+                                    onChange={(e) => updatePrescriptionItem(index, 'auto_calculate_quantity', e.target.checked)}
+                                    className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                  />
+                                  <span className="text-xs font-medium text-gray-700">Auto Calculate Quantity</span>
+                                </label>
+                                {item.auto_calculate_quantity ? (
+                                  <div className="px-3 py-2 text-sm bg-green-50 border border-green-300 rounded font-medium text-green-600">
+                                    Auto: {calculateAutoQuantity(item.frequency_times, item.duration_days)} units
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={item.stock_quantity}
+                                    value={item.quantity}
+                                    onChange={(e) => updatePrescriptionItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    placeholder="Custom quantity"
+                                  />
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Instructions</label>
+                              <textarea
+                                value={item.instructions}
+                                onChange={(e) => updatePrescriptionItem(index, 'instructions', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                                placeholder="e.g., Take after meals, Avoid alcohol, Complete the full course"
+                                rows={2}
+                                data-allow-enter="true"
                               />
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Instructions</label>
-                          <textarea
-                            value={item.instructions}
-                            onChange={(e) => updatePrescriptionItem(index, 'instructions', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                            placeholder="e.g., Take after meals, Avoid alcohol, Complete the full course"
-                            rows={2}
-                            data-allow-enter="true"
-                          />
-                        </div>
+                            </div>
                           </div>
                         )}
                       </div>

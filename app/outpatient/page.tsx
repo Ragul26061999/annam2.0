@@ -843,7 +843,7 @@ function OutpatientPageContent() {
           created_at,
           status,
           patient:patients(id, patient_id, name, date_of_birth, gender, phone),
-          doctor:users(id, name),
+          doctor:doctors(id, user:users(name)),
           prescription_items(
             id,
             medication_id,
@@ -873,7 +873,7 @@ function OutpatientPageContent() {
       // Format data for display
       const formattedLabTestPrescriptions = (data || []).map((prescription: any) => {
         const patient = prescription.patient;
-        const doctor = prescription.doctor;
+        const doctor = prescription.doctor?.user || prescription.doctor;
         const items = prescription.prescription_items || [];
 
         return {
