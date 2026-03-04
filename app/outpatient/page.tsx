@@ -110,16 +110,16 @@ function OutpatientPageContent() {
   // Tab state for queue management
   const [activeTab, setActiveTab] = useState<'outpatient' | 'queue' | 'injection' | 'appointments' | 'patients' | 'recent' | 'billing' | 'lab_tests'>('outpatient');
   const [queueStats, setQueueStats] = useState({ totalWaiting: 0, totalInProgress: 0, totalCompleted: 0, averageWaitTime: 0 });
-  
+
   // Injection queue state
   const [injectionQueue, setInjectionQueue] = useState<any[]>([]);
   const [updatedInjections, setUpdatedInjections] = useState<any[]>([]);
   const [injectionLoading, setInjectionLoading] = useState(false);
-  
+
   // Lab test prescriptions state
   const [labTestPrescriptions, setLabTestPrescriptions] = useState<any[]>([]);
   const [labTestLoading, setLabTestLoading] = useState(false);
-  
+
   // Outpatient queue state for Today's Queue tab
   const [outpatientQueueEntries, setOutpatientQueueEntries] = useState<QueueEntry[]>([]);
   const [queueEntriesLoading, setQueueEntriesLoading] = useState(false);
@@ -149,7 +149,7 @@ function OutpatientPageContent() {
     if (billingDateFilter !== 'all' && !billingStartDate && !billingEndDate) {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
+
       switch (billingDateFilter) {
         case 'daily':
           setBillingStartDate(today.toISOString().split('T')[0]);
@@ -222,7 +222,7 @@ function OutpatientPageContent() {
     // Auto-refresh every 30 seconds
     const intervalMs = 0;
     let interval: NodeJS.Timeout;
-    
+
     if (intervalMs > 0) {
       interval = setInterval(() => {
         loadOutpatientData();
@@ -253,7 +253,7 @@ function OutpatientPageContent() {
     try {
       // Get today's date in YYYY-MM-DD format
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Fetch prescriptions with injection medications that have been updated (dispensed or expired)
       const { data: updatedPrescriptions, error } = await supabase
         .from('prescriptions')
@@ -298,13 +298,13 @@ function OutpatientPageContent() {
         const items = prescription.prescription_items || [];
         return items.some((item: any) => {
           const dosageForm = item.medication?.dosage_form?.toLowerCase() || '';
-          return dosageForm.includes('injection') || 
-                 dosageForm.includes('inject') || 
-                 dosageForm.includes('iv') || 
-                 dosageForm.includes('im') || 
-                 dosageForm.includes('sc') || 
-                 dosageForm.includes('vial') || 
-                 dosageForm.includes('ampoule');
+          return dosageForm.includes('injection') ||
+            dosageForm.includes('inject') ||
+            dosageForm.includes('iv') ||
+            dosageForm.includes('im') ||
+            dosageForm.includes('sc') ||
+            dosageForm.includes('vial') ||
+            dosageForm.includes('ampoule');
         });
       });
 
@@ -314,13 +314,13 @@ function OutpatientPageContent() {
         const items = prescription.prescription_items || [];
         const injectionItems = items.filter((item: any) => {
           const dosageForm = item.medication?.dosage_form?.toLowerCase() || '';
-          return dosageForm.includes('injection') || 
-                 dosageForm.includes('inject') || 
-                 dosageForm.includes('iv') || 
-                 dosageForm.includes('im') || 
-                 dosageForm.includes('sc') || 
-                 dosageForm.includes('vial') || 
-                 dosageForm.includes('ampoule');
+          return dosageForm.includes('injection') ||
+            dosageForm.includes('inject') ||
+            dosageForm.includes('iv') ||
+            dosageForm.includes('im') ||
+            dosageForm.includes('sc') ||
+            dosageForm.includes('vial') ||
+            dosageForm.includes('ampoule');
         });
 
         // Map database status back to UI status
@@ -370,17 +370,17 @@ function OutpatientPageContent() {
   const loadInjectionQueue = async () => {
     try {
       setInjectionLoading(true);
-      
+
       // Check authentication status before querying
       try {
         console.log('Checking Supabase authentication status...');
         const { data: authData, error: authError } = await supabase.auth.getUser();
-        console.log('Auth status:', { 
-          user: authData?.user ? 'authenticated' : 'not authenticated', 
+        console.log('Auth status:', {
+          user: authData?.user ? 'authenticated' : 'not authenticated',
           error: authError,
           userId: authData?.user?.id
         });
-        
+
         if (authError || !authData?.user) {
           console.warn('User is not authenticated - this will cause RLS to block prescriptions table access');
           console.warn('RLS Policy requires: auth.role() = authenticated, but auth.role() returns null');
@@ -388,12 +388,12 @@ function OutpatientPageContent() {
       } catch (authCheckErr) {
         console.error('Error checking auth status:', authCheckErr);
       }
-      
+
       // Get today's date in YYYY-MM-DD format
       const today = new Date().toISOString().split('T')[0];
-      
+
       console.log('Loading injection queue for today:', today);
-      
+
       // First, try a simple query to test connectivity
       try {
         console.log('Testing basic Supabase connectivity...');
@@ -402,7 +402,7 @@ function OutpatientPageContent() {
           .select('count')
           .limit(1)
           .single();
-        
+
         if (testError) {
           console.error('Basic connectivity test failed:', testError);
           setInjectionQueue([]);
@@ -414,13 +414,13 @@ function OutpatientPageContent() {
         setInjectionQueue([]);
         return;
       }
-      
+
       // Fetch prescriptions with injection medications for today
       // First try a simpler query without joins to isolate the issue
       console.log('Trying simplified query first...');
       let prescriptions = null;
       let error = null;
-      
+
       try {
         const { data: simpleData, error: simpleError } = await supabase
           .from('prescriptions')
@@ -430,12 +430,12 @@ function OutpatientPageContent() {
           .gte('created_at', `${today}T00:00:00`)
           .lt('created_at', `${today}T23:59:59`)
           .limit(50); // Limit to prevent large responses
-        
+
         console.log('Simplified query result:', { data: simpleData, error: simpleError });
-        
+
         if (simpleError) {
           console.error('Simplified query failed:', simpleError);
-          
+
           // Check if this is an RLS issue
           if (!simpleError.message && !simpleError.details && !simpleError.hint && !simpleError.code) {
             console.error('🔒 RLS ISSUE DETECTED: Empty error object suggests Row Level Security is blocking access');
@@ -447,16 +447,16 @@ function OutpatientPageContent() {
             setInjectionQueue([]);
             return;
           }
-          
+
           throw simpleError;
         }
-        
+
         if (!simpleData || simpleData.length === 0) {
           console.log('No prescriptions found for today');
           setInjectionQueue([]);
           return;
         }
-        
+
         // Now try the complex query with joins
         console.log('Simplified query succeeded, trying complex query...');
         const { data: complexData, error: complexError } = await supabase
@@ -483,10 +483,10 @@ function OutpatientPageContent() {
           .not('status', 'eq', 'dispensed')
           .gte('created_at', `${today}T00:00:00`)
           .lt('created_at', `${today}T23:59:59`);
-        
+
         prescriptions = complexData;
         error = complexError;
-        
+
       } catch (queryError) {
         console.error('Query failed:', queryError);
         error = queryError;
@@ -506,7 +506,7 @@ function OutpatientPageContent() {
           errorType: typeof error,
           errorKeys: error ? Object.keys(error) : 'error is null/undefined'
         });
-        
+
         // Check if this is an RLS issue
         if (!error?.message && !error?.details && !error?.hint && !error?.code) {
           console.error('🔒 RLS ISSUE DETECTED: Empty error object suggests Row Level Security is blocking access');
@@ -514,7 +514,7 @@ function OutpatientPageContent() {
           console.error('💡 QUICK FIX: Run: ALTER TABLE public.prescriptions DISABLE ROW LEVEL SECURITY;');
           console.error('💡 LONG FIX: Implement proper Supabase authentication');
         }
-        
+
         // For now, don't fail the entire page load due to injection queue issues
         // This allows the outpatient page to work even if injection queue has RLS issues
         console.warn('Injection queue failed, but continuing with empty queue. This is likely due to RLS policies.');
@@ -526,7 +526,7 @@ function OutpatientPageContent() {
       console.log('Raw prescriptions data:', prescriptions);
       console.log('Prescriptions type:', typeof prescriptions);
       console.log('Prescriptions is array:', Array.isArray(prescriptions));
-      
+
       if (!prescriptions || !Array.isArray(prescriptions)) {
         console.warn('Prescriptions data is not an array:', prescriptions);
         setInjectionQueue([]);
@@ -538,13 +538,13 @@ function OutpatientPageContent() {
         const items = prescription.prescription_items || [];
         return items.some((item: any) => {
           const dosageForm = item.medication?.dosage_form?.toLowerCase() || '';
-          return dosageForm.includes('injection') || 
-                 dosageForm.includes('inject') || 
-                 dosageForm.includes('iv') || 
-                 dosageForm.includes('im') || 
-                 dosageForm.includes('sc') || 
-                 dosageForm.includes('vial') || 
-                 dosageForm.includes('ampoule');
+          return dosageForm.includes('injection') ||
+            dosageForm.includes('inject') ||
+            dosageForm.includes('iv') ||
+            dosageForm.includes('im') ||
+            dosageForm.includes('sc') ||
+            dosageForm.includes('vial') ||
+            dosageForm.includes('ampoule');
         });
       });
 
@@ -554,13 +554,13 @@ function OutpatientPageContent() {
         const items = prescription.prescription_items || [];
         const injectionItems = items.filter((item: any) => {
           const dosageForm = item.medication?.dosage_form?.toLowerCase() || '';
-          return dosageForm.includes('injection') || 
-                 dosageForm.includes('inject') || 
-                 dosageForm.includes('iv') || 
-                 dosageForm.includes('im') || 
-                 dosageForm.includes('sc') || 
-                 dosageForm.includes('vial') || 
-                 dosageForm.includes('ampoule');
+          return dosageForm.includes('injection') ||
+            dosageForm.includes('inject') ||
+            dosageForm.includes('iv') ||
+            dosageForm.includes('im') ||
+            dosageForm.includes('sc') ||
+            dosageForm.includes('vial') ||
+            dosageForm.includes('ampoule');
         });
 
         return {
@@ -600,7 +600,7 @@ function OutpatientPageContent() {
 
     const dbStatus = statusMapping[status] || 'active';
     console.log('Mapped status:', { uiStatus: status, dbStatus });
-    
+
     // Double-check the mapping
     if (status === 'completed' && dbStatus !== 'dispensed') {
       console.error('Mapping error: completed should map to dispensed');
@@ -611,14 +611,14 @@ function OutpatientPageContent() {
     if (status === 'cancelled' && dbStatus !== 'expired') {
       console.error('Mapping error: cancelled should map to expired');
     }
-    
+
     try {
       const updateData = {
         status: dbStatus,
         edited_by_name: staffName || 'Unknown Staff',
         updated_at: new Date().toISOString()
       };
-      
+
       console.log('Updating prescription with data:', updateData);
 
       const { data, error } = await supabase
@@ -652,8 +652,8 @@ function OutpatientPageContent() {
       // Find the item in the current queue
       const itemToUpdate = injectionQueue.find(item => item.id === itemId);
       if (itemToUpdate) {
-        const updatedItem = { 
-          ...itemToUpdate, 
+        const updatedItem = {
+          ...itemToUpdate,
           status: status, // Keep the UI status for display
           dbStatus: dbStatus, // Store the database status
           updatedByName: staffName || 'Unknown Staff',
@@ -688,15 +688,15 @@ function OutpatientPageContent() {
   const loadBillingRecords = async () => {
     try {
       setBillingLoading(true);
-      
+
       // Calculate date range based on filter
       let startDate = billingStartDate;
       let endDate = billingEndDate;
-      
+
       if (billingDateFilter !== 'all' && !startDate && !endDate) {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
+
         switch (billingDateFilter) {
           case 'daily':
             startDate = today.toISOString().split('T')[0];
@@ -718,16 +718,16 @@ function OutpatientPageContent() {
             break;
         }
       }
-      
+
       const result = await getBillingRecords(50, 0, {
         search: billingSearch,
         dateFrom: startDate,
         dateTo: endDate
       });
-      
+
       // Filter for outpatient records only
       const outpatientRecords = result.records.filter(record => record.source === 'outpatient');
-      
+
       setBillingRecords(outpatientRecords);
     } catch (error) {
       console.error('Error loading billing records:', error);
@@ -831,7 +831,7 @@ function OutpatientPageContent() {
   const loadLabTestPrescriptions = async () => {
     try {
       setLabTestLoading(true);
-      
+
       // Fetch recent prescriptions (removed has_lab_tests filter as column doesn't exist)
       const { data, error } = await supabase
         .from('prescriptions')
@@ -843,7 +843,7 @@ function OutpatientPageContent() {
           created_at,
           status,
           patient:patients(id, patient_id, name, date_of_birth, gender, phone),
-          doctor:users(id, name),
+          doctor:doctors(id, user:users(name)),
           prescription_items(
             id,
             medication_id,
@@ -873,11 +873,12 @@ function OutpatientPageContent() {
       // Format data for display
       const formattedLabTestPrescriptions = (data || []).map((prescription: any) => {
         const patient = prescription.patient;
-        const doctor = prescription.doctor;
+        const doctor = prescription.doctor?.user || prescription.doctor;
         const items = prescription.prescription_items || [];
 
         return {
           id: prescription.id,
+          patient_id: prescription.patient_id || patient?.id,
           prescription_id: prescription.prescription_id,
           patient: patient,
           doctor: doctor,
@@ -1034,7 +1035,7 @@ function OutpatientPageContent() {
     const created = new Date(createdAt);
     const now = new Date();
     const diffMinutes = Math.floor((now.getTime() - created.getTime()) / (1000 * 60));
-    
+
     if (diffMinutes < 60) {
       return `${diffMinutes} min`;
     } else {
@@ -1760,7 +1761,7 @@ function OutpatientPageContent() {
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-2">
                     <select
                       value={statusFilter}
@@ -2202,7 +2203,7 @@ function OutpatientPageContent() {
                                   placeholder="Enter staff name..."
                                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                   onChange={(e) => {
-                                    setInjectionQueue(prev => prev.map(queueItem => 
+                                    setInjectionQueue(prev => prev.map(queueItem =>
                                       queueItem.id === item.id ? { ...queueItem, staffName: e.target.value } : queueItem
                                     ));
                                   }}
@@ -2214,10 +2215,10 @@ function OutpatientPageContent() {
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => {
-                                      console.log('Dispensed button clicked:', { 
-                                        itemId: item.id, 
+                                      console.log('Dispensed button clicked:', {
+                                        itemId: item.id,
                                         staffName: item.staffName,
-                                        item: item 
+                                        item: item
                                       });
                                       updateInjectionStatus(item.id, 'completed', item.staffName);
                                     }}
@@ -2227,10 +2228,10 @@ function OutpatientPageContent() {
                                   </button>
                                   <button
                                     onClick={() => {
-                                      console.log('Active button clicked:', { 
-                                        itemId: item.id, 
+                                      console.log('Active button clicked:', {
+                                        itemId: item.id,
                                         staffName: item.staffName,
-                                        item: item 
+                                        item: item
                                       });
                                       updateInjectionStatus(item.id, 'pending', item.staffName);
                                     }}
@@ -2240,10 +2241,10 @@ function OutpatientPageContent() {
                                   </button>
                                   <button
                                     onClick={() => {
-                                      console.log('Expired button clicked:', { 
-                                        itemId: item.id, 
+                                      console.log('Expired button clicked:', {
+                                        itemId: item.id,
                                         staffName: item.staffName,
-                                        item: item 
+                                        item: item
                                       });
                                       updateInjectionStatus(item.id, 'cancelled', item.staffName);
                                     }}
@@ -2258,11 +2259,11 @@ function OutpatientPageContent() {
                           {item.status && item.updatedByName && (
                             <div className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
                               Status: <span className="font-medium">
-                                {item.status === 'completed' ? 'Dispensed' : 
-                                 item.status === 'pending' ? 'Active' : 
-                                 item.status === 'cancelled' ? 'Expired' : 
-                                 item.status}
-                              </span> by 
+                                {item.status === 'completed' ? 'Dispensed' :
+                                  item.status === 'pending' ? 'Active' :
+                                    item.status === 'cancelled' ? 'Expired' :
+                                      item.status}
+                              </span> by
                               <span className="font-medium">
                                 {item.updatedByName || 'Unknown Staff'}
                               </span>
@@ -2292,32 +2293,29 @@ function OutpatientPageContent() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-3">
-                              <div className={`p-2 rounded-lg ${
-                                item.status === 'completed' ? 'bg-green-100' : 
-                                item.status === 'pending' ? 'bg-yellow-100' : 
-                                'bg-red-100'
-                              }`}>
-                                <Syringe className={`h-5 w-5 ${
-                                  item.status === 'completed' ? 'text-green-600' : 
-                                  item.status === 'pending' ? 'text-yellow-600' : 
-                                  'text-red-600'
-                                }`} />
+                              <div className={`p-2 rounded-lg ${item.status === 'completed' ? 'bg-green-100' :
+                                item.status === 'pending' ? 'bg-yellow-100' :
+                                  'bg-red-100'
+                                }`}>
+                                <Syringe className={`h-5 w-5 ${item.status === 'completed' ? 'text-green-600' :
+                                  item.status === 'pending' ? 'text-yellow-600' :
+                                    'text-red-600'
+                                  }`} />
                               </div>
                               <div>
                                 <h4 className="font-semibold text-gray-900">{item.patient?.name || 'Unknown Patient'}</h4>
                                 <p className="text-sm text-gray-600">UHID: {item.patient?.patient_id || 'N/A'}</p>
                               </div>
-                              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                item.status === 'completed' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : item.status === 'pending'
+                              <div className={`px-2 py-1 rounded-full text-xs font-medium ${item.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : item.status === 'pending'
                                   ? 'bg-yellow-100 text-yellow-800'
                                   : 'bg-red-100 text-red-800'
-                              }`}>
-                                {item.status === 'completed' ? 'Dispensed' : 
-                                 item.status === 'pending' ? 'Active' : 
-                                 item.status === 'cancelled' ? 'Expired' : 
-                                 item.status}
+                                }`}>
+                                {item.status === 'completed' ? 'Dispensed' :
+                                  item.status === 'pending' ? 'Active' :
+                                    item.status === 'cancelled' ? 'Expired' :
+                                      item.status}
                               </div>
                             </div>
 
@@ -2371,11 +2369,11 @@ function OutpatientPageContent() {
                             <div className="border-t pt-3 mt-3">
                               <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
                                 Status: <span className="font-medium">
-                                  {item.status === 'completed' ? 'Dispensed' : 
-                                   item.status === 'pending' ? 'Active' : 
-                                   item.status === 'cancelled' ? 'Expired' : 
-                                   item.status}
-                                </span> by 
+                                  {item.status === 'completed' ? 'Dispensed' :
+                                    item.status === 'pending' ? 'Active' :
+                                      item.status === 'cancelled' ? 'Expired' :
+                                        item.status}
+                                </span> by
                                 <span className="font-medium">
                                   {item.updatedByName || 'Unknown Staff'}
                                 </span>
@@ -2450,7 +2448,7 @@ function OutpatientPageContent() {
                   </div>
                   <span className="text-sm text-gray-500">Last 10 appointments</span>
                 </div>
-                
+
                 {recentPatients.length > 0 ? (
                   <div className="space-y-3">
                     {recentPatients.map((patient, index) => (
@@ -2466,13 +2464,19 @@ function OutpatientPageContent() {
                                 <p className="text-sm text-gray-500">UHID: {patient.patient_id}</p>
                               </div>
                             </div>
-                            <div className="text-right">
+                            <div className="flex flex-col items-end gap-2">
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                 {patient.appointment_status}
                               </span>
+                              <Link href={`/patients/${patient.id}`}>
+                                <button className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1">
+                                  View Profile
+                                  <ArrowRight size={10} />
+                                </button>
+                              </Link>
                             </div>
                           </div>
-                          
+
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-sm">
                             <div className="flex items-center gap-2 text-gray-600">
                               <Phone className="h-4 w-4" />
@@ -2487,7 +2491,7 @@ function OutpatientPageContent() {
                               <span>{patient.last_appointment_time}</span>
                             </div>
                           </div>
-                          
+
                           {patient.doctor_name && (
                             <div className="mt-3 pt-3 border-t border-gray-100">
                               <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -2789,16 +2793,15 @@ function OutpatientPageContent() {
                           {new Date(prescription.created_at).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            prescription.status === 'active' ? 'bg-yellow-100 text-yellow-800' :
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${prescription.status === 'active' ? 'bg-yellow-100 text-yellow-800' :
                             prescription.status === 'dispensed' ? 'bg-green-100 text-green-800' :
-                            prescription.status === 'expired' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
+                              prescription.status === 'expired' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                            }`}>
                             {prescription.status === 'active' ? 'Active' :
-                               prescription.status === 'dispensed' ? 'Completed' :
-                               prescription.status === 'expired' ? 'Expired' :
-                               prescription.status}
+                              prescription.status === 'dispensed' ? 'Completed' :
+                                prescription.status === 'expired' ? 'Expired' :
+                                  prescription.status}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -2849,7 +2852,7 @@ function OutpatientPageContent() {
                 className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
               />
             </div>
-            
+
             <div className="flex gap-2">
               <select
                 value={billingDateFilter}
@@ -2862,7 +2865,7 @@ function OutpatientPageContent() {
                 <option value="monthly">Monthly</option>
               </select>
             </div>
-            
+
             <div className="flex gap-2">
               <input
                 type="date"
@@ -2909,7 +2912,14 @@ function OutpatientPageContent() {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div>
-                            <div className="font-medium">{record.patient?.name || 'Unknown Patient'}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium">{record.patient?.name || 'Unknown Patient'}</div>
+                              <Link href={`/patients/${record.patient?.id}`}>
+                                <button className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors" title="View Patient">
+                                  <Eye size={14} />
+                                </button>
+                              </Link>
+                            </div>
                             <div className="text-gray-500">{record.patient?.patient_id || 'N/A'}</div>
                           </div>
                         </td>
@@ -3007,116 +3017,116 @@ function OutpatientPageContent() {
           return todaysPatients.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {todaysPatients.slice(0, 3).map((patient) => (
-              <div
-                key={patient.id}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-bold text-gray-900">{patient.name}</h3>
-                    <p className="text-gray-500 text-sm font-mono">{patient.patient_id}</p>
-                  </div>
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    Outpatient
-                  </span>
-                </div>
-
-                <div className="space-y-3 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-blue-500" />
-                    <span className="font-medium">
-                      Age: {patient.age || calculateAge(patient.date_of_birth)} | {patient.gender}
+                <div
+                  key={patient.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-bold text-gray-900">{patient.name}</h3>
+                      <p className="text-gray-500 text-sm font-mono">{patient.patient_id}</p>
+                    </div>
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Outpatient
                     </span>
                   </div>
 
-                  {patient.consulting_doctor_name && (
+                  <div className="space-y-3 text-sm text-gray-600">
                     <div className="flex items-center gap-2">
-                      <Stethoscope className="h-4 w-4 text-purple-500" />
-                      <span className="text-purple-700 font-medium">Dr. {patient.consulting_doctor_name}</span>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {patient.bmi && (
-                      <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded border border-green-100 text-[10px] font-bold">
-                        BMI: {patient.bmi}
-                      </span>
-                    )}
-                    {patient.bp_systolic && (
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-100 text-[10px] font-bold">
-                        BP: {patient.bp_systolic}/{patient.bp_diastolic}
-                      </span>
-                    )}
-                    {patient.temperature && (
-                      <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded border border-orange-100 text-[10px] font-bold">
-                        Temp: {patient.temperature}°F
-                      </span>
-                    )}
-                  </div>
-
-                  {patient.diagnosis && (
-                    <div className="flex items-start gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                      <AlertCircle className="h-4 w-4 mt-0.5 text-orange-500" />
-                      <span className="text-xs line-clamp-2" title={patient.diagnosis}>
-                        {patient.diagnosis}
+                      <User className="h-4 w-4 text-blue-500" />
+                      <span className="font-medium">
+                        Age: {patient.age || calculateAge(patient.date_of_birth)} | {patient.gender}
                       </span>
                     </div>
-                  )}
 
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
-                    <div className="flex items-center gap-1 text-gray-400">
-                      <Calendar className="h-4 w-4" />
-                      <span className="text-[11px]">{patient.admission_date ? new Date(patient.admission_date).toLocaleDateString() : 'N/A'}</span>
+                    {patient.consulting_doctor_name && (
+                      <div className="flex items-center gap-2">
+                        <Stethoscope className="h-4 w-4 text-purple-500" />
+                        <span className="text-purple-700 font-medium">Dr. {patient.consulting_doctor_name}</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {patient.bmi && (
+                        <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded border border-green-100 text-[10px] font-bold">
+                          BMI: {patient.bmi}
+                        </span>
+                      )}
+                      {patient.bp_systolic && (
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-100 text-[10px] font-bold">
+                          BP: {patient.bp_systolic}/{patient.bp_diastolic}
+                        </span>
+                      )}
+                      {patient.temperature && (
+                        <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded border border-orange-100 text-[10px] font-bold">
+                          Temp: {patient.temperature}°F
+                        </span>
+                      )}
                     </div>
-                    {patient.total_amount && (
-                      <div className="text-green-600 font-bold">
-                        ₹{patient.total_amount}
+
+                    {patient.diagnosis && (
+                      <div className="flex items-start gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        <AlertCircle className="h-4 w-4 mt-0.5 text-orange-500" />
+                        <span className="text-xs line-clamp-2" title={patient.diagnosis}>
+                          {patient.diagnosis}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+                      <div className="flex items-center gap-1 text-gray-400">
+                        <Calendar className="h-4 w-4" />
+                        <span className="text-[11px]">{patient.admission_date ? new Date(patient.admission_date).toLocaleDateString() : 'N/A'}</span>
+                      </div>
+                      {patient.total_amount && (
+                        <div className="text-green-600 font-bold">
+                          ₹{patient.total_amount}
+                        </div>
+                      )}
+                    </div>
+
+                    {patient.staff && (
+                      <div className="mt-2 text-[10px] text-gray-500 flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 rounded border border-gray-100 italic">
+                        <User size={10} className="text-blue-500" />
+                        <span>Registered By: {patient.staff.first_name} {patient.staff.last_name}</span>
                       </div>
                     )}
                   </div>
 
-                  {patient.staff && (
-                    <div className="mt-2 text-[10px] text-gray-500 flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 rounded border border-gray-100 italic">
-                      <User size={10} className="text-blue-500" />
-                      <span>Registered By: {patient.staff.first_name} {patient.staff.last_name}</span>
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <Link
+                      href={`/patients/${patient.id}`}
+                      className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center justify-center gap-1 w-full py-1.5 rounded bg-blue-50 hover:bg-blue-100 transition-colors"
+                    >
+                      View Patient Case File
+                      <ArrowRight size={12} />
+                    </Link>
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handlePrintBill(patient)}
+                        className="flex-1 text-green-600 hover:text-green-800 text-xs font-bold flex items-center justify-center gap-1 py-1.5 rounded bg-green-50 hover:bg-green-100 transition-colors"
+                      >
+                        <Printer size={12} />
+                        Print Bill
+                      </button>
+                      <button
+                        onClick={() => handleBillUHID(patient)}
+                        className="flex-1 text-purple-600 hover:text-purple-800 text-xs font-bold flex items-center justify-center gap-1 py-1.5 rounded bg-purple-50 hover:bg-purple-100 transition-colors"
+                      >
+                        <FileText size={12} />
+                        Bill UHID
+                      </button>
                     </div>
-                  )}
-                </div>
-
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <Link
-                    href={`/patients/${patient.id}`}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center justify-center gap-1 w-full py-1.5 rounded bg-blue-50 hover:bg-blue-100 transition-colors"
-                  >
-                    View Patient Case File
-                    <ArrowRight size={12} />
-                  </Link>
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => handlePrintBill(patient)}
-                      className="flex-1 text-green-600 hover:text-green-800 text-xs font-bold flex items-center justify-center gap-1 py-1.5 rounded bg-green-50 hover:bg-green-100 transition-colors"
-                    >
-                      <Printer size={12} />
-                      Print Bill
-                    </button>
-                    <button
-                      onClick={() => handleBillUHID(patient)}
-                      className="flex-1 text-purple-600 hover:text-purple-800 text-xs font-bold flex items-center justify-center gap-1 py-1.5 rounded bg-purple-50 hover:bg-purple-100 transition-colors"
-                    >
-                      <FileText size={12} />
-                      Bill UHID
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <User className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-500">No patients registered today</p>
-          </div>
-        );
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500">No patients registered today</p>
+            </div>
+          );
         })()}
       </div >
 
@@ -3229,8 +3239,8 @@ function OutpatientPageContent() {
                         </button>
                       </Link>
                       {appointment.status === 'scheduled' && (
-                        <button 
-                          disabled 
+                        <button
+                          disabled
                           className="text-xs px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg cursor-not-allowed transition-colors"
                           title="Admission to IP is currently disabled"
                         >

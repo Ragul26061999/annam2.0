@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Clock,
   Plus,
-  RotateCcw
+  RotateCcw,
+  FileText
 } from 'lucide-react'
 import { supabase } from '@/src/lib/supabase'
 import { getCurrentUserProfile } from '@/src/lib/supabase'
@@ -123,7 +124,7 @@ export default function PharmacyBillingPage() {
   useEffect(() => {
     loadBillingData()
     loadMedications()
-    
+
     // Load current user for admin check
     const loadCurrentUser = async () => {
       try {
@@ -137,9 +138,9 @@ export default function PharmacyBillingPage() {
         setIsAdmin(false)
       }
     }
-    
+
     loadCurrentUser()
-    
+
       ; (async () => {
         try {
           const { data } = await supabase.from('hospital_settings').select('*').eq('id', 1).maybeSingle()
@@ -277,7 +278,7 @@ export default function PharmacyBillingPage() {
         if (!staffError && staffData) {
           staffMap = staffData.reduce((acc: any, s: any) => {
             const fullName = `${s.first_name || ''} ${s.last_name || ''}`.trim()
-            acc[s.id] = { 
+            acc[s.id] = {
               first_name: s.first_name || '',
               last_name: s.last_name || '',
               employee_id: s.employee_id || '',
@@ -294,10 +295,10 @@ export default function PharmacyBillingPage() {
       const getPaymentStatusWithRoundoff = (totalAmount: number, amountPaid: number, currentStatus: string, paymentMethod: string) => {
         // For credit payments, always keep as pending until explicitly marked as paid through payment system
         if (paymentMethod === 'credit') return 'pending';
-        
+
         // If already marked as paid and not credit, keep it as paid
         if (currentStatus === 'paid') return 'paid';
-        
+
         // If no amount paid, it's pending
         if (!amountPaid || amountPaid <= 0) return 'pending';
 
@@ -320,10 +321,10 @@ export default function PharmacyBillingPage() {
         const amountPaid = bill.amount_paid || 0;
         const currentStatus = bill.payment_status || 'pending';
         const paymentMethod = bill.payment_method || 'cash';
-        
+
         // Determine correct payment status considering roundoff and payment method
         const correctedStatus = getPaymentStatusWithRoundoff(totalAmount, amountPaid, currentStatus, paymentMethod);
-        
+
         return {
           id: bill.id,
           bill_number: bill.bill_number || `#${bill.id.slice(-8)}`,
@@ -359,16 +360,16 @@ export default function PharmacyBillingPage() {
             setBillReturnsMap({})
           } else {
             const map: Record<string, { return_id: string; return_number: string; return_date: string | null; refund_amount: number | null }[]> = {}
-            ;(srRows || []).forEach((r: any) => {
-              const bid = String(r.bill_id)
-              if (!map[bid]) map[bid] = []
-              map[bid].push({
-                return_id: String(r.id),
-                return_number: String(r.return_number || ''),
-                return_date: r.return_date || null,
-                refund_amount: r.refund_amount !== null && r.refund_amount !== undefined ? Number(r.refund_amount) : null
+              ; (srRows || []).forEach((r: any) => {
+                const bid = String(r.bill_id)
+                if (!map[bid]) map[bid] = []
+                map[bid].push({
+                  return_id: String(r.id),
+                  return_number: String(r.return_number || ''),
+                  return_date: r.return_date || null,
+                  refund_amount: r.refund_amount !== null && r.refund_amount !== undefined ? Number(r.refund_amount) : null
+                })
               })
-            })
             setBillReturnsMap(map)
           }
         } else {
@@ -538,7 +539,7 @@ export default function PharmacyBillingPage() {
       // Update billing table with correct payment status
       let paymentStatus = 'partial'
       const difference = Math.abs(totalAmount - newTotalPaid)
-      
+
       // Use same roundoff tolerance as the status function
       if (difference <= 0.05 || newTotalPaid >= totalAmount) {
         paymentStatus = 'paid'
@@ -546,7 +547,7 @@ export default function PharmacyBillingPage() {
 
       const { error: billingError } = await supabase
         .from('billing')
-        .update({ 
+        .update({
           payment_status: paymentStatus,
           amount_paid: newTotalPaid,
           payment_method: paymentMethod,
@@ -599,13 +600,13 @@ export default function PharmacyBillingPage() {
           received_at: new Date().toISOString(),
           paid_at: new Date().toISOString()
         }
-        
+
         console.log('Simple payment data:', simplePaymentData)
-        
+
         const { error: simplePaymentError } = await supabase
           .from('billing_payments')
           .insert(simplePaymentData)
-        
+
         if (simplePaymentError) {
           console.error('Simple payment insert error:', simplePaymentError)
           throw simplePaymentError
@@ -615,7 +616,7 @@ export default function PharmacyBillingPage() {
       await loadBillingData()
       setShowMarkPaidModal(false)
       setSelectedBillForPayment(null)
-      
+
       // Show appropriate success message
       if (paymentStatus === 'paid') {
         alert('Payment recorded successfully! Bill marked as fully paid.')
@@ -638,7 +639,7 @@ export default function PharmacyBillingPage() {
 
     try {
       setLoading(true)
-      
+
       // First delete related billing items
       const { error: itemsError } = await supabase
         .from('billing_item')
@@ -773,7 +774,7 @@ export default function PharmacyBillingPage() {
 
     try {
       // Get all bills with pending or partial payment status
-      const pendingBillsData = bills.filter(bill => 
+      const pendingBillsData = bills.filter(bill =>
         bill.payment_status === 'pending' || bill.payment_status === 'partial'
       )
 
@@ -1375,7 +1376,7 @@ export default function PharmacyBillingPage() {
     let matchesTimeframe = true
     if (timeframe !== 'all') {
       const billDate = new Date(bill.created_at)
-      
+
       if (timeframe === 'date_range') {
         if (startDate && endDate) {
           const start = new Date(startDate)
@@ -1475,6 +1476,12 @@ export default function PharmacyBillingPage() {
               <p className="text-gray-600 mt-1">Manage bills and payment records</p>
             </div>
           </div>
+          <Link href="/pharmacy/billing/reports">
+            <button className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl shadow-lg hover:bg-indigo-700 transition-all font-semibold">
+              <FileText className="h-5 w-5" />
+              Report
+            </button>
+          </Link>
         </div>
       )}
 
@@ -1812,7 +1819,7 @@ export default function PharmacyBillingPage() {
               )}
               <div><span className="font-medium">Date:</span> {new Date(selectedBill.created_at).toLocaleString()}</div>
               <div><span className="font-medium">Payment Status:</span> <span className={getStatusBadge(selectedBill.payment_status)}>{selectedBill.payment_status}</span></div>
-                            {(selectedBill.amount_paid !== undefined && selectedBill.amount_paid !== selectedBill.total_amount) && (
+              {(selectedBill.amount_paid !== undefined && selectedBill.amount_paid !== selectedBill.total_amount) && (
                 <div className="col-span-2">
                   <span className="font-medium">Payment:</span> ₹{roundToWholeNumber(selectedBill.amount_paid || 0)} / ₹{roundToWholeNumber(selectedBill.total_amount || 0)}
                   {selectedBill.payment_status === 'partial' && (
@@ -1941,8 +1948,8 @@ export default function PharmacyBillingPage() {
             <div className="mt-4 flex gap-3">
               <button onClick={showThermalPreviewWithLogo} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Thermal Print</button>
               {isAdmin && (
-                <button 
-                  onClick={() => handleDeleteBill(selectedBill.id, selectedBill.bill_number)} 
+                <button
+                  onClick={() => handleDeleteBill(selectedBill.id, selectedBill.bill_number)}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -2236,7 +2243,7 @@ export default function PharmacyBillingPage() {
                     const totalAmount = selectedBillForPayment.total_amount || 0
                     const currentPaid = selectedBillForPayment.amount_paid || 0
                     const remainingBalance = totalAmount - currentPaid
-                    
+
                     // Prevent entering amount greater than remaining balance
                     if (amount > remainingBalance) {
                       setPaymentAmount(remainingBalance.toString())

@@ -43,6 +43,7 @@ import StaffSelect from '../../../src/components/StaffSelect';
 import UniversalPaymentModal from '../../../src/components/UniversalPaymentModal';
 import { getAllDoctorsSimple } from '../../../src/lib/doctorService';
 import { motion, AnimatePresence } from 'framer-motion';
+import LabXrayAttachments from '../../../src/components/LabXrayAttachments';
 
 interface TestSelection {
     testId: string;
@@ -101,10 +102,9 @@ export default function XrayOrderPage() {
         emailId: ''
     });
 
-    // Order Details
-    const [selectedTests, setSelectedTests] = useState<TestSelection[]>([
-        { testId: '', testName: '', groupName: '', bodyPart: '', amount: 0 }
-    ]);
+    const [selectedTests, setSelectedTests] = useState<TestSelection[]>([]);
+    const [pendingTestId, setPendingTestId] = useState('');
+    const [pendingAmount, setPendingAmount] = useState<number>(0);
     const [orderingDoctorId, setOrderingDoctorId] = useState('');
     const [clinicalIndication, setClinicalIndication] = useState('');
     const [urgency, setUrgency] = useState<'routine' | 'urgent' | 'stat' | 'emergency'>('routine');
@@ -301,15 +301,27 @@ export default function XrayOrderPage() {
         }
     };
 
-    const addTest = () => {
-        setSelectedTests([...selectedTests, { testId: '', testName: '', groupName: '', bodyPart: '', amount: 0 }]);
+    const handleAddPendingTest = () => {
+        if (!pendingTestId) return;
+        const test = radCatalog.find(t => t.id === pendingTestId);
+        if (!test) return;
+        setSelectedTests(prev => [
+            {
+                testId: test.id,
+                testName: test.test_name,
+                groupName: test.modality || 'X-Ray',
+                bodyPart: test.body_part || '',
+                amount: Number.isFinite(pendingAmount) && pendingAmount > 0 ? pendingAmount : (test.test_cost || 0)
+            },
+            ...prev.filter(t => t.testId !== test.id)
+        ]);
+        // reset pending
+        setPendingTestId('');
+        setPendingAmount(0);
     };
 
-    const removeTest = (index: number) => {
-        if (selectedTests.length === 1) return;
-        const newTests = [...selectedTests];
-        newTests.splice(index, 1);
-        setSelectedTests(ensureTrailingEmptyRow(newTests));
+    const handleRemoveSelectedTest = (testId: string) => {
+        setSelectedTests(prev => prev.filter(t => t.testId !== testId));
     };
 
     const applyGroupToSelection = async (groupId: string) => {
@@ -337,7 +349,7 @@ export default function XrayOrderPage() {
                 })
                 .filter(s => Boolean(s.testId));
 
-            setSelectedTests(ensureTrailingEmptyRow(selections.length ? selections : [{ testId: '', testName: '', groupName: '', bodyPart: '', amount: 0 }]));
+            setSelectedTests(selections);
         } catch (e: any) {
             setError(e?.message || 'Failed to load group items');
         } finally {
@@ -348,29 +360,26 @@ export default function XrayOrderPage() {
     const clearGroupSelection = () => {
         setSelectedGroupId('');
         setUseGroup(false);
-        setSelectedTests([{ testId: '', testName: '', groupName: '', bodyPart: '', amount: 0 }]);
+        setSelectedTests([]);
     };
 
-    const handleTestChange = (index: number, testId: string) => {
-        const test = radCatalog.find(t => t.id === testId);
-        if (!test) return;
-
-        const newTests = [...selectedTests];
-        newTests[index] = {
-            testId: test.id,
-            testName: test.test_name,
-            groupName: test.modality || 'X-Ray',
-            bodyPart: test.body_part || '',
-            amount: test.test_cost || 0
-        };
-        setSelectedTests(ensureTrailingEmptyRow(newTests));
+    const handleAmountChange = (testId: string, amount: number) => {
+        setSelectedTests(prev => prev.map(t => t.testId === testId ? { ...t, amount } : t));
     };
 
-    const handleManualAmountChange = (index: number, amount: number) => {
-        const newTests = [...selectedTests];
-        newTests[index].amount = amount;
-        setSelectedTests(ensureTrailingEmptyRow(newTests));
+    const handleBodyPartChange = (testId: string, bodyPart: string) => {
+        setSelectedTests(prev => prev.map(t => t.testId === testId ? { ...t, bodyPart } : t));
     };
+
+    // Update pending amount automatically when pending test changes
+    useEffect(() => {
+        if (!pendingTestId) {
+            setPendingAmount(0);
+            return;
+        }
+        const t = radCatalog.find(item => item.id === pendingTestId);
+        setPendingAmount(t?.test_cost || 0);
+    }, [pendingTestId, radCatalog]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -497,6 +506,7 @@ export default function XrayOrderPage() {
                                             onChange={(e) => setUhidSearch(e.target.value)}
                                             onFocus={() => setShowSearchDropdown(searchResults.length > 0)}
                                             className="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-2 border-transparent focus:border-teal-500 focus:bg-white rounded-2xl transition-all outline-none text-sm font-semibold text-slate-700"
+                                            autoFocus
                                         />
                                         {uhidSearch && (
                                             <button
@@ -510,7 +520,7 @@ export default function XrayOrderPage() {
                                                 <X size={18} />
                                             </button>
                                         )}
-                                        
+
                                         {/* Search Results Dropdown */}
                                         {showSearchDropdown && searchResults.length > 0 && (
                                             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-lg max-h-80 overflow-y-auto z-50">
@@ -600,7 +610,7 @@ export default function XrayOrderPage() {
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col"
+                            className="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden"
                         >
                             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
@@ -617,7 +627,7 @@ export default function XrayOrderPage() {
                                         onClick={() => setShowNewTestModal(true)}
                                         className="flex items-center gap-2 px-4 py-2 border-2 border-teal-600 text-teal-600 rounded-xl text-sm font-bold hover:bg-teal-50 transition-all"
                                     >
-                                        <Beaker size={18} />
+                                        <Plus size={18} />
                                         New Catalog Entry
                                     </button>
                                 </div>
@@ -670,97 +680,149 @@ export default function XrayOrderPage() {
                                     </div>
                                 </div>
 
-                                <AnimatePresence>
-                                    {selectedTests.map((test, index) => (
-                                        <motion.div
-                                            key={`rad-test-${index}`}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.95 }}
-                                            className="relative grid grid-cols-1 md:grid-cols-12 gap-5 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-100 hover:border-cyan-200 transition-all group shadow-sm"
-                                        >
-                                            <div className="md:col-span-4 space-y-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Procedure Name</label>
+                                <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
+                                    {/* Pinned selection bar */}
+                                    <div className="sticky top-0 z-10 -mx-4 px-4 pb-4 bg-slate-50">
+                                        <div className="hidden md:grid grid-cols-12 gap-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                            <div className="md:col-span-5 pl-1">Procedure Name</div>
+                                            <div className="md:col-span-4 pl-1">Modality</div>
+                                            <div className="md:col-span-2 pl-1">Amount (₹)</div>
+                                            <div className="md:col-span-1" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                                            <div className="md:col-span-5">
                                                 <SearchableSelect
-                                                    value={test.testId}
-                                                    onChange={(value: string) => handleTestChange(index, value)}
+                                                    value={pendingTestId}
+                                                    onChange={(value: string) => {
+                                                        setPendingTestId(value);
+                                                        if (value) {
+                                                            const test = radCatalog.find(t => t.id === value);
+                                                            if (test) {
+                                                                setSelectedTests(prev => [
+                                                                    ...prev.filter(t => t.testId !== test.id),
+                                                                    {
+                                                                        testId: test.id,
+                                                                        testName: test.test_name,
+                                                                        groupName: test.modality || 'X-Ray',
+                                                                        bodyPart: test.body_part || '',
+                                                                        amount: test.test_cost || 0
+                                                                    }
+                                                                ]);
+                                                                setPendingTestId('');
+                                                                setPendingAmount(0);
+                                                            }
+                                                        }
+                                                    }}
                                                     options={radCatalog.map(item => ({
                                                         value: item.id,
                                                         label: item.test_name,
                                                         group: item.modality,
                                                         subLabel: `₹${item.test_cost}`
                                                     }))}
-                                                    placeholder="CHOOSE SCAN..."
+                                                    placeholder="CHOOSE X-RAY SCAN..."
+                                                    keepOpenAfterSelect={true}
                                                 />
                                             </div>
-
-                                            <div className="md:col-span-3 space-y-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Modality</label>
-                                                <div className="px-5 py-3.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest text-center shadow-inner">
-                                                    {test.groupName || 'IMAGE'}
+                                            <div className="md:col-span-4">
+                                                <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
+                                                    {radCatalog.find(i => i.id === pendingTestId)?.modality || 'N/A'}
                                                 </div>
                                             </div>
-
-                                            <div className="md:col-span-3 space-y-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Cost / Amount (₹)</label>
+                                            <div className="md:col-span-2">
                                                 <div className="relative">
-                                                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+                                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                                                     <input
                                                         type="number"
-                                                        value={test.amount}
-                                                        onChange={(e) => handleManualAmountChange(index, parseFloat(e.target.value) || 0)}
-                                                        className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm font-black text-cyan-700 focus:ring-2 focus:ring-cyan-500 outline-none tracking-tighter"
+                                                        value={pendingAmount}
+                                                        onChange={(e) => setPendingAmount(parseFloat(e.target.value) || 0)}
+                                                        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-teal-700 focus:ring-2 focus:ring-teal-500 outline-none"
                                                     />
                                                 </div>
                                             </div>
-
-                                            <div className="md:col-span-2 flex justify-end items-end">
+                                            <div className="md:col-span-1">
                                                 <button
-                                                    onClick={addTest}
-                                                    className="flex items-center gap-2 px-3 py-3.5 bg-cyan-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-cyan-700 transition-all shadow-lg shadow-cyan-100"
-                                                    title="Add Procedure"
+                                                    type="button"
+                                                    onClick={handleAddPendingTest}
+                                                    disabled={!pendingTestId}
+                                                    className="w-full flex items-center justify-center p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-all disabled:opacity-50"
                                                 >
-                                                    <Plus size={16} />
+                                                    <Plus size={20} />
                                                 </button>
                                             </div>
+                                        </div>
+                                    </div>
 
-                                            {/* Region Input - Extra field for Xray */}
-                                            <div className="md:col-span-12 space-y-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Specific Region / View Details</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="E.g. AP & LATERAL, OBLIQUE VIEW, CONTRAST REQUIRED"
-                                                    value={test.bodyPart}
-                                                    onChange={(e) => {
-                                                        const newTests = [...selectedTests];
-                                                        newTests[index].bodyPart = e.target.value;
-                                                        setSelectedTests(newTests);
-                                                    }}
-                                                    className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 placeholder:text-slate-300 outline-none focus:border-cyan-300 transition-all"
-                                                />
-                                            </div>
-
-                                            {selectedTests.length > 1 && (
-                                                <button
-                                                    onClick={() => removeTest(index)}
-                                                    className="absolute -top-3 -right-3 p-2 bg-white border border-slate-200 text-slate-300 hover:text-red-500 hover:border-red-100 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all z-10"
+                                    {/* Selected tests list */}
+                                    <div className="space-y-4 pt-2">
+                                        <AnimatePresence>
+                                            {selectedTests.map((test) => (
+                                                <motion.div
+                                                    key={`test-${test.testId}`}
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95 }}
+                                                    className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start relative group p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-teal-200 transition-all"
                                                 >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            )}
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
+                                                    <button
+                                                        onClick={() => handleRemoveSelectedTest(test.testId)}
+                                                        className="absolute -top-2 -right-2 p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-500 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20 hover:scale-110 active:scale-90"
+                                                        title="Remove"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+
+                                                    <div className="md:col-span-12 lg:col-span-5 space-y-2">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Procedure Name</label>
+                                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
+                                                            {test.testName}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="md:col-span-6 lg:col-span-4 space-y-2">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Modality</label>
+                                                        <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
+                                                            {test.groupName || 'IMAGE'}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="md:col-span-6 lg:col-span-3 space-y-2">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Amount (₹)</label>
+                                                        <div className="relative">
+                                                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                                            <input
+                                                                type="number"
+                                                                value={test.amount}
+                                                                onChange={(e) => handleAmountChange(test.testId, parseFloat(e.target.value) || 0)}
+                                                                className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-teal-700 focus:ring-2 focus:ring-teal-500 outline-none"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="md:col-span-12 space-y-2 mt-2">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Specific Region / View Details</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="E.g. AP & LATERAL, OBLIQUE VIEW, CONTRAST REQUIRED"
+                                                            value={test.bodyPart}
+                                                            onChange={(e) => handleBodyPartChange(test.testId, e.target.value)}
+                                                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 placeholder:text-slate-300 outline-none focus:border-teal-300 transition-all"
+                                                        />
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
 
                                 {/* Secondary Form Details */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8">
                                     <div className="space-y-6">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Referring Physician (Optional)</label>
                                             <select
                                                 value={orderingDoctorId}
                                                 onChange={(e) => setOrderingDoctorId(e.target.value)}
-                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-cyan-500"
+                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                                             >
                                                 <option value="">SELECT INTERNAL DOCTOR...</option>
                                                 {doctors.map(d => (
@@ -779,80 +841,72 @@ export default function XrayOrderPage() {
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Clinical Instruction</label>
                                             <textarea
-                                                rows={3}
+                                                rows={4}
                                                 value={clinicalIndication}
                                                 onChange={(e) => setClinicalIndication(e.target.value)}
-                                                placeholder="INDICATIONS FOR SCAN..."
-                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none resize-none"
+                                                placeholder="Provide detailed indications for scan..."
+                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none resize-none transition-all"
                                             />
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Radiation Safety / Consents</label>
-                                            <div className="border-2 border-dashed border-slate-200 rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 bg-slate-50 hover:bg-cyan-50 hover:border-cyan-200 transition-all cursor-pointer group">
-                                                <div className="p-4 bg-white rounded-2xl border border-slate-200 text-slate-400 group-hover:text-cyan-500 group-hover:border-cyan-200 shadow-sm transition-all animate-none group-hover:animate-bounce">
-                                                    <Upload size={26} />
-                                                </div>
-                                                <div className="text-center">
-                                                    <p className="text-xs font-black text-slate-700 uppercase tracking-tighter">Attach Clinical Report</p>
-                                                    <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold">PDF, DICOM OR IMG MAX 25MB</p>
-                                                </div>
-                                            </div>
+                                    <div className="space-y-6">
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">X-Ray Study Attachments</label>
+                                            <LabXrayAttachments
+                                                patientId={patientDetails.id}
+                                                testType="radiology"
+                                                testName={selectedTests.filter(t => t.testId).length > 0 ? selectedTests.filter(t => t.testId).map(t => t.testName).join(', ') : 'Study'}
+                                                uploadedBy={undefined}
+                                                onAttachmentChange={() => {
+                                                    // Refresh attachments if needed
+                                                }}
+                                                showFileBrowser={false}
+                                            />
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Billing Action Section */}
-                            <div className="p-7 bg-slate-900 border-t border-slate-800 rounded-b-[2rem]">
+                            {/* Total Billing Footer */}
+                            <div className="p-8 bg-slate-900 border-t border-slate-800">
                                 <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                                     <div className="flex items-center gap-10">
                                         <div className="flex flex-col">
                                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Total Estimated Bill</span>
                                             <div className="flex items-baseline gap-2">
-                                                <span className="text-cyan-500 text-xl font-black">₹</span>
+                                                <span className="text-teal-500 text-xl font-black">₹</span>
                                                 <span className="text-5xl font-black text-white tracking-tighter">{totalAmount.toLocaleString()}</span>
+                                                <span className="text-teal-400 text-[10px] font-black ml-2 opacity-50">GST incl.</span>
                                             </div>
                                         </div>
                                         <div className="flex flex-col border-l border-slate-800 pl-10">
-                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Priority Scan</span>
-                                            <div className="flex gap-2">
-                                                {['routine', 'stat'].map(level => (
-                                                    <button
-                                                        key={level}
-                                                        onClick={() => setUrgency(level as any)}
-                                                        className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${urgency === level ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-900/50' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-                                                    >
-                                                        {level}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Tests Selected</span>
+                                            <span className="text-2xl font-black text-white">{selectedTests.filter(t => t.testId).length} <span className="text-xs text-slate-500 uppercase ml-1">Items</span></span>
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-2 w-full md:w-auto">
+                                    <div className="flex gap-4 w-full md:w-auto">
                                         <button
                                             onClick={() => router.push('/lab-xray')}
-                                            className="flex-1 md:flex-none px-4 py-2 bg-slate-800 text-slate-400 rounded-xl font-black text-xs uppercase tracking-widest hover:text-white transition-all border border-slate-700"
+                                            className="flex-1 md:flex-none px-6 py-4 bg-slate-800 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:text-white transition-all border border-slate-700 active:scale-95"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             onClick={handleSubmit}
                                             disabled={submitting || success}
-                                            className="flex-1 md:flex-none flex items-center justify-center gap-1 px-4 py-2 bg-cyan-500 text-white rounded-xl font-black text-xs hover:bg-cyan-400 transition-all shadow-lg shadow-cyan-900/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                                            className="flex-1 md:flex-none flex items-center justify-center gap-3 px-10 py-4 bg-teal-500 text-white rounded-2xl font-black text-lg hover:bg-teal-400 transition-all shadow-xl shadow-teal-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 min-w-[240px]"
                                         >
                                             {submitting ? (
                                                 <>
-                                                    <Loader2 className="animate-spin h-3 w-3" />
-                                                    <span className="uppercase tracking-widest text-xs">Transmitting...</span>
+                                                    <Loader2 className="animate-spin h-5 w-5" />
+                                                    <span className="uppercase tracking-widest text-xs">Processing...</span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Zap size={12} />
-                                                    <span className="uppercase tracking-widest text-xs">Generate Bill</span>
+                                                    <CreditCard size={24} />
+                                                    <span className="uppercase tracking-widest text-sm">Generate Bill</span>
                                                 </>
                                             )}
                                         </button>
@@ -863,7 +917,7 @@ export default function XrayOrderPage() {
                     </div>
                 </div>
 
-                {/* Floating Notifications */}
+                {/* Status Messages */}
                 <AnimatePresence>
                     {error && (
                         <motion.div
@@ -885,67 +939,65 @@ export default function XrayOrderPage() {
                             </button>
                         </motion.div>
                     )}
+
+                    {success && (
+                        <motion.div
+                            key="success-modal"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[200] p-6"
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                className="bg-white rounded-[3rem] p-12 max-w-md w-full text-center space-y-8 shadow-2xl border border-white/20"
+                            >
+                                <div className="w-28 h-28 bg-teal-100 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner relative overflow-hidden">
+                                    <CheckCircle2 size={56} className="text-teal-600 relative z-10" />
+                                    <div className="absolute inset-x-0 bottom-0 h-2 bg-teal-200"></div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Order Locked!</h3>
+                                    <p className="text-slate-500 font-bold text-sm tracking-wide leading-relaxed truncate">Procedure request generated and billing initiated for {patientDetails.name}.</p>
+                                </div>
+
+                                <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 space-y-4 shadow-inner">
+                                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                        <span>BILL ID</span>
+                                        <span className="text-slate-900 text-xs font-mono">{generatedBill?.bill_id || 'PENDING'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Charged</span>
+                                        <span className="text-2xl font-black text-teal-600 tracking-tighter">₹{totalAmount.toLocaleString()}</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-3">
+                                    <button
+                                        onClick={() => router.push('/lab-xray')}
+                                        className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-[900] text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-slate-800 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                    >
+                                        Confirm & Close
+                                    </button>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => window.print()}
+                                            className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Printer size={16} /> Print
+                                        </button>
+                                        <button className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">
+                                            Send SMS
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
                 </AnimatePresence>
             </div>
-
-            {/* Success Modal Overlay */}
-            <AnimatePresence>
-                {success && (
-                    <motion.div
-                        key="success-modal"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[200] p-6"
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            className="bg-white rounded-[3rem] p-12 max-w-md w-full text-center space-y-8 shadow-2xl border border-white/20"
-                        >
-                            <div className="w-28 h-28 bg-cyan-100 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner relative overflow-hidden">
-                                <CheckCircle2 size={56} className="text-cyan-600 relative z-10" />
-                                <div className="absolute inset-x-0 bottom-0 h-2 bg-cyan-200"></div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Order Locked!</h3>
-                                <p className="text-slate-500 font-bold text-sm tracking-wide">Procedure request generated and billing initiated for {patientDetails.name}.</p>
-                            </div>
-
-                            <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 space-y-4 shadow-inner">
-                                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                    <span>BILL ID</span>
-                                    <span className="text-slate-900 text-xs">{generatedBill?.bill_id || 'PENDING'}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Charged</span>
-                                    <span className="text-2xl font-black text-cyan-600 tracking-tighter">₹{totalAmount.toLocaleString()}</span>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-3">
-                                <button
-                                    onClick={() => router.push('/lab-xray')}
-                                    className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-[900] text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-slate-800 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                                >
-                                    Confirm & Close
-                                </button>
-                                <div className="flex gap-3">
-                                    <button 
-                                        onClick={() => window.print()}
-                                        className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
-                                    >
-                                        Print Slip
-                                    </button>
-                                    <button className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">
-                                        Send SMS
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             {/* New Test Catalog Modal */}
             <AnimatePresence>
@@ -963,7 +1015,7 @@ export default function XrayOrderPage() {
                         >
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Add New Radiology Catalog</h3>
+                                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Add New Study</h3>
                                     <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Register new procedure type</p>
                                 </div>
                                 <button onClick={() => setShowNewTestModal(false)} className="p-3 hover:bg-slate-100 rounded-2xl transition-all">
@@ -978,7 +1030,7 @@ export default function XrayOrderPage() {
                                         type="text"
                                         value={newTestData.testName}
                                         onChange={(e) => setNewTestData({ ...newTestData, testName: e.target.value })}
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                                         placeholder="e.g., Chest X-Ray Lateral"
                                     />
                                 </div>
@@ -988,7 +1040,7 @@ export default function XrayOrderPage() {
                                         type="text"
                                         value={newTestData.groupName}
                                         onChange={(e) => setNewTestData({ ...newTestData, groupName: e.target.value })}
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                                         placeholder="e.g., CR"
                                     />
                                 </div>
@@ -998,7 +1050,7 @@ export default function XrayOrderPage() {
                                         type="number"
                                         value={newTestData.amount}
                                         onChange={(e) => setNewTestData({ ...newTestData, amount: parseFloat(e.target.value) || 0 })}
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                                     />
                                 </div>
                             </div>
@@ -1006,14 +1058,14 @@ export default function XrayOrderPage() {
                             <div className="flex gap-4">
                                 <button
                                     onClick={() => setShowNewTestModal(false)}
-                                    className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                                    className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleCreateNewTest}
                                     disabled={creatingTest}
-                                    className="flex-1 py-4 bg-cyan-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-cyan-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl shadow-cyan-100"
+                                    className="flex-1 py-4 bg-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-teal-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl shadow-teal-100 hover:scale-[1.02] active:scale-[0.98]"
                                 >
                                     {creatingTest ? <Loader2 className="animate-spin h-4 w-4" /> : <Save size={18} />}
                                     Save Scan

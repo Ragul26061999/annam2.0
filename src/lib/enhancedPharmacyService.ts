@@ -331,7 +331,7 @@ export async function getSuppliers(filters?: {
 export async function createSupplier(supplier: Partial<Supplier>): Promise<Supplier | null> {
   try {
     const { data: codeData } = await supabase.rpc('generate_supplier_code');
-    
+
     const { data, error } = await supabase
       .from('suppliers')
       .insert({
@@ -582,12 +582,12 @@ export async function deleteDrugPurchase(id: string): Promise<boolean> {
     // Mark associated batches as inactive if we have items
     if (purchaseItems && purchaseItems.length > 0) {
       const batchNumbers = purchaseItems.map((item: { batch_number?: string }) => item.batch_number).filter(Boolean);
-      
+
       if (batchNumbers.length > 0) {
         // Set quantity to 0 and add a note that this was from cancelled purchase
         const { error: batchUpdateError } = await supabase
           .from('medicine_batches')
-          .update({ 
+          .update({
             current_quantity: 0,
             updated_at: new Date().toISOString()
           })
@@ -604,7 +604,7 @@ export async function deleteDrugPurchase(id: string): Promise<boolean> {
     // This prevents data integrity issues and maintains audit trail
     const { error } = await supabase
       .from('drug_purchases')
-      .update({ 
+      .update({
         status: 'cancelled',
         updated_at: new Date().toISOString()
       })
@@ -830,7 +830,7 @@ export async function createPurchaseReturn(
       } else if (med) {
         const newAvailableStock = Math.max(0, (med.available_stock || 0) - item.quantity);
         const newTotalStock = Math.max(0, (med.total_stock || 0) - item.quantity);
-        
+
         const { error: updateError } = await supabase
           .from('medications')
           .update({
@@ -859,7 +859,7 @@ export async function createPurchaseReturn(
           console.error('Error fetching batch stock:', batchError);
         } else if (batch) {
           const newBatchQuantity = Math.max(0, (batch.current_quantity || 0) - item.quantity);
-          
+
           const { error: batchUpdateError } = await supabase
             .from('medicine_batches')
             .update({
@@ -1066,7 +1066,10 @@ export async function getSalesReturns(filters?: {
   search?: string;
 }): Promise<SalesReturn[]> {
   try {
-    let query = supabase.from('sales_returns').select('*');
+    let query = supabase.from('sales_returns').select(`
+      *,
+      original_bill_number:billing(bill_number)
+    `);
 
     if (filters?.status) {
       query = query.eq('status', filters.status);
@@ -1091,7 +1094,10 @@ export async function getSalesReturns(filters?: {
       return [];
     }
 
-    return data || [];
+    return (data || []).map((sr: any) => ({
+      ...sr,
+      original_bill_number: sr.original_bill_number?.bill_number || sr.bill_number || 'N/A'
+    }));
   } catch (error) {
     console.error('Error in getSalesReturns:', error);
     return [];
@@ -1491,7 +1497,7 @@ export async function updateBillAfterReturn(
     console.error('Error in updateBillAfterReturn (raw):', error)
     try {
       console.error('Error in updateBillAfterReturn (json):', JSON.stringify(error))
-    } catch {}
+    } catch { }
     throw error
   }
 }
@@ -1674,7 +1680,7 @@ export async function createDrugBrokenRecord(
     console.log('RecordNumber:', recordNumber);
     console.log('UnitPrice:', unitPrice);
     console.log('EstimatedValue:', estimatedValue);
-    
+
     const insertData = {
       broken_number: recordNumber || `DB-${Date.now()}`,
       medication_id: record.medication_id,
@@ -1690,7 +1696,7 @@ export async function createDrugBrokenRecord(
       estimated_value: estimatedValue,
       remarks: record.remarks || null,
     };
-    
+
     console.log('Insert data:', insertData);
 
     // Insert into drug_broken_records (matching actual DB schema)
@@ -1799,14 +1805,14 @@ export async function createCashCollection(
   try {
     const { data: collectionNumber } = await supabase.rpc('generate_cash_collection_number');
 
-    const totalCollections = 
+    const totalCollections =
       (collection.cash_sales || 0) +
       (collection.card_collections || 0) +
       (collection.upi_collections || 0) +
       (collection.insurance_collections || 0) +
       (collection.credit_collections || 0);
 
-    const expectedCash = 
+    const expectedCash =
       (collection.opening_cash || 0) +
       (collection.cash_sales || 0) -
       (collection.cash_refunds || 0);

@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   FileText,
@@ -20,7 +20,7 @@ import {
   Syringe
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SearchableSelect } from './ui/SearchableSelect';
+import { SearchableSelect, type SearchableSelectRef } from './ui/SearchableSelect';
 import {
   getRadiologyTestCatalog,
   createRadiologyTestCatalogEntry,
@@ -63,6 +63,7 @@ interface LabTest {
 }
 
 interface LabTestSelection {
+  rowId: string;
   testId: string;
   testName: string;
   groupName: string; // category
@@ -82,6 +83,7 @@ interface XRayOrder {
 }
 
 interface XrayTestSelection {
+  rowId: string;
   testId: string;
   testName: string;
   groupName: string; // modality
@@ -162,16 +164,29 @@ export default function ClinicalEntryForm2({
   // Lab Tests State
   const [labCatalog, setLabCatalog] = useState<LabTestCatalog[]>([]);
   const [selectedLabTests, setSelectedLabTests] = useState<LabTestSelection[]>([
-    { testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }
+    { rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }
   ]);
   const [labUrgency, setLabUrgency] = useState<'routine' | 'urgent' | 'stat' | 'emergency'>('routine');
 
   // X-ray Orders State
   const [radCatalog, setRadCatalog] = useState<RadiologyTestCatalog[]>([]);
   const [selectedXrayTests, setSelectedXrayTests] = useState<XrayTestSelection[]>([
-    { testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }
+    { rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }
   ]);
   const [xrayUrgency, setXrayUrgency] = useState<'routine' | 'urgent' | 'stat' | 'emergency'>('routine');
+
+  // Refs for focusing
+  const topLabRef = useRef<SearchableSelectRef>(null);
+  const topXrayRef = useRef<SearchableSelectRef>(null);
+
+  // Auto-focus empty row when rows change (e.g. after selection)
+  useEffect(() => {
+    if (activeTab === 'lab' && selectedLabTests[0]?.testId === '') {
+      setTimeout(() => topLabRef.current?.focus(), 100);
+    } else if (activeTab === 'xray' && selectedXrayTests[0]?.testId === '') {
+      setTimeout(() => topXrayRef.current?.focus(), 100);
+    }
+  }, [selectedLabTests.length, selectedXrayTests.length, activeTab]);
 
   // New Catalog UI (Lab + Xray)
   const [showNewLabTestModal, setShowNewLabTestModal] = useState(false);
@@ -378,7 +393,7 @@ export default function ClinicalEntryForm2({
         .eq('is_active', true)
         .gt('available_stock', 0)
         .order('name');
-      
+
       if (!error && data) {
         setMedications(data);
       }
@@ -458,8 +473,8 @@ export default function ClinicalEntryForm2({
       setSearchResults([]);
       return;
     }
-    
-    const filtered = medications.filter(med => 
+
+    const filtered = medications.filter(med =>
       med.name.toLowerCase().includes(term.toLowerCase()) ||
       (med.generic_name && med.generic_name.toLowerCase().includes(term.toLowerCase()))
     );
@@ -480,7 +495,7 @@ export default function ClinicalEntryForm2({
       auto_calculate_quantity: true,
       stock_quantity: medication.available_stock || 0
     };
-    
+
     setPrescriptions((prev) => {
       const next = [...prev, newItem];
       const newIndex = next.length - 1;
@@ -535,16 +550,16 @@ export default function ClinicalEntryForm2({
   const updatePrescriptionItem = (index: number, field: keyof PrescriptionItem, value: any) => {
     const updatedItems = [...prescriptions];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
-    
-    if (updatedItems[index].auto_calculate_quantity && 
-        (field === 'frequency_times' || field === 'duration_days')) {
+
+    if (updatedItems[index].auto_calculate_quantity &&
+      (field === 'frequency_times' || field === 'duration_days')) {
       const autoQuantity = calculateAutoQuantity(
-        updatedItems[index].frequency_times, 
+        updatedItems[index].frequency_times,
         updatedItems[index].duration_days
       );
       updatedItems[index].quantity = autoQuantity;
     }
-    
+
     setPrescriptions(updatedItems);
   };
 
@@ -656,7 +671,7 @@ export default function ClinicalEntryForm2({
   };
 
   const addLabRow = () => {
-    setSelectedLabTests(prev => [...prev, { testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }]);
+    setSelectedLabTests(prev => [{ rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }, ...prev]);
   };
 
   const removeLabRow = (index: number) => {
@@ -675,7 +690,26 @@ export default function ClinicalEntryForm2({
         testName: test.test_name,
         groupName: test.category || 'N/A'
       };
-      return next;
+
+      // If we just selected a test in an empty row, we might want to ensure a new empty row exists at the top
+      // Actually, the user wants: "selected test should be display in bottom of the unselected test"
+      // So we filter and re-order: unselected rows (testId === '') at top, selected at bottom
+      const unselected = next.filter(r => !r.testId);
+      const selected = next.filter(r => r.testId);
+
+      // If no unselected rows left, add one at the top
+      if (unselected.length === 0) {
+        unselected.unshift({
+          rowId: Math.random().toString(36).substr(2, 9),
+          testId: '',
+          testName: '',
+          groupName: '',
+          clinicalIndication: '',
+          specialInstructions: ''
+        });
+      }
+
+      return [...unselected, ...selected];
     });
   };
 
@@ -700,6 +734,7 @@ export default function ClinicalEntryForm2({
       const mappedRows = items.map((item: any) => {
         const catalogItem = labCatalog.find(t => t.id === item.catalog_id);
         return {
+          rowId: Math.random().toString(36).substr(2, 9),
           testId: item.catalog_id,
           testName: catalogItem?.test_name || 'Unknown Test',
           groupName: catalogItem?.category || 'N/A',
@@ -708,7 +743,17 @@ export default function ClinicalEntryForm2({
         };
       });
 
-      setSelectedLabTests(mappedRows.length > 0 ? mappedRows : [{ testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }]);
+      // Maintain one unselected row at top
+      const emptyRow = {
+        rowId: Math.random().toString(36).substr(2, 9),
+        testId: '',
+        testName: '',
+        groupName: '',
+        clinicalIndication: '',
+        specialInstructions: ''
+      };
+
+      setSelectedLabTests(mappedRows.length > 0 ? [emptyRow, ...mappedRows] : [emptyRow]);
     } catch (err) {
       console.error('Error applying lab group:', err);
     }
@@ -751,7 +796,7 @@ export default function ClinicalEntryForm2({
 
     setCreatingPrescriptionGroup(true);
     setError(null);
-    
+
     try {
       // Create the group
       const group = await createDiagnosticGroup({
@@ -792,7 +837,7 @@ export default function ClinicalEntryForm2({
         items: []
       });
       setShowNewPrescriptionGroupModal(false);
-      
+
       // Auto-select the newly created group
       setSelectedPrescriptionGroupId(group.id);
       await applyPrescriptionGroupToSelection(group.id);
@@ -848,7 +893,8 @@ export default function ClinicalEntryForm2({
       setSelectedLabTests(prev => {
         const next = [...prev];
         const emptyIndex = next.findIndex(t => !t.testId);
-        const selection = {
+        const selection: LabTestSelection = {
+          rowId: emptyIndex !== -1 ? next[emptyIndex].rowId : Math.random().toString(36).substr(2, 9),
           testId: newEntry.id,
           testName: newEntry.test_name,
           groupName: newEntry.category || 'N/A',
@@ -871,7 +917,7 @@ export default function ClinicalEntryForm2({
   };
 
   const addXrayRow = () => {
-    setSelectedXrayTests(prev => [...prev, { testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }]);
+    setSelectedXrayTests(prev => [{ rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }, ...prev]);
   };
 
   const removeXrayRow = (index: number) => {
@@ -891,7 +937,24 @@ export default function ClinicalEntryForm2({
         groupName: test.modality || 'X-Ray',
         bodyPart: test.body_part || ''
       };
-      return next;
+
+      // unselected at top, selected at bottom
+      const unselected = next.filter(r => !r.testId);
+      const selected = next.filter(r => r.testId);
+
+      if (unselected.length === 0) {
+        unselected.unshift({
+          rowId: Math.random().toString(36).substr(2, 9),
+          testId: '',
+          testName: '',
+          groupName: '',
+          bodyPart: '',
+          clinicalIndication: '',
+          specialInstructions: ''
+        });
+      }
+
+      return [...unselected, ...selected];
     });
   };
 
@@ -934,7 +997,8 @@ export default function ClinicalEntryForm2({
       setSelectedXrayTests(prev => {
         const next = [...prev];
         const emptyIndex = next.findIndex(t => !t.testId);
-        const selection = {
+        const selection: XrayTestSelection = {
+          rowId: emptyIndex !== -1 ? next[emptyIndex].rowId : Math.random().toString(36).substr(2, 9),
           testId: newEntry.id,
           testName: newEntry.test_name,
           groupName: newEntry.modality || 'X-Ray',
@@ -998,7 +1062,7 @@ export default function ClinicalEntryForm2({
                 sort_order: index
               })),
               group_id: selectedLabGroupId || crypto.randomUUID(),
-              group_name: useLabGroup && selectedLabGroupId 
+              group_name: useLabGroup && selectedLabGroupId
                 ? availableLabGroups.find((g: any) => g.id === selectedLabGroupId)?.name || `Lab Group - ${new Date().toLocaleDateString()}`
                 : `Lab Order - ${new Date().toLocaleDateString()}`
             });
@@ -1086,7 +1150,7 @@ export default function ClinicalEntryForm2({
           // If a prescription group is selected, save as a single grouped prescription
           if (usePrescriptionGroup && selectedPrescriptionGroupId) {
             const groupName = availablePrescriptionGroups.find((g: any) => g.id === selectedPrescriptionGroupId)?.name || `Prescription Group - ${new Date().toLocaleDateString()}`;
-            
+
             const prescriptionData: PrescriptionData = {
               patient_id: patientId,
               doctor_id: doctorId,
@@ -1222,7 +1286,7 @@ export default function ClinicalEntryForm2({
       // Guaranteed fallback logging
       console.error('Raw error object:', supabaseError);
       console.dir(supabaseError, { depth: 5 });
-      
+
       try {
         console.error('Error saving clinical data:', {
           message: supabaseError?.message,
@@ -1298,11 +1362,10 @@ export default function ClinicalEntryForm2({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-6 py-4 border-b-2 transition-all whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600 bg-white font-semibold'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
+                className={`flex items-center space-x-2 px-6 py-4 border-b-2 transition-all whitespace-nowrap ${activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600 bg-white font-semibold'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
               >
                 <Icon size={18} />
                 <span>{tab.label}</span>
@@ -1486,11 +1549,11 @@ export default function ClinicalEntryForm2({
                   <FileText className="h-5 w-5 text-blue-600" />
                   <h3 className="text-lg font-bold text-gray-800">Case Sheet</h3>
                   <p className="text-sm text-gray-500 ml-auto">
-                    Date: {new Date().toLocaleDateString('en-IN', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
+                    Date: {new Date().toLocaleDateString('en-IN', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
                     })}
                   </p>
                 </div>
@@ -1505,9 +1568,9 @@ export default function ClinicalEntryForm2({
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
                         rows={section.rows}
                         value={clinicalNotes[section.key as keyof ClinicalNotes]}
-                        onChange={(e) => setClinicalNotes({ 
-                          ...clinicalNotes, 
-                          [section.key]: e.target.value 
+                        onChange={(e) => setClinicalNotes({
+                          ...clinicalNotes,
+                          [section.key]: e.target.value
                         })}
                         placeholder={`Enter ${section.label.toLowerCase()}...`}
                         data-allow-enter="true"
@@ -1524,11 +1587,20 @@ export default function ClinicalEntryForm2({
             <div className="max-w-5xl mx-auto space-y-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-teal-600" />
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-teal-100 rounded-lg">
+                      <Activity className="h-5 w-5 text-teal-600" />
+                    </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Lab Test Selection</h3>
-                      <p className="text-sm text-gray-500">Add required diagnostics for clinical analysis</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-gray-900 tracking-tight">Lab Test Selection</h3>
+                        {selectedLabTests.filter(t => t.testId).length > 0 && (
+                          <span className="bg-teal-600 text-white text-xs font-bold px-2.5 py-1 rounded-full animate-bounce-subtle">
+                            {selectedLabTests.filter(t => t.testId).length}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 font-medium italic">Add required diagnostics for clinical analysis</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1599,13 +1671,14 @@ export default function ClinicalEntryForm2({
                     }));
 
                     return (
-                      <div key={index} className="space-y-4">
+                      <div key={row.rowId || index} className="space-y-4">
                         <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
                               Test Name
                             </label>
                             <SearchableSelect
+                              ref={index === 0 ? topLabRef : null}
                               options={options}
                               value={row.testId}
                               onChange={(val) => handleLabTestChange(index, val)}
@@ -1701,12 +1774,11 @@ export default function ClinicalEntryForm2({
                               {test.groupName}
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${
-                            labUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${labUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
                             labUrgency === 'stat' ? 'bg-orange-100 text-orange-700' :
-                            labUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
+                              labUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-blue-100 text-blue-700'
+                            }`}>
                             {labUrgency}
                           </span>
                         </div>
@@ -1732,11 +1804,20 @@ export default function ClinicalEntryForm2({
             <div className="max-w-5xl mx-auto space-y-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-teal-600" />
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Activity className="h-5 w-5 text-blue-600" />
+                    </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Radiological Procedures</h3>
-                      <p className="text-sm text-gray-500">Select modality and body regions</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-gray-900 tracking-tight">Radiological Procedures</h3>
+                        {selectedXrayTests.filter(t => t.testId).length > 0 && (
+                          <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full animate-bounce-subtle">
+                            {selectedXrayTests.filter(t => t.testId).length}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 font-medium italic">Select modality and body regions</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1798,7 +1879,7 @@ export default function ClinicalEntryForm2({
                   </div>
                 </div>
 
-                <div className="bg-teal-50 rounded-xl p-6 space-y-4 border border-teal-100">
+                <div className="bg-blue-50 rounded-xl p-6 space-y-4 border border-blue-100">
                   {selectedXrayTests.map((row, index) => {
                     const options = radCatalog.map((t) => ({
                       value: t.id,
@@ -1808,17 +1889,18 @@ export default function ClinicalEntryForm2({
                     }));
 
                     return (
-                      <div key={index} className="space-y-4">
+                      <div key={row.rowId || index} className="space-y-4">
                         <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
                               Procedure Name
                             </label>
                             <SearchableSelect
+                              ref={index === 0 ? topXrayRef : null}
                               options={options}
                               value={row.testId}
                               onChange={(val) => handleXrayTestChange(index, val)}
-                              placeholder="CHOOSE SCAN..."
+                              placeholder="Search & Select Procedure..."
                             />
                           </div>
 
@@ -1921,12 +2003,11 @@ export default function ClinicalEntryForm2({
                           <span className="px-2 py-0.5 text-xs rounded-full bg-teal-100 text-teal-700 uppercase">
                             {xray.groupName || 'IMAGE'}
                           </span>
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${
-                            xrayUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${xrayUrgency === 'emergency' ? 'bg-red-100 text-red-700' :
                             xrayUrgency === 'stat' ? 'bg-orange-100 text-orange-700' :
-                            xrayUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
+                              xrayUrgency === 'urgent' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-blue-100 text-blue-700'
+                            }`}>
                             {xrayUrgency}
                           </span>
                         </div>
@@ -2024,7 +2105,7 @@ export default function ClinicalEntryForm2({
                         placeholder="Search medications by name, generic name, or category..."
                       />
                     </div>
-                    
+
                     {searchResults.length > 0 && (
                       <div className="mt-3 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white">
                         {searchResults.map((medication) => (
@@ -2073,13 +2154,12 @@ export default function ClinicalEntryForm2({
                               </div>
                               <div className="flex items-center gap-2">
                                 <span
-                                  className={`px-2 py-0.5 text-xs rounded-full border ${
-                                    item.stock_quantity > 10
-                                      ? 'bg-green-50 border-green-200 text-green-700'
-                                      : item.stock_quantity > 0
-                                        ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                                        : 'bg-red-50 border-red-200 text-red-700'
-                                  }`}
+                                  className={`px-2 py-0.5 text-xs rounded-full border ${item.stock_quantity > 10
+                                    ? 'bg-green-50 border-green-200 text-green-700'
+                                    : item.stock_quantity > 0
+                                      ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                                      : 'bg-red-50 border-red-200 text-red-700'
+                                    }`}
                                 >
                                   Stock: {item.stock_quantity}
                                 </span>
@@ -2114,7 +2194,7 @@ export default function ClinicalEntryForm2({
 
                         {expandedPrescriptionIndexes.includes(index) && (
                           <div className="p-4 border-t border-gray-200">
-                        
+
                             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium text-blue-800">Current Stock:</span>
@@ -2124,99 +2204,99 @@ export default function ClinicalEntryForm2({
                               </div>
                             </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Duration (Days) *</label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.duration_days}
-                              onChange={(e) => updatePrescriptionItem(index, 'duration_days', parseInt(e.target.value) || 1)}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Frequency Times */}
-                        <div className="mb-4">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Frequency Times *</label>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                            {['Morning', 'Afternoon', 'Evening', 'Night'].map((time) => (
-                              <label key={time} className="flex items-center space-x-2 p-2 border border-gray-200 rounded hover:bg-gray-50">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Duration (Days) *</label>
                                 <input
-                                  type="checkbox"
-                                  checked={item.frequency_times.includes(time)}
-                                  onChange={(e) => {
-                                    const newTimes = e.target.checked
-                                      ? [...item.frequency_times, time]
-                                      : item.frequency_times.filter(t => t !== time);
-                                    updatePrescriptionItem(index, 'frequency_times', newTimes);
-                                  }}
-                                  className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                  type="number"
+                                  min="1"
+                                  value={item.duration_days}
+                                  onChange={(e) => updatePrescriptionItem(index, 'duration_days', parseInt(e.target.value) || 1)}
+                                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                 />
-                                <span className="text-sm text-gray-700">{time}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Meal Timing */}
-                        <div className="mb-4">
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Meal Timing</label>
-                          <select
-                            value={item.meal_timing}
-                            onChange={(e) => updatePrescriptionItem(index, 'meal_timing', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          >
-                            <option value="">Select meal timing</option>
-                            <option value="before_meal">Before Meal</option>
-                            <option value="after_meal">After Meal</option>
-                            <option value="with_meal">With Meal</option>
-                            <option value="empty_stomach">Empty Stomach</option>
-                          </select>
-                        </div>
-
-                        {/* Quantity Section */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <label className="flex items-center space-x-2 mb-2">
-                              <input
-                                type="checkbox"
-                                checked={item.auto_calculate_quantity}
-                                onChange={(e) => updatePrescriptionItem(index, 'auto_calculate_quantity', e.target.checked)}
-                                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                              />
-                              <span className="text-xs font-medium text-gray-700">Auto Calculate Quantity</span>
-                            </label>
-                            {item.auto_calculate_quantity ? (
-                              <div className="px-3 py-2 text-sm bg-green-50 border border-green-300 rounded font-medium text-green-600">
-                                Auto: {calculateAutoQuantity(item.frequency_times, item.duration_days)} units
                               </div>
-                            ) : (
-                              <input
-                                type="number"
-                                min="1"
-                                max={item.stock_quantity}
-                                value={item.quantity}
-                                onChange={(e) => updatePrescriptionItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                            </div>
+
+                            {/* Frequency Times */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-medium text-gray-700 mb-2">Frequency Times *</label>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {['Morning', 'Afternoon', 'Evening', 'Night'].map((time) => (
+                                  <label key={time} className="flex items-center space-x-2 p-2 border border-gray-200 rounded hover:bg-gray-50">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.frequency_times.includes(time)}
+                                      onChange={(e) => {
+                                        const newTimes = e.target.checked
+                                          ? [...item.frequency_times, time]
+                                          : item.frequency_times.filter(t => t !== time);
+                                        updatePrescriptionItem(index, 'frequency_times', newTimes);
+                                      }}
+                                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                    />
+                                    <span className="text-sm text-gray-700">{time}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Meal Timing */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-medium text-gray-700 mb-2">Meal Timing</label>
+                              <select
+                                value={item.meal_timing}
+                                onChange={(e) => updatePrescriptionItem(index, 'meal_timing', e.target.value)}
                                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                placeholder="Custom quantity"
+                              >
+                                <option value="">Select meal timing</option>
+                                <option value="before_meal">Before Meal</option>
+                                <option value="after_meal">After Meal</option>
+                                <option value="with_meal">With Meal</option>
+                                <option value="empty_stomach">Empty Stomach</option>
+                              </select>
+                            </div>
+
+                            {/* Quantity Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <label className="flex items-center space-x-2 mb-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.auto_calculate_quantity}
+                                    onChange={(e) => updatePrescriptionItem(index, 'auto_calculate_quantity', e.target.checked)}
+                                    className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                  />
+                                  <span className="text-xs font-medium text-gray-700">Auto Calculate Quantity</span>
+                                </label>
+                                {item.auto_calculate_quantity ? (
+                                  <div className="px-3 py-2 text-sm bg-green-50 border border-green-300 rounded font-medium text-green-600">
+                                    Auto: {calculateAutoQuantity(item.frequency_times, item.duration_days)} units
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={item.stock_quantity}
+                                    value={item.quantity}
+                                    onChange={(e) => updatePrescriptionItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    placeholder="Custom quantity"
+                                  />
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Instructions</label>
+                              <textarea
+                                value={item.instructions}
+                                onChange={(e) => updatePrescriptionItem(index, 'instructions', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                                placeholder="e.g., Take after meals, Avoid alcohol, Complete the full course"
+                                rows={2}
+                                data-allow-enter="true"
                               />
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Instructions</label>
-                          <textarea
-                            value={item.instructions}
-                            onChange={(e) => updatePrescriptionItem(index, 'instructions', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                            placeholder="e.g., Take after meals, Avoid alcohol, Complete the full course"
-                            rows={2}
-                            data-allow-enter="true"
-                          />
-                        </div>
+                            </div>
                           </div>
                         )}
                       </div>

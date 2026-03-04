@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, Suspense } from 'react'
-import { 
-  Plus, Search, Eye, XCircle, RotateCcw, User, Receipt, CheckCircle, 
+import {
+  Plus, Search, Eye, XCircle, RotateCcw, User, Receipt, CheckCircle,
   AlertCircle, ArrowLeft, ShoppingCart, Trash2, Calendar, CreditCard, Printer
 } from 'lucide-react'
 import {
@@ -73,7 +73,7 @@ function SalesReturnContent() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-  
+
   // Multi-step form state
   const [step, setStep] = useState<'search' | 'view-bill' | 'select-items' | 'confirm'>('search')
   const [billSearchTerm, setBillSearchTerm] = useState('')
@@ -83,7 +83,7 @@ function SalesReturnContent() {
   const [selectedBill, setSelectedBill] = useState<any>(null)
   const [billDetails, setBillDetails] = useState<{ bill: any; items: any[] } | null>(null)
   const [loadingBillDetails, setLoadingBillDetails] = useState(false)
-  
+
   // Return items selection
   const [selectedItems, setSelectedItems] = useState<Map<string, {
     item: any
@@ -92,7 +92,7 @@ function SalesReturnContent() {
     restock: boolean
     gstPercent: number
   }>>(new Map())
-  
+
   // Return form data
   const [returnData, setReturnData] = useState({
     return_date: new Date().toISOString().split('T')[0],
@@ -115,11 +115,11 @@ function SalesReturnContent() {
   useEffect(() => {
     const billId = searchParams?.get('billId')
     if (!billId) return
-    ;(async () => {
-      await loadBillDetails(billId)
-      setSelectedBill({ id: billId })
-      setStep('view-bill')
-    })()
+      ; (async () => {
+        await loadBillDetails(billId)
+        setSelectedBill({ id: billId })
+        setStep('view-bill')
+      })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -146,25 +146,38 @@ function SalesReturnContent() {
     }
   }
 
+  // Auto Search with Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (billSearchTerm.trim()) {
+        handleSearchBills()
+      } else {
+        setSearchResults([])
+      }
+    }, 500) // 500ms delay
+
+    return () => clearTimeout(timer)
+  }, [billSearchTerm])
+
   const loadReturnHistory = async (returnItem: SalesReturn) => {
     setSelectedReturnForHistory(returnItem)
     setLoadingHistory(true)
     setShowReturnHistory(true)
-    
+
     try {
       const { data, error } = await supabase
         .from('sales_return_items')
         .select(`
           *,
-          medication:medication_id (
+          medication:medications (
             name,
-            medicine_code,
+            medication_code,
             category,
             manufacturer
           )
         `)
         .eq('return_id', returnItem.id)
-      
+
       if (error) throw error
       setReturnHistoryItems(data || [])
     } catch (error) {
@@ -177,7 +190,7 @@ function SalesReturnContent() {
 
   const handleSearchBills = async () => {
     if (!billSearchTerm.trim()) return
-    
+
     setSearchingBills(true)
     try {
       const results = await searchPharmacyBills(billSearchTerm)
@@ -203,7 +216,7 @@ function SalesReturnContent() {
       const { data: returnedItems, error: returnedError } = await supabase
         .from('sales_return_items')
         .select('medication_id, batch_number, quantity')
-        .in('return_id', 
+        .in('return_id',
           (await supabase
             .from('sales_returns')
             .select('id')
@@ -226,7 +239,7 @@ function SalesReturnContent() {
         const returnedQty = returnedMap.get(key) || 0
         const originalQty = Number(item.qty || 0)
         const remainingQty = Math.max(0, originalQty - returnedQty)
-        
+
         return {
           ...item,
           original_qty: originalQty,
@@ -248,7 +261,7 @@ function SalesReturnContent() {
     setSelectedBill(bill)
     setLoadingBillDetails(true)
     setStep('view-bill')
-    
+
     try {
       const details = await getPharmacyBillForReturn(bill.id)
       setBillDetails(details)
@@ -270,7 +283,7 @@ function SalesReturnContent() {
 
   const handleToggleItemReturn = (item: any) => {
     const newSelected = new Map(selectedItems)
-    
+
     if (newSelected.has(item.id)) {
       newSelected.delete(item.id)
     } else {
@@ -282,14 +295,14 @@ function SalesReturnContent() {
         gstPercent: 0 // Default to 0% GST, user can edit
       })
     }
-    
+
     setSelectedItems(newSelected)
   }
 
   const handleUpdateReturnItem = (itemId: string, field: string, value: any) => {
     const newSelected = new Map(selectedItems)
     const existing = newSelected.get(itemId)
-    
+
     if (existing) {
       newSelected.set(itemId, {
         ...existing,
@@ -313,11 +326,11 @@ function SalesReturnContent() {
     // Use provided gstPercent or default to 0
     const gst = gstPercent !== undefined ? gstPercent : 0
     const baseAmount = Number(item.unit_amount || 0) // This is the base amount (exclusive of GST)
-    
+
     // Calculate GST amount and total (base + GST)
     const gstAmount = (baseAmount * gst) / 100
     const totalAmount = baseAmount + gstAmount
-    
+
     return {
       baseAmount,
       gstAmount,
@@ -343,7 +356,7 @@ function SalesReturnContent() {
     try {
       const returnItems: SalesReturnItem[] = Array.from(selectedItems.values()).map(({ item, returnQuantity, reason, restock, gstPercent }) => {
         const gstCalc = calculateGSTBasedReturn(item, returnQuantity, gstPercent)
-        
+
         return {
           medication_id: item.medicine_id,
           medication_name: item.medication?.name || '',
@@ -411,7 +424,7 @@ function SalesReturnContent() {
             const restockMap = new Map<string, boolean>()
             Array.from(selectedItems.values()).forEach(({ item, restock }) => {
               const key = `${String(item?.medicine_id || '')}-${String(item?.batch_number || '')}`
-              if (key !== '-'){ 
+              if (key !== '-') {
                 restockMap.set(key, restock !== undefined ? !!restock : true)
               }
             })
@@ -483,7 +496,7 @@ function SalesReturnContent() {
       })
       try {
         console.error('Error processing return (json):', JSON.stringify(error))
-      } catch {}
+      } catch { }
       alert('Failed to process return')
     }
   }
@@ -538,13 +551,7 @@ function SalesReturnContent() {
                 <p className="text-gray-600">Process customer drug returns with bill lookup</p>
               </div>
             </div>
-            <button
-              onClick={() => setStep('search')}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-green-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Return
-            </button>
+
           </div>
 
           {/* Bill Search Section */}
@@ -571,6 +578,56 @@ function SalesReturnContent() {
                 {searchingBills ? 'Searching...' : 'Search'}
               </button>
             </div>
+            {searchingBills && (
+              <div className="mt-2 flex items-center gap-2 text-blue-600 animate-pulse">
+                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                <span className="text-sm font-medium italic">Auto-searching database...</span>
+              </div>
+            )}
+
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <div className="mt-4 bg-white rounded-lg shadow-md max-h-96 overflow-y-auto">
+                <div className="p-4 border-b bg-gray-50">
+                  <h3 className="font-medium">Found {searchResults.length} bill(s)</h3>
+                </div>
+                {searchResults.map((bill) => (
+                  <div
+                    key={bill.id}
+                    onClick={() => handleSelectBill(bill)}
+                    className="p-4 border-b hover:bg-blue-50 cursor-pointer transition-colors"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-blue-600">{bill.bill_number}</div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {bill.customer_name || 'Walk-in Customer'}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Patient ID: {formatPatientId(bill.patient_id)}
+                        </div>
+                        <div className="mt-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${bill.payment_status === 'paid'
+                            ? 'bg-green-100 text-green-800'
+                            : bill.payment_status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : bill.payment_status === 'partial'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                            {bill.payment_status || 'unknown'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-lg">{formatCurrency(Number(bill.total || 0))}</div>
+                        <div className="text-xs text-gray-500">{formatDate(bill.created_at)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Recent Bills - Quick Selection */}
             {recentBills.length > 0 && (
@@ -598,58 +655,14 @@ function SalesReturnContent() {
                           Patient ID: {formatPatientId(bill.patient_id)}
                         </div>
                         <div className="mt-2">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            bill.payment_status === 'paid'
-                              ? 'bg-green-100 text-green-800'
-                              : bill.payment_status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : bill.payment_status === 'partial'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {bill.payment_status || 'unknown'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg">{formatCurrency(Number(bill.total || 0))}</div>
-                        <div className="text-xs text-gray-500">{formatDate(bill.created_at)}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Search Results */}
-            {searchResults.length > 0 && (
-              <div className="mt-4 bg-white rounded-lg shadow-md max-h-96 overflow-y-auto">
-                <div className="p-4 border-b bg-gray-50">
-                  <h3 className="font-medium">Found {searchResults.length} bill(s)</h3>
-                </div>
-                {searchResults.map((bill) => (
-                  <div
-                    key={bill.id}
-                    onClick={() => handleSelectBill(bill)}
-                    className="p-4 border-b hover:bg-blue-50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-bold text-blue-600">{bill.bill_number}</div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          {bill.customer_name || 'Walk-in Customer'}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Patient ID: {formatPatientId(bill.patient_id)}
-                        </div>
-                        <div className="mt-2">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            bill.payment_status === 'paid'
-                              ? 'bg-green-100 text-green-800'
-                              : bill.payment_status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${bill.payment_status === 'paid'
+                            ? 'bg-green-100 text-green-800'
+                            : bill.payment_status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : bill.payment_status === 'partial'
+                                ? 'bg-blue-100 text-blue-800'
                                 : 'bg-gray-100 text-gray-800'
-                          }`}>
+                            }`}>
                             {bill.payment_status || 'unknown'}
                           </span>
                         </div>
@@ -705,7 +718,7 @@ function SalesReturnContent() {
                       <td className="px-6 py-4 text-sm font-medium">{formatCurrency(Number(returnItem.total_amount || 0))}</td>
                       <td className="px-6 py-4">{getStatusBadge(returnItem.status)}</td>
                       <td className="px-6 py-4">
-                        <button 
+                        <button
                           onClick={() => loadReturnHistory(returnItem)}
                           className="text-blue-600 hover:text-blue-800"
                           title="View Return Details"
@@ -779,7 +792,7 @@ function SalesReturnContent() {
               {billDetails.items.map((item) => {
                 const isSelected = selectedItems.has(item.id)
                 const selectedData = selectedItems.get(item.id)
-                
+
                 return (
                   <div
                     key={item.id}
@@ -969,7 +982,7 @@ function SalesReturnContent() {
                 <input
                   type="date"
                   value={returnData.return_date}
-                  onChange={(e) => setReturnData({...returnData, return_date: e.target.value})}
+                  onChange={(e) => setReturnData({ ...returnData, return_date: e.target.value })}
                   className="w-full border rounded-lg px-4 py-2"
                 />
               </div>
@@ -980,12 +993,11 @@ function SalesReturnContent() {
                     {REFUND_MODES.map(mode => (
                       <button
                         key={mode.value}
-                        onClick={() => setReturnData({...returnData, refund_mode: mode.value as any})}
-                        className={`border rounded-lg px-4 py-2 text-sm flex items-center justify-center ${
-                          returnData.refund_mode === mode.value
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'hover:bg-gray-50'
-                        }`}
+                        onClick={() => setReturnData({ ...returnData, refund_mode: mode.value as any })}
+                        className={`border rounded-lg px-4 py-2 text-sm flex items-center justify-center ${returnData.refund_mode === mode.value
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'hover:bg-gray-50'
+                          }`}
                       >
                         <span className="mr-2">{mode.icon}</span>
                         {mode.label}
@@ -1004,7 +1016,7 @@ function SalesReturnContent() {
               <label className="block text-sm font-medium mb-2">Additional Remarks</label>
               <textarea
                 value={returnData.remarks}
-                onChange={(e) => setReturnData({...returnData, remarks: e.target.value})}
+                onChange={(e) => setReturnData({ ...returnData, remarks: e.target.value })}
                 className="w-full border rounded-lg px-4 py-2"
                 rows={3}
                 placeholder="Any additional notes about this return..."
@@ -1304,7 +1316,7 @@ function SalesReturnContent() {
                 <div className="px-6 py-4 border-b bg-gray-50">
                   <h3 className="text-lg font-semibold">Returned Items</h3>
                 </div>
-                
+
                 {loadingHistory ? (
                   <div className="p-8 text-center">Loading items...</div>
                 ) : (
@@ -1327,7 +1339,7 @@ function SalesReturnContent() {
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-4 py-3">
                               <div className="font-medium">{item.medication?.name || 'Unknown'}</div>
-                              <div className="text-xs text-gray-500">{item.medication?.medicine_code}</div>
+                              <div className="text-xs text-gray-500">{item.medication?.medication_code}</div>
                             </td>
                             <td className="px-4 py-3 text-sm">{item.medication?.category || 'N/A'}</td>
                             <td className="px-4 py-3 text-sm font-mono">{item.batch_number || 'N/A'}</td>
@@ -1338,11 +1350,10 @@ function SalesReturnContent() {
                               {RETURN_REASONS.find(r => r.value === item.reason)?.label || item.reason}
                             </td>
                             <td className="px-4 py-3 text-center">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                item.restock_status === 'restocked' ? 'bg-green-100 text-green-800' :
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${item.restock_status === 'restocked' ? 'bg-green-100 text-green-800' :
                                 item.restock_status === 'disposed' ? 'bg-red-100 text-red-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
                                 {item.restock_status}
                               </span>
                             </td>
