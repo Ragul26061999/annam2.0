@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, Edit3, Package, ArrowLeft, CheckSquare, Trash2, Loader2, FileSpreadsheet, Users, LayoutGrid } from 'lucide-react';
+import { Upload, Edit3, Package, ArrowLeft, CheckSquare, Trash2, Loader2, FileSpreadsheet, Users, LayoutGrid, BadgeIndianRupee, Barcode, SearchCheck, ListChecks } from 'lucide-react';
 
 const PharmacySettingsPage = () => {
   const router = useRouter();
@@ -130,6 +130,88 @@ const PharmacySettingsPage = () => {
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-10 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Excel Tools</h2>
+                <p className="text-gray-600 mt-1">Upload and validate Excel sheets (headers vary across formats)</p>
+              </div>
+              <button
+                onClick={() => router.push('/settings/pharmacy/bulk-upload-excel')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span className="text-sm font-medium">Bulk Upload</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => router.push('/settings/pharmacy/excel-tools/stock-price-check')}
+                className="group text-left rounded-2xl border border-gray-100 hover:border-transparent bg-gradient-to-br from-white to-pink-50 hover:shadow-lg transition-all duration-200 p-5"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 shadow-sm">
+                    <BadgeIndianRupee className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-lg font-bold text-gray-900">Stock Price Check</div>
+                    <div className="text-sm text-gray-600 mt-1">Upload Drug Stock Excel and compare purchase/MRP values</div>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => router.push('/settings/pharmacy/excel-tools/legacy-batch-code-uploader')}
+                className="group text-left rounded-2xl border border-gray-100 hover:border-transparent bg-gradient-to-br from-white to-purple-50 hover:shadow-lg transition-all duration-200 p-5"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 shadow-sm">
+                    <Barcode className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-lg font-bold text-gray-900">Legacy Batch Code Uploader</div>
+                    <div className="text-sm text-gray-600 mt-1">Upload legacy mapping (DrugName / Batch / Barcode) to fill legacy codes</div>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => router.push('/settings/pharmacy/excel-tools/missing-batches')}
+                className="group text-left rounded-2xl border border-gray-100 hover:border-transparent bg-gradient-to-br from-white to-amber-50 hover:shadow-lg transition-all duration-200 p-5"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 shadow-sm">
+                    <SearchCheck className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-lg font-bold text-gray-900">Find Missing Batches</div>
+                    <div className="text-sm text-gray-600 mt-1">Scan Excel stock sheets and add batches that are missing in DB</div>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => router.push('/settings/pharmacy/excel-tools/field-validators')}
+                className="group text-left rounded-2xl border border-gray-100 hover:border-transparent bg-gradient-to-br from-white to-cyan-50 hover:shadow-lg transition-all duration-200 p-5"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 shadow-sm">
+                    <ListChecks className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-lg font-bold text-gray-900">Field Validators</div>
+                    <div className="text-sm text-gray-600 mt-1">Validate headers and required fields across the 3 Excel formats</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="mt-10 bg-white rounded-2xl shadow-lg border border-red-100 overflow-hidden">
