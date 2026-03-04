@@ -409,7 +409,7 @@ export default function PharmacyBillingReportsPage() {
             margin: { left: 15, right: 15 }
         })
 
-        doc.save(`${selectedReport}_${new Date().toISOString().split('T')[0]}.pdf`)
+        doc.save(`${renderReportTitle().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`)
     }
 
     const exportWord = () => {
@@ -422,7 +422,7 @@ export default function PharmacyBillingReportsPage() {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${selectedReport}_${new Date().toISOString()}.doc`
+        a.download = `${renderReportTitle().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.doc`
         a.click()
     }
 
@@ -432,7 +432,7 @@ export default function PharmacyBillingReportsPage() {
         const url = canvas.toDataURL('image/png')
         const a = document.createElement('a')
         a.href = url
-        a.download = `${selectedReport}_${new Date().toISOString()}.png`
+        a.download = `${renderReportTitle().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.png`
         a.click()
     }
 

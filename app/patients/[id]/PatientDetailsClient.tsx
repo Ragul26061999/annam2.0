@@ -179,7 +179,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
     if (searchParams) {
       const tab = searchParams.get('tab');
       const subtab = searchParams.get('subtab');
-      
+
       if (tab === 'clinical-records') {
         console.log('PatientDetailsClient: Opening clinical records modal');
         setShowClinicalRecordsModal(true);
@@ -287,16 +287,16 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
 
       // Resolve active/latest IP allocation
       const allocations = Array.isArray(patientData?.bed_allocations) ? patientData.bed_allocations : [];
-      
+
       // Check if a specific allocation ID is provided in URL params
       const allocationId = searchParams?.get('allocation');
       let selectedAllocation = null;
-      
+
       if (allocationId) {
         // Find the specific allocation requested
         selectedAllocation = allocations.find((a: any) => a?.id === allocationId) || null;
       }
-      
+
       // If no specific allocation found or not provided, fall back to default logic
       if (!selectedAllocation) {
         const activeAlloc = allocations.find((a: any) => a?.status === 'active') || null;
@@ -311,7 +311,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
           : null;
         selectedAllocation = activeAlloc || latestAlloc;
       }
-      
+
       const allocForBilling = selectedAllocation;
       setIpAllocation(allocForBilling || null);
 
@@ -320,7 +320,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
         if (allocForBilling?.id) {
           const billingData = await getIPComprehensiveBilling(allocForBilling.id);
           setComprehensiveBilling(billingData);
-          
+
           // Set legacy ipBilling for compatibility
           setIpBilling({
             id: allocForBilling.id,
@@ -329,7 +329,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
             balance_due: billingData.summary.pending_amount,
             payment_status: billingData.summary.pending_amount > 0 ? 'pending' : 'paid'
           });
-          
+
           // Set payment data from comprehensive billing
           const paymentRows = billingData.payment_receipts.map(receipt => ({
             method: receipt.payment_type,
@@ -457,7 +457,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
 
   const fetchTimeline = async () => {
     if (!patient || timelineLoaded) return;
-    
+
     setCompleteHistoryLoading(true);
     try {
       const vitalsData = await getPatientVitals(patient.id);
@@ -468,7 +468,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
         getPatientXrayOrders(patient.id),
         getPatientScanOrders(patient.id)
       ]);
-      
+
       const history = await getPatientCompleteHistory({
         patientUuid: patient.id,
         patientUhid: patient.patient_id,
@@ -527,7 +527,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
     // Convert UTC to Indian time (UTC+5:30)
     const date = new Date(dateString);
     const indianTime = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
-    
+
     return indianTime.toLocaleDateString('en-IN', {
       year: 'numeric',
       month: 'long',
@@ -540,7 +540,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
     // Convert UTC to Indian time (UTC+5:30)
     const date = new Date(dateString);
     const indianTime = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
-    
+
     return indianTime.toLocaleString('en-IN', {
       year: 'numeric',
       month: 'long',
@@ -691,7 +691,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-[1700px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/patients">
@@ -746,7 +746,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-[1700px] mx-auto px-6 py-6">
         {/* Patient Overview Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           {/* Personal Information */}
@@ -879,88 +879,88 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
           </div>
 
           {/* Advance Payment Info */}
-          {((patient.advance_amount && parseFloat(patient.advance_amount) > 0) || 
+          {((patient.advance_amount && parseFloat(patient.advance_amount) > 0) ||
             (comprehensiveBilling?.summary?.advance_paid && comprehensiveBilling.summary.advance_paid > 0) ||
             (ipAdvances.length > 0)) && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Wallet className="h-5 w-5 text-green-600" />
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Wallet className="h-5 w-5 text-green-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900">Advance Payment</h3>
                 </div>
-                <h3 className="font-semibold text-gray-900">Advance Payment</h3>
-              </div>
-              <div className="space-y-3">
-                {/* Patient Registration Advance */}
-                {patient.advance_amount && parseFloat(patient.advance_amount) > 0 && (
-                  <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-                    <div className="flex justify-between items-center text-sm mb-2">
-                      <span className="text-gray-600 font-medium">Registration Advance</span>
-                      <span className="font-bold text-green-600">₹{parseFloat(patient.advance_amount).toFixed(0)}</span>
+                <div className="space-y-3">
+                  {/* Patient Registration Advance */}
+                  {patient.advance_amount && parseFloat(patient.advance_amount) > 0 && (
+                    <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                      <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-gray-600 font-medium">Registration Advance</span>
+                        <span className="font-bold text-green-600">₹{parseFloat(patient.advance_amount).toFixed(0)}</span>
+                      </div>
+                      {patient.advance_payment_method && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-500">Method</span>
+                          <span className="font-medium capitalize">{patient.advance_payment_method}</span>
+                        </div>
+                      )}
+                      {patient.advance_payment_date && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-500">Date</span>
+                          <span className="font-medium">{formatDate(patient.advance_payment_date)}</span>
+                        </div>
+                      )}
                     </div>
-                    {patient.advance_payment_method && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-500">Method</span>
-                        <span className="font-medium capitalize">{patient.advance_payment_method}</span>
-                      </div>
-                    )}
-                    {patient.advance_payment_date && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-500">Date</span>
-                        <span className="font-medium">{formatDate(patient.advance_payment_date)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  )}
 
-                {/* IP Admission Advance */}
-                {ipAdvances.length > 0 && (
-                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="flex justify-between items-center text-sm mb-2">
-                      <span className="text-gray-600 font-medium">IP Admission Advance</span>
-                      <span className="font-bold text-blue-600">
-                        ₹{ipAdvances.reduce((sum, adv) => sum + (adv.available_amount || adv.amount || 0), 0).toFixed(0)}
-                      </span>
+                  {/* IP Admission Advance */}
+                  {ipAdvances.length > 0 && (
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                      <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-gray-600 font-medium">IP Admission Advance</span>
+                        <span className="font-bold text-blue-600">
+                          ₹{ipAdvances.reduce((sum, adv) => sum + (adv.available_amount || adv.amount || 0), 0).toFixed(0)}
+                        </span>
+                      </div>
+                      {ipAdvances.map((advance, idx) => (
+                        <div key={idx} className="text-xs text-gray-500 mt-1">
+                          ₹{advance.amount?.toFixed(0)} paid on {formatDate(advance.advance_date)} via {advance.payment_type}
+                          {advance.reference_number && ` (Ref: ${advance.reference_number})`}
+                          {advance.notes && ` - ${advance.notes}`}
+                        </div>
+                      ))}
                     </div>
-                    {ipAdvances.map((advance, idx) => (
-                      <div key={idx} className="text-xs text-gray-500 mt-1">
-                        ₹{advance.amount?.toFixed(0)} paid on {formatDate(advance.advance_date)} via {advance.payment_type}
-                        {advance.reference_number && ` (Ref: ${advance.reference_number})`}
-                        {advance.notes && ` - ${advance.notes}`}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  )}
 
-                {/* IP Billing Advance */}
-                {comprehensiveBilling?.summary?.advance_paid && comprehensiveBilling.summary.advance_paid > 0 && (
-                  <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-                    <div className="flex justify-between items-center text-sm mb-2">
-                      <span className="text-gray-600 font-medium">IP Billing Advance</span>
-                      <span className="font-bold text-indigo-600">₹{(comprehensiveBilling.summary.advance_paid || 0).toFixed(0)}</span>
+                  {/* IP Billing Advance */}
+                  {comprehensiveBilling?.summary?.advance_paid && comprehensiveBilling.summary.advance_paid > 0 && (
+                    <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                      <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-gray-600 font-medium">IP Billing Advance</span>
+                        <span className="font-bold text-indigo-600">₹{(comprehensiveBilling.summary.advance_paid || 0).toFixed(0)}</span>
+                      </div>
+                      {comprehensiveBilling?.payment_receipts?.filter(r => r.payment_type === 'advance').map((receipt, idx) => (
+                        <div key={idx} className="text-xs text-gray-500 mt-1">
+                          Paid on {formatDate(receipt.payment_date)} via {receipt.payment_type}
+                          {receipt.reference_number && ` (Ref: ${receipt.reference_number})`}
+                        </div>
+                      ))}
                     </div>
-                    {comprehensiveBilling?.payment_receipts?.filter(r => r.payment_type === 'advance').map((receipt, idx) => (
-                      <div key={idx} className="text-xs text-gray-500 mt-1">
-                        Paid on {formatDate(receipt.payment_date)} via {receipt.payment_type}
-                        {receipt.reference_number && ` (Ref: ${receipt.reference_number})`}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  )}
 
-                {/* Total Advance */}
-                <div className="flex justify-between items-center text-sm p-3 bg-purple-50 rounded-lg border border-purple-200">
-                  <span className="text-purple-700 font-bold">Total Advance</span>
-                  <span className="font-bold text-purple-700">
-                    ₹{(
-                      (patient.advance_amount ? parseFloat(patient.advance_amount) : 0) + 
-                      (ipAdvances.reduce((sum, adv) => sum + (adv.available_amount || adv.amount || 0), 0)) +
-                      (comprehensiveBilling?.summary?.advance_paid || 0)
-                    ).toFixed(0)}
-                  </span>
+                  {/* Total Advance */}
+                  <div className="flex justify-between items-center text-sm p-3 bg-purple-50 rounded-lg border border-purple-200">
+                    <span className="text-purple-700 font-bold">Total Advance</span>
+                    <span className="font-bold text-purple-700">
+                      ₹{(
+                        (patient.advance_amount ? parseFloat(patient.advance_amount) : 0) +
+                        (ipAdvances.reduce((sum, adv) => sum + (adv.available_amount || adv.amount || 0), 0)) +
+                        (comprehensiveBilling?.summary?.advance_paid || 0)
+                      ).toFixed(0)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
 
         {/* Tabs Content */}
@@ -1175,12 +1175,12 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                     </div>
                   ) : (
                     <div className="relative">
-                      <div className="absolute left-[19px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-gray-200 via-gray-300 to-gray-200" style={{backgroundImage: 'repeating-linear-gradient(0deg, #e5e7eb, #e5e7eb 4px, transparent 4px, transparent 8px)'}}></div>
+                      <div className="absolute left-[19px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-gray-200 via-gray-300 to-gray-200" style={{ backgroundImage: 'repeating-linear-gradient(0deg, #e5e7eb, #e5e7eb 4px, transparent 4px, transparent 8px)' }}></div>
                       <div className="space-y-4">
                         {(() => {
                           const groupedByIP: { [key: string]: PatientTimelineEvent[] } = {};
                           const standaloneEvents: PatientTimelineEvent[] = [];
-                          
+
                           filteredHistory.forEach(e => {
                             if (e.bedAllocationId) {
                               if (!groupedByIP[e.bedAllocationId]) {
@@ -1279,267 +1279,267 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                                     {isDateExpanded && (
                                       <div className="mt-3 ml-4 space-y-2 border-l-2 border-gray-200 pl-4">
                                         {dayEvents.map((e: any) => {
-                            const getEventColor = (type: PatientTimelineEventType) => {
-                              const colors: Record<PatientTimelineEventType, string> = {
-                                registration: 'bg-gray-500',
-                                appointment: 'bg-blue-500',
-                                ip_admission: 'bg-indigo-600',
-                                ip_discharge: 'bg-indigo-400',
-                                vitals: 'bg-orange-500',
-                                medical_history: 'bg-red-500',
-                                lab: 'bg-cyan-500',
-                                radiology: 'bg-purple-500',
-                                xray: 'bg-purple-400',
-                                scan: 'bg-purple-600',
-                                billing: 'bg-yellow-500',
-                                billing_payment: 'bg-green-500',
-                                ip_payment: 'bg-green-600',
-                                other_bill: 'bg-yellow-600',
-                                other_bill_payment: 'bg-green-400',
-                                pharmacy_bill: 'bg-pink-500',
-                                medication: 'bg-emerald-500',
-                                case_sheet: 'bg-teal-500',
-                                progress_note: 'bg-sky-500',
-                                doctor_order: 'bg-violet-500',
-                                nurse_record: 'bg-rose-500',
-                                discharge_summary: 'bg-indigo-500',
-                              };
-                              return colors[type] || 'bg-gray-400';
-                            };
+                                          const getEventColor = (type: PatientTimelineEventType) => {
+                                            const colors: Record<PatientTimelineEventType, string> = {
+                                              registration: 'bg-gray-500',
+                                              appointment: 'bg-blue-500',
+                                              ip_admission: 'bg-indigo-600',
+                                              ip_discharge: 'bg-indigo-400',
+                                              vitals: 'bg-orange-500',
+                                              medical_history: 'bg-red-500',
+                                              lab: 'bg-cyan-500',
+                                              radiology: 'bg-purple-500',
+                                              xray: 'bg-purple-400',
+                                              scan: 'bg-purple-600',
+                                              billing: 'bg-yellow-500',
+                                              billing_payment: 'bg-green-500',
+                                              ip_payment: 'bg-green-600',
+                                              other_bill: 'bg-yellow-600',
+                                              other_bill_payment: 'bg-green-400',
+                                              pharmacy_bill: 'bg-pink-500',
+                                              medication: 'bg-emerald-500',
+                                              case_sheet: 'bg-teal-500',
+                                              progress_note: 'bg-sky-500',
+                                              doctor_order: 'bg-violet-500',
+                                              nurse_record: 'bg-rose-500',
+                                              discharge_summary: 'bg-indigo-500',
+                                            };
+                                            return colors[type] || 'bg-gray-400';
+                                          };
 
-                            const getEventIcon = (type: PatientTimelineEventType) => {
-                              const icons: Record<PatientTimelineEventType, React.ReactElement> = {
-                                registration: <User className="h-3.5 w-3.5" />,
-                                appointment: <Calendar className="h-3.5 w-3.5" />,
-                                ip_admission: <Bed className="h-3.5 w-3.5" />,
-                                ip_discharge: <LogOut className="h-3.5 w-3.5" />,
-                                vitals: <Activity className="h-3.5 w-3.5" />,
-                                medical_history: <Heart className="h-3.5 w-3.5" />,
-                                lab: <Microscope className="h-3.5 w-3.5" />,
-                                radiology: <Radiation className="h-3.5 w-3.5" />,
-                                xray: <Radiation className="h-3.5 w-3.5" />,
-                                scan: <FolderOpen className="h-3.5 w-3.5" />,
-                                billing: <FileText className="h-3.5 w-3.5" />,
-                                billing_payment: <FileText className="h-3.5 w-3.5" />,
-                                ip_payment: <FileText className="h-3.5 w-3.5" />,
-                                other_bill: <FileText className="h-3.5 w-3.5" />,
-                                other_bill_payment: <FileText className="h-3.5 w-3.5" />,
-                                pharmacy_bill: <Pill className="h-3.5 w-3.5" />,
-                                medication: <Pill className="h-3.5 w-3.5" />,
-                                case_sheet: <ClipboardList className="h-3.5 w-3.5" />,
-                                progress_note: <MessageSquare className="h-3.5 w-3.5" />,
-                                doctor_order: <Stethoscope className="h-3.5 w-3.5" />,
-                                nurse_record: <UserCheck className="h-3.5 w-3.5" />,
-                                discharge_summary: <FileText className="h-3.5 w-3.5" />,
-                              };
-                              return icons[type] || <FileText className="h-3.5 w-3.5" />;
-                            };
+                                          const getEventIcon = (type: PatientTimelineEventType) => {
+                                            const icons: Record<PatientTimelineEventType, React.ReactElement> = {
+                                              registration: <User className="h-3.5 w-3.5" />,
+                                              appointment: <Calendar className="h-3.5 w-3.5" />,
+                                              ip_admission: <Bed className="h-3.5 w-3.5" />,
+                                              ip_discharge: <LogOut className="h-3.5 w-3.5" />,
+                                              vitals: <Activity className="h-3.5 w-3.5" />,
+                                              medical_history: <Heart className="h-3.5 w-3.5" />,
+                                              lab: <Microscope className="h-3.5 w-3.5" />,
+                                              radiology: <Radiation className="h-3.5 w-3.5" />,
+                                              xray: <Radiation className="h-3.5 w-3.5" />,
+                                              scan: <FolderOpen className="h-3.5 w-3.5" />,
+                                              billing: <FileText className="h-3.5 w-3.5" />,
+                                              billing_payment: <FileText className="h-3.5 w-3.5" />,
+                                              ip_payment: <FileText className="h-3.5 w-3.5" />,
+                                              other_bill: <FileText className="h-3.5 w-3.5" />,
+                                              other_bill_payment: <FileText className="h-3.5 w-3.5" />,
+                                              pharmacy_bill: <Pill className="h-3.5 w-3.5" />,
+                                              medication: <Pill className="h-3.5 w-3.5" />,
+                                              case_sheet: <ClipboardList className="h-3.5 w-3.5" />,
+                                              progress_note: <MessageSquare className="h-3.5 w-3.5" />,
+                                              doctor_order: <Stethoscope className="h-3.5 w-3.5" />,
+                                              nurse_record: <UserCheck className="h-3.5 w-3.5" />,
+                                              discharge_summary: <FileText className="h-3.5 w-3.5" />,
+                                            };
+                                            return icons[type] || <FileText className="h-3.5 w-3.5" />;
+                                          };
 
-                            if (e._isIPGroup) {
-                              const isExpanded = expandedIPSections.has(e.bedAllocationId!);
-                              return (
-                                <div key={e.id} className="relative">
-                                  <div className="flex gap-4">
-                                    <div className="relative flex flex-col items-center">
-                                      <div className={`w-10 h-10 rounded-full ${getEventColor(e.type)} flex items-center justify-center text-white shadow-lg z-10`}>
-                                        {getEventIcon(e.type)}
-                                      </div>
-                                    </div>
-                                    <div className="flex-1 pb-4">
-                                      <button
-                                        onClick={() => {
-                                          const newExpanded = new Set(expandedIPSections);
-                                          if (isExpanded) {
-                                            newExpanded.delete(e.bedAllocationId!);
-                                          } else {
-                                            newExpanded.add(e.bedAllocationId!);
-                                          }
-                                          setExpandedIPSections(newExpanded);
-                                        }}
-                                        className="w-full text-left bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100 rounded-xl p-4 border border-indigo-200 transition-all"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                              <p className="text-base font-bold text-indigo-900">{e.title}</p>
-                                              <span className="px-2 py-0.5 bg-indigo-200 text-indigo-800 text-xs font-medium rounded-full">{e._ipEvents.length} events</span>
-                                            </div>
-                                            <p className="text-sm text-indigo-700">{e.subtitle}</p>
-                                            <p className="text-xs text-indigo-600 mt-1">{formatDateTime(e.date)}</p>
-                                          </div>
-                                          <ChevronRight className={`h-5 w-5 text-indigo-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                                        </div>
-                                      </button>
-                                      {isExpanded && (
-                                        <div className="mt-3 ml-4 space-y-2 border-l-2 border-indigo-200 pl-4">
-                                          {e._ipEvents.map((ipEvent: PatientTimelineEvent) => (
-                                            <div key={ipEvent.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-                                              <div className={`w-8 h-8 rounded-full ${getEventColor(ipEvent.type)} flex items-center justify-center text-white flex-shrink-0`}>
-                                                {getEventIcon(ipEvent.type)}
-                                              </div>
-                                              <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between gap-2">
-                                                  <p className="text-sm font-semibold text-gray-900">{ipEvent.title}</p>
-                                                  {typeof ipEvent.amount === 'number' && (
-                                                    <p className="text-sm font-bold text-gray-900 whitespace-nowrap">₹{formatMoney(ipEvent.amount)}</p>
-                                                  )}
-                                                </div>
-                                                <p className="text-xs text-gray-600 mt-0.5">{ipEvent.subtitle || ipEvent.status || ''}</p>
-                                                <p className="text-xs text-gray-500 mt-1">{formatDateTime(ipEvent.date)}</p>
-                                              </div>
-                                              {ipEvent.link && (
-                                                <Link href={ipEvent.link} className="text-orange-600 font-bold text-xs hover:underline flex items-center gap-1 flex-shrink-0">
-                                                  VIEW <ChevronRight size={10} />
-                                                </Link>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            }
-
-                            if (e.type === 'lab' && (e as any)?.data?.kind === 'lab_bill') {
-                              const labKey = `lab_bill_${e.id}`;
-                              const isExpanded = expandedLabSections.has(labKey);
-                              const bill = (e as any)?.data?.bill;
-                              const items = (e as any)?.data?.items || [];
-                              const attachments = (e as any)?.data?.attachments || [];
-                              const billNo = bill?.bill_number || bill?.bill_no || `Bill ${bill.id}`;
-
-                              return (
-                                <div key={e.id} className="relative flex gap-4">
-                                  <div className="relative flex flex-col items-center">
-                                    <div className="w-10 h-10 rounded-full bg-cyan-600 flex items-center justify-center text-white shadow-lg z-10">
-                                      <Microscope className="h-3.5 w-3.5" />
-                                    </div>
-                                  </div>
-                                  <div className="flex-1 pb-4">
-                                    <button
-                                      onClick={() => {
-                                        const next = new Set(expandedLabSections);
-                                        if (isExpanded) next.delete(labKey);
-                                        else next.add(labKey);
-                                        setExpandedLabSections(next);
-                                      }}
-                                      className="w-full text-left bg-cyan-50 hover:bg-cyan-100 rounded-xl p-4 border border-cyan-200 transition-all"
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <div>
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <p className="text-sm font-bold text-cyan-900">Lab Bill #{billNo}</p>
-                                            <span className="px-2 py-0.5 bg-cyan-200 text-cyan-900 text-xs font-medium rounded-full">{items.length} services</span>
-                                            {attachments.length > 0 && (
-                                              <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">{attachments.length} files</span>
-                                            )}
-                                          </div>
-                                          <p className="text-xs text-cyan-800">{formatDateTime(e.date)}</p>
-                                        </div>
-                                        <ChevronRight className={`h-5 w-5 text-cyan-700 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                                      </div>
-                                    </button>
-
-                                    {isExpanded && (
-                                      <div className="mt-3 space-y-4">
-                                        {/* Services List */}
-                                        {items.length > 0 && (
-                                          <div>
-                                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Services</h4>
-                                            <div className="space-y-2">
-                                              {items.map((it: any) => (
-                                                <div key={it.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                  <div>
-                                                    <p className="font-medium text-gray-900">{it.description}</p>
-                                                    <p className="text-sm text-gray-600">Qty: {it.qty} • Unit: ₹{Number(it.unit_amount || 0).toFixed(0)}</p>
-                                                  </div>
-                                                  <div className="text-right">
-                                                    <p className="font-medium text-gray-900">₹{Number(it.total_amount || 0).toFixed(0)}</p>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* Attachments */}
-                                        {attachments.length > 0 && (
-                                          <div>
-                                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Attachments</h4>
-                                            <div className="space-y-2">
-                                              {attachments.map((att: any) => (
-                                                <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                  <div className="flex items-center gap-2 min-w-0">
-                                                    <Paperclip className="w-4 h-4 text-blue-600" />
-                                                    <div className="min-w-0">
-                                                      <p className="font-medium text-gray-900 truncate">{att.file_name}</p>
-                                                      <p className="text-sm text-gray-600">
-                                                        {(Number(att.file_size || 0) / 1024).toFixed(1)} KB • {att.file_type}
-                                                      </p>
+                                          if (e._isIPGroup) {
+                                            const isExpanded = expandedIPSections.has(e.bedAllocationId!);
+                                            return (
+                                              <div key={e.id} className="relative">
+                                                <div className="flex gap-4">
+                                                  <div className="relative flex flex-col items-center">
+                                                    <div className={`w-10 h-10 rounded-full ${getEventColor(e.type)} flex items-center justify-center text-white shadow-lg z-10`}>
+                                                      {getEventIcon(e.type)}
                                                     </div>
                                                   </div>
-                                                  <div className="flex items-center gap-2">
-                                                    {att.file_url ? (
-                                                      <a
-                                                        href={att.file_url}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="px-3 py-2 rounded-xl bg-gray-100 text-gray-900 text-xs font-black hover:bg-gray-200 inline-flex items-center gap-2"
-                                                      >
-                                                        <Eye size={16} />
-                                                        Open
-                                                      </a>
-                                                    ) : null}
+                                                  <div className="flex-1 pb-4">
+                                                    <button
+                                                      onClick={() => {
+                                                        const newExpanded = new Set(expandedIPSections);
+                                                        if (isExpanded) {
+                                                          newExpanded.delete(e.bedAllocationId!);
+                                                        } else {
+                                                          newExpanded.add(e.bedAllocationId!);
+                                                        }
+                                                        setExpandedIPSections(newExpanded);
+                                                      }}
+                                                      className="w-full text-left bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100 rounded-xl p-4 border border-indigo-200 transition-all"
+                                                    >
+                                                      <div className="flex items-center justify-between">
+                                                        <div className="flex-1">
+                                                          <div className="flex items-center gap-2 mb-1">
+                                                            <p className="text-base font-bold text-indigo-900">{e.title}</p>
+                                                            <span className="px-2 py-0.5 bg-indigo-200 text-indigo-800 text-xs font-medium rounded-full">{e._ipEvents.length} events</span>
+                                                          </div>
+                                                          <p className="text-sm text-indigo-700">{e.subtitle}</p>
+                                                          <p className="text-xs text-indigo-600 mt-1">{formatDateTime(e.date)}</p>
+                                                        </div>
+                                                        <ChevronRight className={`h-5 w-5 text-indigo-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                                      </div>
+                                                    </button>
+                                                    {isExpanded && (
+                                                      <div className="mt-3 ml-4 space-y-2 border-l-2 border-indigo-200 pl-4">
+                                                        {e._ipEvents.map((ipEvent: PatientTimelineEvent) => (
+                                                          <div key={ipEvent.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                                                            <div className={`w-8 h-8 rounded-full ${getEventColor(ipEvent.type)} flex items-center justify-center text-white flex-shrink-0`}>
+                                                              {getEventIcon(ipEvent.type)}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                              <div className="flex items-center justify-between gap-2">
+                                                                <p className="text-sm font-semibold text-gray-900">{ipEvent.title}</p>
+                                                                {typeof ipEvent.amount === 'number' && (
+                                                                  <p className="text-sm font-bold text-gray-900 whitespace-nowrap">₹{formatMoney(ipEvent.amount)}</p>
+                                                                )}
+                                                              </div>
+                                                              <p className="text-xs text-gray-600 mt-0.5">{ipEvent.subtitle || ipEvent.status || ''}</p>
+                                                              <p className="text-xs text-gray-500 mt-1">{formatDateTime(ipEvent.date)}</p>
+                                                            </div>
+                                                            {ipEvent.link && (
+                                                              <Link href={ipEvent.link} className="text-orange-600 font-bold text-xs hover:underline flex items-center gap-1 flex-shrink-0">
+                                                                VIEW <ChevronRight size={10} />
+                                                              </Link>
+                                                            )}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            }
+                                              </div>
+                                            );
+                                          }
 
-                            return (
-                              <div key={e.id} className="relative flex gap-4">
-                                <div className="relative flex flex-col items-center">
-                                  <div className={`w-10 h-10 rounded-full ${getEventColor(e.type)} flex items-center justify-center text-white shadow-lg z-10`}>
-                                    {getEventIcon(e.type)}
-                                  </div>
-                                </div>
-                                <div className="flex-1 pb-4">
-                                  <div className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-lg transition-shadow">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                          <p className="text-sm font-bold text-gray-900">{e.title}</p>
-                                          {e.status && (
-                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full capitalize">{e.status}</span>
-                                          )}
-                                        </div>
-                                        {e.subtitle && <p className="text-xs text-gray-600 mb-1">{e.subtitle}</p>}
-                                        <p className="text-xs text-gray-500">{formatDateTime(e.date)}</p>
-                                      </div>
-                                      <div className="flex items-center gap-3 flex-shrink-0">
-                                        {typeof e.amount === 'number' && (
-                                          <p className="text-base font-bold text-gray-900 whitespace-nowrap">₹{formatMoney(e.amount)}</p>
-                                        )}
-                                        {e.link && (
-                                          <Link href={e.link} className="text-orange-600 font-bold text-xs hover:underline flex items-center gap-1">
-                                            VIEW <ChevronRight size={12} />
-                                          </Link>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
+                                          if (e.type === 'lab' && (e as any)?.data?.kind === 'lab_bill') {
+                                            const labKey = `lab_bill_${e.id}`;
+                                            const isExpanded = expandedLabSections.has(labKey);
+                                            const bill = (e as any)?.data?.bill;
+                                            const items = (e as any)?.data?.items || [];
+                                            const attachments = (e as any)?.data?.attachments || [];
+                                            const billNo = bill?.bill_number || bill?.bill_no || `Bill ${bill.id}`;
+
+                                            return (
+                                              <div key={e.id} className="relative flex gap-4">
+                                                <div className="relative flex flex-col items-center">
+                                                  <div className="w-10 h-10 rounded-full bg-cyan-600 flex items-center justify-center text-white shadow-lg z-10">
+                                                    <Microscope className="h-3.5 w-3.5" />
+                                                  </div>
+                                                </div>
+                                                <div className="flex-1 pb-4">
+                                                  <button
+                                                    onClick={() => {
+                                                      const next = new Set(expandedLabSections);
+                                                      if (isExpanded) next.delete(labKey);
+                                                      else next.add(labKey);
+                                                      setExpandedLabSections(next);
+                                                    }}
+                                                    className="w-full text-left bg-cyan-50 hover:bg-cyan-100 rounded-xl p-4 border border-cyan-200 transition-all"
+                                                  >
+                                                    <div className="flex items-center justify-between">
+                                                      <div>
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                          <p className="text-sm font-bold text-cyan-900">Lab Bill #{billNo}</p>
+                                                          <span className="px-2 py-0.5 bg-cyan-200 text-cyan-900 text-xs font-medium rounded-full">{items.length} services</span>
+                                                          {attachments.length > 0 && (
+                                                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">{attachments.length} files</span>
+                                                          )}
+                                                        </div>
+                                                        <p className="text-xs text-cyan-800">{formatDateTime(e.date)}</p>
+                                                      </div>
+                                                      <ChevronRight className={`h-5 w-5 text-cyan-700 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                                    </div>
+                                                  </button>
+
+                                                  {isExpanded && (
+                                                    <div className="mt-3 space-y-4">
+                                                      {/* Services List */}
+                                                      {items.length > 0 && (
+                                                        <div>
+                                                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Services</h4>
+                                                          <div className="space-y-2">
+                                                            {items.map((it: any) => (
+                                                              <div key={it.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                                                <div>
+                                                                  <p className="font-medium text-gray-900">{it.description}</p>
+                                                                  <p className="text-sm text-gray-600">Qty: {it.qty} • Unit: ₹{Number(it.unit_amount || 0).toFixed(0)}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                  <p className="font-medium text-gray-900">₹{Number(it.total_amount || 0).toFixed(0)}</p>
+                                                                </div>
+                                                              </div>
+                                                            ))}
+                                                          </div>
+                                                        </div>
+                                                      )}
+
+                                                      {/* Attachments */}
+                                                      {attachments.length > 0 && (
+                                                        <div>
+                                                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Attachments</h4>
+                                                          <div className="space-y-2">
+                                                            {attachments.map((att: any) => (
+                                                              <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                  <Paperclip className="w-4 h-4 text-blue-600" />
+                                                                  <div className="min-w-0">
+                                                                    <p className="font-medium text-gray-900 truncate">{att.file_name}</p>
+                                                                    <p className="text-sm text-gray-600">
+                                                                      {(Number(att.file_size || 0) / 1024).toFixed(1)} KB • {att.file_type}
+                                                                    </p>
+                                                                  </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                  {att.file_url ? (
+                                                                    <a
+                                                                      href={att.file_url}
+                                                                      target="_blank"
+                                                                      rel="noreferrer"
+                                                                      className="px-3 py-2 rounded-xl bg-gray-100 text-gray-900 text-xs font-black hover:bg-gray-200 inline-flex items-center gap-2"
+                                                                    >
+                                                                      <Eye size={16} />
+                                                                      Open
+                                                                    </a>
+                                                                  ) : null}
+                                                                </div>
+                                                              </div>
+                                                            ))}
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          }
+
+                                          return (
+                                            <div key={e.id} className="relative flex gap-4">
+                                              <div className="relative flex flex-col items-center">
+                                                <div className={`w-10 h-10 rounded-full ${getEventColor(e.type)} flex items-center justify-center text-white shadow-lg z-10`}>
+                                                  {getEventIcon(e.type)}
+                                                </div>
+                                              </div>
+                                              <div className="flex-1 pb-4">
+                                                <div className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-lg transition-shadow">
+                                                  <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="flex items-center gap-2 mb-1">
+                                                        <p className="text-sm font-bold text-gray-900">{e.title}</p>
+                                                        {e.status && (
+                                                          <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full capitalize">{e.status}</span>
+                                                        )}
+                                                      </div>
+                                                      {e.subtitle && <p className="text-xs text-gray-600 mb-1">{e.subtitle}</p>}
+                                                      <p className="text-xs text-gray-500">{formatDateTime(e.date)}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                                      {typeof e.amount === 'number' && (
+                                                        <p className="text-base font-bold text-gray-900 whitespace-nowrap">₹{formatMoney(e.amount)}</p>
+                                                      )}
+                                                      {e.link && (
+                                                        <Link href={e.link} className="text-orange-600 font-bold text-xs hover:underline flex items-center gap-1">
+                                                          VIEW <ChevronRight size={12} />
+                                                        </Link>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
                                         })}
                                       </div>
                                     )}
@@ -1679,9 +1679,8 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                                   <h4 className="font-bold text-gray-900 text-lg">
                                     {alloc.ip_number || 'IP Admission'}
                                   </h4>
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                                    alloc.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                                  }`}>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${alloc.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                                    }`}>
                                     {alloc.status}
                                   </span>
                                 </div>
@@ -1690,7 +1689,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                                 </p>
                               </div>
                             </div>
-                            
+
                             <button
                               onClick={() => {
                                 setIpAllocation(alloc);
@@ -1739,7 +1738,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                       <p className="text-sm text-gray-500">View all uploaded lab tests, radiology reports, and scan documents.</p>
                     </div>
                   </div>
-                  
+
                   <div className="bg-white border border-gray-200 rounded-xl p-6">
                     <LabXrayAttachments patientId={patient.id} readOnly={true} />
                   </div>
@@ -1840,11 +1839,11 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                 {/* Uploaded Documents */}
                 <div>
                   <h4 className="font-bold text-gray-900 mb-4 px-2">Uploaded Documents</h4>
-                  <EnhancedDocumentList 
-                    patientId={patient.id} 
+                  <EnhancedDocumentList
+                    patientId={patient.id}
                     uhid={patient.patient_id}
-                    showDelete={true} 
-                    refreshTrigger={documentRefreshTrigger} 
+                    showDelete={true}
+                    refreshTrigger={documentRefreshTrigger}
                     temporaryFiles={temporaryDocuments}
                   />
                 </div>
@@ -1912,7 +1911,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                   <p className="text-lg text-gray-600 mb-6">This feature is currently under development</p>
                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                     <p className="text-sm text-orange-800">
-                      We're working hard to bring you comprehensive billing and financial management tools. 
+                      We're working hard to bring you comprehensive billing and financial management tools.
                       This section will include pharmacy bills, IP billing, payment tracking, and detailed financial reports.
                     </p>
                   </div>
@@ -1962,13 +1961,13 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
           onSuccess={fetchPatientData}
         />
       )}
-      
+
       {/* Print Modal */}
       {showPrintModal && comprehensiveBilling && (
         <>
-          <PatientBillingPrint 
-            billing={comprehensiveBilling} 
-            patient={patient} 
+          <PatientBillingPrint
+            billing={comprehensiveBilling}
+            patient={patient}
             onClose={() => setShowPrintModal(false)}
           />
         </>

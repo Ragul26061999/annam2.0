@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   FileText,
@@ -20,7 +20,7 @@ import {
   Syringe
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SearchableSelect } from './ui/SearchableSelect';
+import { SearchableSelect, type SearchableSelectRef } from './ui/SearchableSelect';
 import {
   getRadiologyTestCatalog,
   createRadiologyTestCatalogEntry,
@@ -63,6 +63,7 @@ interface LabTest {
 }
 
 interface LabTestSelection {
+  rowId: string;
   testId: string;
   testName: string;
   groupName: string; // category
@@ -82,6 +83,7 @@ interface XRayOrder {
 }
 
 interface XrayTestSelection {
+  rowId: string;
   testId: string;
   testName: string;
   groupName: string; // modality
@@ -162,16 +164,29 @@ export default function ClinicalEntryForm2({
   // Lab Tests State
   const [labCatalog, setLabCatalog] = useState<LabTestCatalog[]>([]);
   const [selectedLabTests, setSelectedLabTests] = useState<LabTestSelection[]>([
-    { testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }
+    { rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }
   ]);
   const [labUrgency, setLabUrgency] = useState<'routine' | 'urgent' | 'stat' | 'emergency'>('routine');
 
   // X-ray Orders State
   const [radCatalog, setRadCatalog] = useState<RadiologyTestCatalog[]>([]);
   const [selectedXrayTests, setSelectedXrayTests] = useState<XrayTestSelection[]>([
-    { testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }
+    { rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }
   ]);
   const [xrayUrgency, setXrayUrgency] = useState<'routine' | 'urgent' | 'stat' | 'emergency'>('routine');
+
+  // Refs for focusing
+  const topLabRef = useRef<SearchableSelectRef>(null);
+  const topXrayRef = useRef<SearchableSelectRef>(null);
+
+  // Auto-focus empty row when rows change (e.g. after selection)
+  useEffect(() => {
+    if (activeTab === 'lab' && selectedLabTests[0]?.testId === '') {
+      setTimeout(() => topLabRef.current?.focus(), 100);
+    } else if (activeTab === 'xray' && selectedXrayTests[0]?.testId === '') {
+      setTimeout(() => topXrayRef.current?.focus(), 100);
+    }
+  }, [selectedLabTests.length, selectedXrayTests.length, activeTab]);
 
   // New Catalog UI (Lab + Xray)
   const [showNewLabTestModal, setShowNewLabTestModal] = useState(false);
@@ -656,7 +671,7 @@ export default function ClinicalEntryForm2({
   };
 
   const addLabRow = () => {
-    setSelectedLabTests(prev => [...prev, { testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }]);
+    setSelectedLabTests(prev => [{ rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }, ...prev]);
   };
 
   const removeLabRow = (index: number) => {
@@ -676,9 +691,16 @@ export default function ClinicalEntryForm2({
         groupName: test.category || 'N/A'
       };
 
-      // Automatically add a new row if this is the last row
-      if (index === prev.length - 1) {
-        next.push({
+      // If we just selected a test in an empty row, we might want to ensure a new empty row exists at the top
+      // Actually, the user wants: "selected test should be display in bottom of the unselected test"
+      // So we filter and re-order: unselected rows (testId === '') at top, selected at bottom
+      const unselected = next.filter(r => !r.testId);
+      const selected = next.filter(r => r.testId);
+
+      // If no unselected rows left, add one at the top
+      if (unselected.length === 0) {
+        unselected.unshift({
+          rowId: Math.random().toString(36).substr(2, 9),
           testId: '',
           testName: '',
           groupName: '',
@@ -687,7 +709,7 @@ export default function ClinicalEntryForm2({
         });
       }
 
-      return next;
+      return [...unselected, ...selected];
     });
   };
 
@@ -712,6 +734,7 @@ export default function ClinicalEntryForm2({
       const mappedRows = items.map((item: any) => {
         const catalogItem = labCatalog.find(t => t.id === item.catalog_id);
         return {
+          rowId: Math.random().toString(36).substr(2, 9),
           testId: item.catalog_id,
           testName: catalogItem?.test_name || 'Unknown Test',
           groupName: catalogItem?.category || 'N/A',
@@ -720,7 +743,17 @@ export default function ClinicalEntryForm2({
         };
       });
 
-      setSelectedLabTests(mappedRows.length > 0 ? mappedRows : [{ testId: '', testName: '', groupName: '', clinicalIndication: '', specialInstructions: '' }]);
+      // Maintain one unselected row at top
+      const emptyRow = {
+        rowId: Math.random().toString(36).substr(2, 9),
+        testId: '',
+        testName: '',
+        groupName: '',
+        clinicalIndication: '',
+        specialInstructions: ''
+      };
+
+      setSelectedLabTests(mappedRows.length > 0 ? [emptyRow, ...mappedRows] : [emptyRow]);
     } catch (err) {
       console.error('Error applying lab group:', err);
     }
@@ -860,7 +893,8 @@ export default function ClinicalEntryForm2({
       setSelectedLabTests(prev => {
         const next = [...prev];
         const emptyIndex = next.findIndex(t => !t.testId);
-        const selection = {
+        const selection: LabTestSelection = {
+          rowId: emptyIndex !== -1 ? next[emptyIndex].rowId : Math.random().toString(36).substr(2, 9),
           testId: newEntry.id,
           testName: newEntry.test_name,
           groupName: newEntry.category || 'N/A',
@@ -883,7 +917,7 @@ export default function ClinicalEntryForm2({
   };
 
   const addXrayRow = () => {
-    setSelectedXrayTests(prev => [...prev, { testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }]);
+    setSelectedXrayTests(prev => [{ rowId: Math.random().toString(36).substr(2, 9), testId: '', testName: '', groupName: '', bodyPart: '', clinicalIndication: '', specialInstructions: '' }, ...prev]);
   };
 
   const removeXrayRow = (index: number) => {
@@ -904,9 +938,13 @@ export default function ClinicalEntryForm2({
         bodyPart: test.body_part || ''
       };
 
-      // Automatically add a new row if this is the last row
-      if (index === prev.length - 1) {
-        next.push({
+      // unselected at top, selected at bottom
+      const unselected = next.filter(r => !r.testId);
+      const selected = next.filter(r => r.testId);
+
+      if (unselected.length === 0) {
+        unselected.unshift({
+          rowId: Math.random().toString(36).substr(2, 9),
           testId: '',
           testName: '',
           groupName: '',
@@ -916,7 +954,7 @@ export default function ClinicalEntryForm2({
         });
       }
 
-      return next;
+      return [...unselected, ...selected];
     });
   };
 
@@ -959,7 +997,8 @@ export default function ClinicalEntryForm2({
       setSelectedXrayTests(prev => {
         const next = [...prev];
         const emptyIndex = next.findIndex(t => !t.testId);
-        const selection = {
+        const selection: XrayTestSelection = {
+          rowId: emptyIndex !== -1 ? next[emptyIndex].rowId : Math.random().toString(36).substr(2, 9),
           testId: newEntry.id,
           testName: newEntry.test_name,
           groupName: newEntry.modality || 'X-Ray',
@@ -1548,11 +1587,20 @@ export default function ClinicalEntryForm2({
             <div className="max-w-5xl mx-auto space-y-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-teal-600" />
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-teal-100 rounded-lg">
+                      <Activity className="h-5 w-5 text-teal-600" />
+                    </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Lab Test Selection</h3>
-                      <p className="text-sm text-gray-500">Add required diagnostics for clinical analysis</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-gray-900 tracking-tight">Lab Test Selection</h3>
+                        {selectedLabTests.filter(t => t.testId).length > 0 && (
+                          <span className="bg-teal-600 text-white text-xs font-bold px-2.5 py-1 rounded-full animate-bounce-subtle">
+                            {selectedLabTests.filter(t => t.testId).length}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 font-medium italic">Add required diagnostics for clinical analysis</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1623,13 +1671,14 @@ export default function ClinicalEntryForm2({
                     }));
 
                     return (
-                      <div key={index} className="space-y-4">
+                      <div key={row.rowId || index} className="space-y-4">
                         <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
                               Test Name
                             </label>
                             <SearchableSelect
+                              ref={index === 0 ? topLabRef : null}
                               options={options}
                               value={row.testId}
                               onChange={(val) => handleLabTestChange(index, val)}
@@ -1755,11 +1804,20 @@ export default function ClinicalEntryForm2({
             <div className="max-w-5xl mx-auto space-y-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-teal-600" />
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Activity className="h-5 w-5 text-blue-600" />
+                    </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Radiological Procedures</h3>
-                      <p className="text-sm text-gray-500">Select modality and body regions</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-gray-900 tracking-tight">Radiological Procedures</h3>
+                        {selectedXrayTests.filter(t => t.testId).length > 0 && (
+                          <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full animate-bounce-subtle">
+                            {selectedXrayTests.filter(t => t.testId).length}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 font-medium italic">Select modality and body regions</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1821,7 +1879,7 @@ export default function ClinicalEntryForm2({
                   </div>
                 </div>
 
-                <div className="bg-teal-50 rounded-xl p-6 space-y-4 border border-teal-100">
+                <div className="bg-blue-50 rounded-xl p-6 space-y-4 border border-blue-100">
                   {selectedXrayTests.map((row, index) => {
                     const options = radCatalog.map((t) => ({
                       value: t.id,
@@ -1831,17 +1889,18 @@ export default function ClinicalEntryForm2({
                     }));
 
                     return (
-                      <div key={index} className="space-y-4">
+                      <div key={row.rowId || index} className="space-y-4">
                         <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
                               Procedure Name
                             </label>
                             <SearchableSelect
+                              ref={index === 0 ? topXrayRef : null}
                               options={options}
                               value={row.testId}
                               onChange={(val) => handleXrayTestChange(index, val)}
-                              placeholder="CHOOSE SCAN..."
+                              placeholder="Search & Select Procedure..."
                             />
                           </div>
 

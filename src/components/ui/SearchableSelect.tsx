@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
 
 interface Option {
@@ -18,7 +18,12 @@ interface SearchableSelectProps {
   keepOpenAfterSelect?: boolean;
 }
 
-export const SearchableSelect: React.FC<SearchableSelectProps> = ({
+export interface SearchableSelectRef {
+  focus: () => void;
+  open: () => void;
+}
+
+export const SearchableSelect = forwardRef<SearchableSelectRef, SearchableSelectProps>(({
   options,
   value,
   onChange,
@@ -26,7 +31,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   className = '',
   disabled = false,
   keepOpenAfterSelect = false
-}) => {
+}, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredOptions, setFilteredOptions] = useState<Option[]>(options);
@@ -34,6 +39,16 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const optionsListRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      wrapperRef.current?.focus();
+    },
+    open: () => {
+      setIsOpen(true);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }));
 
   // Get selected option details
   const selectedOption = options.find(opt => opt.value === value);
@@ -111,6 +126,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       case 'Escape':
         e.preventDefault();
         setIsOpen(false);
+        wrapperRef.current?.focus();
         break;
       case 'Tab':
         setIsOpen(false);
@@ -165,11 +181,21 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     }
   };
 
+  const handleGlobalFocus = () => {
+    if (!isOpen && !disabled) {
+      setIsOpen(true);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+    }
+  };
+
   return (
     <div
       className={`relative ${className}`}
       ref={wrapperRef}
       onKeyDown={handleKeyDown}
+      onFocus={handleGlobalFocus}
       tabIndex={disabled ? -1 : 0}
     >
       {/* Trigger Button */}
@@ -183,9 +209,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       >
         <div className="flex-1 truncate">
           {selectedOption ? (
-            <span className="text-slate-900">{selectedOption.label}</span>
+            <span className="text-slate-900 font-bold">{selectedOption.label}</span>
           ) : (
-            <span className="text-slate-400">{placeholder}</span>
+            <span className="text-slate-400 font-medium">{placeholder}</span>
           )}
         </div>
 
@@ -215,7 +241,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Type to search..."
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                 onKeyDown={handleKeyDown}
               />
             </div>
@@ -227,7 +253,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200"
           >
             {filteredOptions.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-sm">
+              <div className="p-8 text-center text-slate-400 text-sm font-medium">
                 No results found for "{searchTerm}"
               </div>
             ) : (
@@ -238,13 +264,13 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     onClick={() => handleSelect(option.value)}
                     onMouseEnter={() => setActiveIndex(index)}
                     className={`
-                      px-4 py-3 cursor-pointer flex items-center justify-between mx-1 rounded-lg
+                      px-4 py-3 cursor-pointer flex items-center justify-between mx-1 rounded-lg transition-colors
                       ${activeIndex === index ? 'bg-teal-600 text-white shadow-md' : value === option.value ? 'bg-teal-50 text-teal-900' : 'text-slate-700 hover:bg-slate-50'}
                     `}
                   >
                     <div>
-                      <div className="font-medium">{option.label}</div>
-                      <div className={`text-xs mt-0.5 flex gap-2 ${activeIndex === index ? 'text-teal-100' : 'text-slate-500'}`}>
+                      <div className="font-bold">{option.label}</div>
+                      <div className={`text-xs mt-0.5 flex gap-2 font-medium ${activeIndex === index ? 'text-teal-100' : 'text-slate-500'}`}>
                         {option.group && (
                           <span className={`px-1.5 py-0.5 rounded ${activeIndex === index ? 'bg-white/20' : 'bg-slate-100'}`}>
                             {option.group}
@@ -263,4 +289,6 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       )}
     </div>
   );
-};
+});
+
+SearchableSelect.displayName = 'SearchableSelect';
