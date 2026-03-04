@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 
 type ParsedSheetRow = {
   row: number;
