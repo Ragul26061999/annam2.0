@@ -399,7 +399,7 @@ export default function LabOrderPage() {
 
         setCreatingGroup(true);
         setError(null);
-        
+
         try {
             // Create the group
             const group = await createDiagnosticGroup({
@@ -440,7 +440,7 @@ export default function LabOrderPage() {
                 items: []
             });
             setShowNewGroupModal(false);
-            
+
             // Auto-select the newly created group
             setSelectedGroupId(group.id);
             await applyGroupToSelection(group.id);
@@ -509,7 +509,7 @@ export default function LabOrderPage() {
 
         try {
             let orders;
-            
+
             // Use grouped orders if multiple tests selected
             if (filledTests.length > 1) {
                 const groupedOrder = await createGroupedLabOrder({
@@ -649,7 +649,7 @@ export default function LabOrderPage() {
                                                 <X size={18} />
                                             </button>
                                         )}
-                                        
+
                                         {/* Search Results Dropdown */}
                                         {showSearchDropdown && searchResults.length > 0 && (
                                             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-lg max-h-80 overflow-y-auto z-50">
@@ -842,13 +842,13 @@ export default function LabOrderPage() {
                                                             const test = labCatalog.find(t => t.id === value);
                                                             if (test) {
                                                                 setSelectedTests(prev => [
+                                                                    ...prev.filter(t => t.testId !== test.id),
                                                                     {
                                                                         testId: test.id,
                                                                         testName: test.test_name,
                                                                         groupName: test.category || 'N/A',
                                                                         amount: test.test_cost || 0
-                                                                    },
-                                                                    ...prev.filter(t => t.testId !== test.id)
+                                                                    }
                                                                 ]);
                                                                 // Reset pending selection
                                                                 setPendingTestId('');
@@ -863,6 +863,7 @@ export default function LabOrderPage() {
                                                         subLabel: `₹${item.test_cost}`
                                                     }))}
                                                     placeholder="Search & Select Test..."
+                                                    keepOpenAfterSelect={true}
                                                 />
                                             </div>
                                             <div className="md:col-span-4">
@@ -1106,7 +1107,7 @@ export default function LabOrderPage() {
                                         <button onClick={() => router.push('/lab-xray')} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-sm hover:scale-[1.02] active:scale-[0.98] transition-all">
                                             Dashboard
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={() => window.print()}
                                             className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
                                             title="Print Bill"
@@ -1341,15 +1342,15 @@ export default function LabOrderPage() {
                     }
                 </AnimatePresence >
 
-            {/* Payment Modal */}
-            {generatedBill && (
-                <UniversalPaymentModal
-                    isOpen={showPaymentModal}
-                    onClose={handlePaymentClose}
-                    bill={generatedBill}
-                    onSuccess={handlePaymentSuccess}
-                />
-            )}
+                {/* Payment Modal */}
+                {generatedBill && (
+                    <UniversalPaymentModal
+                        isOpen={showPaymentModal}
+                        onClose={handlePaymentClose}
+                        bill={generatedBill}
+                        onSuccess={handlePaymentSuccess}
+                    />
+                )}
             </div >
         </div >
     );

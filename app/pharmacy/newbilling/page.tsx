@@ -139,13 +139,17 @@ function NewBillingPageInner() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentStaff, setCurrentStaff] = useState<any>(null);
 
+  // Patient Intent Usage state
+  const [patientIntentUsages, setPatientIntentUsages] = useState<any[]>([]);
+  const [showIntentSelector, setShowIntentSelector] = useState(false);
+
   // Load current user on component mount
   useEffect(() => {
     const loadCurrentUser = async () => {
       try {
         const user = await getCurrentUserProfile();
         setCurrentUser(user);
-        
+
         // Find corresponding staff record for this user
         if (user?.id) {
           const { data: staffData, error: staffError } = await supabase
@@ -154,7 +158,7 @@ function NewBillingPageInner() {
             .eq('user_id', user.id)
             .eq('is_active', true)
             .single();
-          
+
           if (staffError) {
             // Handle different types of staff errors
             if (staffError.code === 'PGRST116') {
@@ -164,7 +168,7 @@ function NewBillingPageInner() {
               // Other database errors
               console.error('Database error finding staff record:', staffError.message);
             }
-            
+
             // No staff mapping found; do NOT fall back to user.id (billing.staff_id must reference staff.id)
             setCurrentStaff(null);
             setStaffId('');
@@ -177,7 +181,7 @@ function NewBillingPageInner() {
         console.error('Error loading current user:', error);
       }
     };
-    
+
     loadCurrentUser();
   }, []);
   // Smooth typing buffer for payment amounts per row
@@ -325,12 +329,12 @@ function NewBillingPageInner() {
     setSearchTerm(value);
     setSelectedMedicine(null);
     setSelectedBatch(null);
-    
+
     // Clear existing timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
-    
+
     // Show loading state for longer searches
     if (value.length > 2) {
       setSearchLoading(true);
@@ -340,7 +344,7 @@ function NewBillingPageInner() {
     } else {
       setSearchLoading(false);
     }
-    
+
     setShowMedicineDropdown(true);
     setSelectedMedicineIndex(0);
     setSelectedBatchIndex(0);
@@ -349,26 +353,26 @@ function NewBillingPageInner() {
   // Smooth scrolling function for dropdown
   const scrollToHighlightedMedicine = (medicineIndex: number, batchIndex: number) => {
     if (!medicineDropdownRef.current) return;
-    
+
     const container = medicineDropdownRef.current;
-    
+
     // Find all medicine elements
     const medicineElements = container.querySelectorAll('[data-medicine-index]');
     const targetMedicineElement = medicineElements[medicineIndex] as HTMLElement;
-    
+
     if (targetMedicineElement) {
       // Find the specific batch within this medicine
       const batchElements = targetMedicineElement.querySelectorAll('[data-batch-index]');
-      const targetElement = batchElements.length > 0 && batchIndex < batchElements.length 
+      const targetElement = batchElements.length > 0 && batchIndex < batchElements.length
         ? batchElements[batchIndex] as HTMLElement
         : targetMedicineElement;
-      
+
       if (targetElement) {
         const containerTop = container.scrollTop;
         const containerBottom = containerTop + container.clientHeight;
         const elementTop = targetElement.offsetTop;
         const elementBottom = elementTop + targetElement.clientHeight;
-        
+
         // Smooth scroll into view if not visible
         if (elementTop < containerTop) {
           container.scrollTo({
@@ -488,7 +492,7 @@ function NewBillingPageInner() {
       setShowPatientDropdown(true);
     }
     if (!showPatientDropdown || patientResults.length === 0) return;
-    
+
     switch (e.key) {
       case 'ArrowDown':
         setSelectedPatientIndex(prev => (prev + 1) % patientResults.length);
@@ -559,25 +563,25 @@ function NewBillingPageInner() {
     if (!showMedicineDropdown || filteredMedicines.length === 0 || searchLoading) {
       return;
     }
-    
+
     // Prevent default for navigation keys
     if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
       e.preventDefault();
     }
-    
+
     const currentMedicine = filteredMedicines[selectedMedicineIndex];
     if (!currentMedicine) return;
-    
-    const matchingBatches = searchTermTrimmed.length > 0 
-      ? currentMedicine.batches.filter(b => 
-          (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-          (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-          ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
-        ) || []
+
+    const matchingBatches = searchTermTrimmed.length > 0
+      ? currentMedicine.batches.filter(b =>
+        (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
+        (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
+        ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
+      ) || []
       : currentMedicine.batches || [];
-    
+
     const totalBatches = matchingBatches.length;
-    
+
     switch (e.key) {
       case 'ArrowDown':
         if (selectedBatchIndex < totalBatches - 1) {
@@ -600,12 +604,12 @@ function NewBillingPageInner() {
         } else if (selectedMedicineIndex > 0) {
           const newMedicineIndex = selectedMedicineIndex - 1;
           const prevMedicine = filteredMedicines[newMedicineIndex];
-          const prevBatches = searchTermTrimmed.length > 0 
-            ? prevMedicine?.batches.filter(b => 
-                (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-                (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-                ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
-              ) || []
+          const prevBatches = searchTermTrimmed.length > 0
+            ? prevMedicine?.batches.filter(b =>
+              (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
+              (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
+              ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
+            ) || []
             : prevMedicine?.batches || [];
           const newBatchIndex = Math.max(0, prevBatches.length - 1);
           setSelectedMedicineIndex(newMedicineIndex);
@@ -789,7 +793,7 @@ function NewBillingPageInner() {
       const { data: batchesJsonData, error: batchesError } = await supabase.rpc('get_batches_with_unit_price');
 
       if (batchesError) throw batchesError;
-      
+
       // Parse JSONB response to array
       const batchesData = batchesJsonData || [];
 
@@ -856,7 +860,7 @@ function NewBillingPageInner() {
 
   useEffect(() => {
     loadMedicines();
-    
+
     // Cleanup function to clear search timeout
     return () => {
       if (searchTimeoutRef.current) {
@@ -1042,6 +1046,36 @@ function NewBillingPageInner() {
     run();
   }, [patientSearch, customer.type]);
 
+  // Fetch pending intent usage for selected patient
+  useEffect(() => {
+    const fetchIntentUsage = async () => {
+      if (customer.type !== 'patient' || !customer.patient_uuid) {
+        setPatientIntentUsages([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('patient_intent_usage')
+          .select('*')
+          .eq('patient_id', customer.patient_uuid)
+          .eq('status', 'pending');
+
+        if (error) throw error;
+        setPatientIntentUsages(data || []);
+
+        // Automatically show selector if pending items found
+        if (data && data.length > 0) {
+          setShowIntentSelector(true);
+        }
+      } catch (err) {
+        console.error('Error fetching intent usage:', err);
+      }
+    };
+
+    fetchIntentUsage();
+  }, [customer.patient_uuid, customer.type]);
+
   // Filter prescribed medications based on search term
   const filteredPrescribedMedications = prescribedMedications.filter(med => {
     if (!prescribedSearchTerm.trim()) return true;
@@ -1072,7 +1106,7 @@ function NewBillingPageInner() {
           medication_code: tempCode,
           manufacturer: 'External',
           category: 'External',
-          unit: 'Nos', 
+          unit: 'Nos',
           is_external: true,
           status: 'active',
           is_active: true
@@ -1081,29 +1115,28 @@ function NewBillingPageInner() {
         .single();
 
       if (medError) {
-          console.error('Error inserting external medicine:', medError);
-          alert('Error logging external medicine: ' + (medError.message || 'Check console for details'));
-          return;
+        console.error('Error inserting external medicine:', medError);
+        alert('Error logging external medicine: ' + (medError.message || 'Check console for details'));
+        return;
       }
 
       alert('External medicine added to database successfully. You can now search for it.');
-      
+
       // Update local state to include this new medicine so it appears in search
       const newMedicine: Medicine = {
-          id: medData.id,
-          name: medData.name,
-          medicine_code: medData.medication_code,
-          manufacturer: medData.manufacturer,
-          category: medData.category,
-          unit: medData.unit,
-          batches: [], // No batches yet
-          is_external: true
+        id: medData.id,
+        name: medData.name,
+        medicine_code: medData.medication_code,
+        manufacturer: medData.manufacturer,
+        category: medData.category,
+        unit: medData.unit,
+        batches: [], // No batches yet
+        is_external: true
       };
-      
+
       setMedicines(prev => [...prev, newMedicine]);
 
       setShowUnlistedModal(false);
-      // Reset form
       setUnlistedForm({
         name: '',
         manufacturer: '',
@@ -1114,13 +1147,55 @@ function NewBillingPageInner() {
         expiry_date: '',
         stock: ''
       });
-      
     } catch (e: any) {
       console.error('Error adding unlisted medicine:', e);
       alert('Error adding unlisted medicine: ' + e.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const addIntentToBill = (usage: any) => {
+    const medicine = medicines.find(m => m.id === usage.medication_id);
+    if (!medicine) {
+      alert(`Medicine for ${usage.patient_name} not found in inventory`);
+      return;
+    }
+
+    // Find the correct batch from the medicine's batches
+    const batch = (medicine.batches || []).find(b => b.batch_number === usage.batch_number);
+
+    // If batch doesn't exist, create a temporary one for the bill
+    const billBatch = batch || {
+      id: `temp-${Date.now()}`,
+      batch_number: usage.batch_number,
+      expiry_date: usage.expiry_date || new Date().toISOString(),
+      current_quantity: usage.quantity,
+      purchase_price: usage.unit_price,
+      selling_price: usage.unit_price,
+      medicine_id: medicine.id,
+      status: 'active'
+    };
+
+    const newItem: BillItem = {
+      medicine,
+      batch: billBatch as MedicineBatch,
+      quantity: usage.quantity,
+      unit_price: usage.unit_price,
+      total: usage.quantity * usage.unit_price,
+      // Store the intent linkage for stock update after payment
+      intent_usage_id: usage.id,
+      intent_medicine_id: usage.intent_medicine_id
+    } as any;
+
+    setBillItems(prev => [...prev, newItem]);
+
+    // Remove from intent list so it doesn't show up again
+    setPatientIntentUsages(prev => prev.filter(p => p.id !== usage.id));
+  };
+
+  const addAllIntentToBill = () => {
+    patientIntentUsages.forEach(usage => addIntentToBill(usage));
   };
 
   const addToBill = (medicine: Medicine, batch: MedicineBatch, quantity: number = 1) => {
@@ -1226,13 +1301,13 @@ function NewBillingPageInner() {
   // Update bill item price
   const updateBillItemPrice = (index: number, newPrice: number) => {
     if (newPrice < 0) return;
-    
+
     const updatedItems = [...billItems];
     const item = updatedItems[index];
     updatedItems[index] = {
-        ...item,
-        unit_price: newPrice,
-        total: item.quantity * newPrice
+      ...item,
+      unit_price: newPrice,
+      total: item.quantity * newPrice
     };
     setBillItems(updatedItems);
   };
@@ -1321,10 +1396,10 @@ function NewBillingPageInner() {
 
       // Clear the bill items
       setBillItems([]);
-      
+
       // Refresh medicines to show updated stock
       await loadMedicines();
-      
+
       alert(`Successfully transferred ${billItems.length} medicines to ${intentType.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`);
     } catch (error) {
       console.error('Error transferring medicines:', error);
@@ -1625,7 +1700,7 @@ function NewBillingPageInner() {
             const isPaid = method !== 'credit' && currentStatus === 'paid';
 
             const allDone = updatedItems.length > 0 && updatedItems.every(x => (Number(x.dispensed_quantity) || 0) >= (Number(x.quantity) || 0));
-            
+
             // Only update prescription status to 'dispensed' when payment is completed
             if (allDone && (isPaid || matchesRoundedPayable || tinyDiff)) {
               const { error: presUpdErr } = await supabase
@@ -1663,13 +1738,45 @@ function NewBillingPageInner() {
         if (payErr) throw payErr;
       }
 
+      // Handle intent medicine stock updates and status
+      for (const item of billItems as any[]) {
+        if (item.intent_usage_id) {
+          // 1. Update patient_intent_usage status to 'billed'
+          await supabase
+            .from('patient_intent_usage')
+            .update({
+              status: 'billed',
+              billing_id: billData!.id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.intent_usage_id);
+
+          // 2. Reduce stock from intent_medicines
+          // First, get current quantity
+          const { data: intentMed } = await supabase
+            .from('intent_medicines')
+            .select('quantity')
+            .eq('id', item.intent_medicine_id)
+            .maybeSingle();
+
+          if (intentMed) {
+            await supabase
+              .from('intent_medicines')
+              .update({
+                quantity: Math.max(0, (intentMed.quantity || 0) - item.quantity)
+              })
+              .eq('id', item.intent_medicine_id);
+          }
+        }
+      }
+
       // Stock transactions and inventory adjustments are handled automatically by database triggers
 
       // Show success modal with receipt (snapshot payments for printing)
       console.log('Customer state at bill generation:', customer);
       console.log('Customer patient_uhid:', customer.patient_uhid);
       console.log('Customer patient_uuid:', customer.patient_uuid);
-      
+
       setGeneratedBill({
         ...billData,
         items: billItems,
@@ -1719,12 +1826,12 @@ function NewBillingPageInner() {
 
     const now = new Date();
     const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-    
+
     // Use generatedBill.customer as fallback since customer state may be reset after bill generation
     const billCustomer1 = generatedBill.customer || customer;
     const patientUhid = billCustomer1.type === 'patient' ? (billCustomer1.patient_uhid || customer.patient_uhid || 'No UHID') : billCustomer1.type === 'intent' ? `INTENT-${intentType}` : 'WALK-IN';
     const patientName1 = billCustomer1.name || customer.name || generatedBill.customer_name || '';
-    
+
     // Get sales type
     const billPayments1 = Array.isArray(generatedBill.payments) && generatedBill.payments.length > 0 ? generatedBill.payments : payments;
     let salesType = billPayments1.length > 1 ? 'SPLIT' : (billPayments1[0]?.method?.toUpperCase() || 'CASH');
@@ -2159,22 +2266,20 @@ function NewBillingPageInner() {
                   <button
                     type="button"
                     onClick={() => setViewMode('compact')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      viewMode === 'compact'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'compact'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
                   >
                     Compact
                   </button>
                   <button
                     type="button"
                     onClick={() => setViewMode('detailed')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      viewMode === 'detailed'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'detailed'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
                   >
                     Detailed
                   </button>
@@ -2192,7 +2297,7 @@ function NewBillingPageInner() {
                   <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">Customer Information</h2>
                 </div>
                 <div className="text-xs text-slate-500">
-                  Billed by: {currentStaff ? 
+                  Billed by: {currentStaff ?
                     `${currentStaff.first_name} ${currentStaff.last_name}`.trim() || currentStaff.employee_id || 'Staff Member' :
                     currentUser?.name || 'Loading...'
                   }
@@ -2264,9 +2369,8 @@ function NewBillingPageInner() {
                                       }
                                     }, 100);
                                   }}
-                                  className={`w-full text-left px-3 py-2 text-xs ${
-                                    index === selectedPatientIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
-                                  }`}
+                                  className={`w-full text-left px-3 py-2 text-xs ${index === selectedPatientIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
+                                    }`}
                                 >
                                   <div className="font-medium text-slate-900">{p.name}</div>
                                   <div className="text-slate-500">UHID: {p.patient_id}</div>
@@ -2371,6 +2475,66 @@ function NewBillingPageInner() {
                     </div>
                   )}
                 </div>
+
+                {/* Patient Intent Usage Notification */}
+                {customer.type === 'patient' && patientIntentUsages.length > 0 && (
+                  <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-indigo-600 p-2 rounded-lg">
+                            <Package className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-indigo-900">Emergency / Intent Medicines Found</h3>
+                            <p className="text-xs text-indigo-700">{patientIntentUsages.length} item(s) used for this patient in departments</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowIntentSelector(!showIntentSelector)}
+                            className="px-3 py-1.5 bg-white text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors"
+                          >
+                            {showIntentSelector ? 'Hide Items' : 'View Items'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={addAllIntentToBill}
+                            className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                          >
+                            Add All to Bill
+                          </button>
+                        </div>
+                      </div>
+
+                      {showIntentSelector && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                          {patientIntentUsages.map((usage) => (
+                            <div key={usage.id} className="bg-white p-3 rounded-lg border border-indigo-100 flex justify-between items-center group hover:border-indigo-300 transition-all">
+                              <div>
+                                <div className="text-sm font-bold text-slate-900">{usage.medication_name}</div>
+                                <div className="text-[10px] text-slate-500 flex gap-2">
+                                  <span>Batch: <span className="text-indigo-600 font-medium">{usage.batch_number}</span></span>
+                                  <span>Dept: <span className="text-indigo-600 font-medium uppercase">{usage.intent_type}</span></span>
+                                </div>
+                                <div className="text-xs font-semibold text-slate-700 mt-0.5">₹{usage.unit_price} x {usage.quantity} units</div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => addIntentToBill(usage)}
+                                className="p-2 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
+                                title="Add to current bill"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div> {/* Added closing div tag here */}
             {/* Prescribed Medications Search - Only show when prescription is linked */}
@@ -2405,7 +2569,7 @@ function NewBillingPageInner() {
                   ) : (
                     filteredPrescribedMedications.map((med, index) => {
                       const remainingQty = med.quantity - med.dispensed_quantity;
-                      const isAlreadyInBill = billItems.some(item => 
+                      const isAlreadyInBill = billItems.some(item =>
                         item.medicine.id === med.medication_id
                       );
 
@@ -2418,13 +2582,12 @@ function NewBillingPageInner() {
                       return (
                         <div
                           key={med.prescription_item_id}
-                          className={`p-3 rounded-lg border transition-colors ${
-                            isAlreadyInBill 
-                              ? 'bg-green-50 border-green-200' 
-                              : !hasStock
-                                ? 'bg-red-50 border-red-200 opacity-60'
-                                : 'bg-slate-50 border-slate-200'
-                          }`}
+                          className={`p-3 rounded-lg border transition-colors ${isAlreadyInBill
+                            ? 'bg-green-50 border-green-200'
+                            : !hasStock
+                              ? 'bg-red-50 border-red-200 opacity-60'
+                              : 'bg-slate-50 border-slate-200'
+                            }`}
                         >
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
@@ -2461,11 +2624,10 @@ function NewBillingPageInner() {
                                   Added to Bill
                                 </span>
                               ) : (
-                                <span className={`px-2 py-1 text-xs font-medium rounded ${
-                                  !hasStock 
-                                    ? 'bg-red-100 text-red-600' 
-                                    : 'bg-slate-100 text-slate-500'
-                                }`}>
+                                <span className={`px-2 py-1 text-xs font-medium rounded ${!hasStock
+                                  ? 'bg-red-100 text-red-600'
+                                  : 'bg-slate-100 text-slate-500'
+                                  }`}>
                                   {!hasStock ? 'No Available' : (remainingQty > 0 ? 'Available' : 'Fully Dispensed')}
                                 </span>
                               )}
@@ -2504,7 +2666,7 @@ function NewBillingPageInner() {
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     {showMedicineDropdown && searchTerm && (
-                      <div 
+                      <div
                         ref={medicineDropdownRef}
                         className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-96 overflow-auto"
                       >
@@ -2529,140 +2691,136 @@ function NewBillingPageInner() {
                                 </button>
                               </div>
                             ) : (
-                          filteredMedicines.map((medicine, index) => {
-                            const matchingBatches = searchTermTrimmed.length > 0 
-                              ? medicine.batches.filter(b => 
-                                  (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-                                  (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-                                  ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
-                                )
-                              : medicine.batches;
-                            return (
-                              <div
-                                key={medicine.id}
-                                data-medicine-index={index}
-                                className={`px-3 py-2 text-xs ${
-                                  index === selectedMedicineIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
-                                }`}
-                              >
-                                <div className="font-medium text-slate-900">{medicine.name}</div>
-                                <div className="text-slate-500">
-                                  {medicine.medicine_code} • {medicine.manufacturer}
-                                </div>
-                                {medicine.location && (
-                                  <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-1">
-                                    Shelf: {medicine.location}
-                                  </div>
-                                )}
-                                {medicine.batches.length > 0 && medicine.batches[0].rack_location && (
-                                  <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded mt-1">
-                                    Rack: {medicine.batches[0].rack_location}
-                                  </div>
-                                )}
-                                
-                                {/* Always show batch section */}
-                                <div className="mt-2">
-                                  {medicine.batches.length === 0 ? (
-                                    medicine.is_external ? (
-                                      <div 
-                                          className={`pl-2 py-2 rounded cursor-pointer border ${
-                                              index === selectedMedicineIndex ? 'bg-blue-100 border-blue-400 ring-1 ring-blue-400' : 'bg-slate-50 border-slate-200 hover:bg-blue-50'
-                                          }`}
-                                          onClick={(e) => {
+                              filteredMedicines.map((medicine, index) => {
+                                const matchingBatches = searchTermTrimmed.length > 0
+                                  ? medicine.batches.filter(b =>
+                                    (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
+                                    (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
+                                    ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
+                                  )
+                                  : medicine.batches;
+                                return (
+                                  <div
+                                    key={medicine.id}
+                                    data-medicine-index={index}
+                                    className={`px-3 py-2 text-xs ${index === selectedMedicineIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
+                                      }`}
+                                  >
+                                    <div className="font-medium text-slate-900">{medicine.name}</div>
+                                    <div className="text-slate-500">
+                                      {medicine.medicine_code} • {medicine.manufacturer}
+                                    </div>
+                                    {medicine.location && (
+                                      <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-1">
+                                        Shelf: {medicine.location}
+                                      </div>
+                                    )}
+                                    {medicine.batches.length > 0 && medicine.batches[0].rack_location && (
+                                      <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded mt-1">
+                                        Rack: {medicine.batches[0].rack_location}
+                                      </div>
+                                    )}
+
+                                    {/* Always show batch section */}
+                                    <div className="mt-2">
+                                      {medicine.batches.length === 0 ? (
+                                        medicine.is_external ? (
+                                          <div
+                                            className={`pl-2 py-2 rounded cursor-pointer border ${index === selectedMedicineIndex ? 'bg-blue-100 border-blue-400 ring-1 ring-blue-400' : 'bg-slate-50 border-slate-200 hover:bg-blue-50'
+                                              }`}
+                                            onClick={(e) => {
                                               e.stopPropagation();
                                               setPendingExternalAdd({ medicine: medicine, quantity: Number(quantity) || 1 });
                                               setExternalPriceInput('');
                                               setShowExternalPriceModal(true);
-                                          }}
-                                      >
-                                          <div className="font-medium text-slate-700 text-xs">Add to Bill</div>
-                                          <div className="text-xs text-slate-500">Price editable in bill</div>
-                                      </div>
-                                    ) : (
-                                      <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                                        No active batches available
-                                      </div>
-                                    )
-                                  ) : (
-                                    <div>
-                                      <div className="text-xs text-slate-600 mb-1">
-                                        Available Batches ({matchingBatches.length > 0 ? matchingBatches.length : medicine.batches.length}):
-                                      </div>
-                                      <div className="space-y-1">
-                                        {(matchingBatches.length > 0 ? matchingBatches : medicine.batches).slice(0, 5).map((batch, batchIndex) => {
-                                          const isSelectedBatch = index === selectedMedicineIndex && batchIndex === selectedBatchIndex;
-                                          const isOutOfStock = (batch.current_quantity || 0) <= 0;
-                                          
-                                          return (
-                                          <div
-                                            key={batch.id}
-                                            data-batch-index={batchIndex}
-                                            className={`pl-2 py-2 rounded cursor-pointer border ${
-                                              isSelectedBatch
-                                                ? 'bg-blue-100 border-blue-400 ring-1 ring-blue-400'
-                                                : isOutOfStock
-                                                  ? 'bg-red-50 border-red-200 cursor-not-allowed opacity-60'
-                                                  : matchingBatches.length > 0 && searchTermTrimmed.length > 0
-                                                    ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                                                    : 'bg-slate-50 border-slate-200 hover:bg-blue-50'
-                                            }`}
-                                            onClick={(e) => {
-                                              if (isOutOfStock) {
-                                                e.stopPropagation();
-                                                return;
-                                              }
-                                              e.stopPropagation();
-                                              setSelectedMedicine(medicine);
-                                              setSelectedBatch(batch);
-                                              setSearchTerm(medicine.name);
-                                              setSelectedMedicineIndex(0);
-                                              setSelectedBatchIndex(0);
-                                              setShowMedicineDropdown(false);
-                                              setTimeout(() => {
-                                                const qtyInput = document.querySelector('input[placeholder="Quantity"]') as HTMLInputElement;
-                                                if (qtyInput) qtyInput.focus();
-                                              }, 50);
                                             }}
                                           >
-                                            <div className="flex justify-between items-center">
-                                              <span className="font-medium text-slate-700 text-xs">
-                                                Batch: {batch.batch_number}
-                                              </span>
-                                              <span className={`text-xs font-medium ${
-                                                isOutOfStock ? 'text-red-600' : 'text-slate-600'
-                                              }`}>
-                                                {isOutOfStock ? 'No Available' : `Stock: ${batch.current_quantity}`}
-                                              </span>
-                                            </div>
-                                            <div className="text-xs text-slate-500 mt-1">
-                                              {batch.batch_barcode && `Barcode: ${batch.batch_barcode}`}
-                                              {batch.legacy_code && ` • Legacy: ${batch.legacy_code}`}
-                                              {batch.expiry_date && ` • Exp: ${new Date(batch.expiry_date).toLocaleDateString()}`}
-                                            </div>
-                                            <div className="text-xs text-emerald-600 mt-1">
-                                              Price: ₹{batch.selling_price}
-                                            </div>
-                                            {batch.rack_location && (
-                                              <div className="text-xs text-blue-600 mt-1">
-                                                Rack: {batch.rack_location}
+                                            <div className="font-medium text-slate-700 text-xs">Add to Bill</div>
+                                            <div className="text-xs text-slate-500">Price editable in bill</div>
+                                          </div>
+                                        ) : (
+                                          <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                                            No active batches available
+                                          </div>
+                                        )
+                                      ) : (
+                                        <div>
+                                          <div className="text-xs text-slate-600 mb-1">
+                                            Available Batches ({matchingBatches.length > 0 ? matchingBatches.length : medicine.batches.length}):
+                                          </div>
+                                          <div className="space-y-1">
+                                            {(matchingBatches.length > 0 ? matchingBatches : medicine.batches).slice(0, 5).map((batch, batchIndex) => {
+                                              const isSelectedBatch = index === selectedMedicineIndex && batchIndex === selectedBatchIndex;
+                                              const isOutOfStock = (batch.current_quantity || 0) <= 0;
+
+                                              return (
+                                                <div
+                                                  key={batch.id}
+                                                  data-batch-index={batchIndex}
+                                                  className={`pl-2 py-2 rounded cursor-pointer border ${isSelectedBatch
+                                                    ? 'bg-blue-100 border-blue-400 ring-1 ring-blue-400'
+                                                    : isOutOfStock
+                                                      ? 'bg-red-50 border-red-200 cursor-not-allowed opacity-60'
+                                                      : matchingBatches.length > 0 && searchTermTrimmed.length > 0
+                                                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                                                        : 'bg-slate-50 border-slate-200 hover:bg-blue-50'
+                                                    }`}
+                                                  onClick={(e) => {
+                                                    if (isOutOfStock) {
+                                                      e.stopPropagation();
+                                                      return;
+                                                    }
+                                                    e.stopPropagation();
+                                                    setSelectedMedicine(medicine);
+                                                    setSelectedBatch(batch);
+                                                    setSearchTerm(medicine.name);
+                                                    setSelectedMedicineIndex(0);
+                                                    setSelectedBatchIndex(0);
+                                                    setShowMedicineDropdown(false);
+                                                    setTimeout(() => {
+                                                      const qtyInput = document.querySelector('input[placeholder="Quantity"]') as HTMLInputElement;
+                                                      if (qtyInput) qtyInput.focus();
+                                                    }, 50);
+                                                  }}
+                                                >
+                                                  <div className="flex justify-between items-center">
+                                                    <span className="font-medium text-slate-700 text-xs">
+                                                      Batch: {batch.batch_number}
+                                                    </span>
+                                                    <span className={`text-xs font-medium ${isOutOfStock ? 'text-red-600' : 'text-slate-600'
+                                                      }`}>
+                                                      {isOutOfStock ? 'No Available' : `Stock: ${batch.current_quantity}`}
+                                                    </span>
+                                                  </div>
+                                                  <div className="text-xs text-slate-500 mt-1">
+                                                    {batch.batch_barcode && `Barcode: ${batch.batch_barcode}`}
+                                                    {batch.legacy_code && ` • Legacy: ${batch.legacy_code}`}
+                                                    {batch.expiry_date && ` • Exp: ${new Date(batch.expiry_date).toLocaleDateString()}`}
+                                                  </div>
+                                                  <div className="text-xs text-emerald-600 mt-1">
+                                                    Price: ₹{batch.selling_price}
+                                                  </div>
+                                                  {batch.rack_location && (
+                                                    <div className="text-xs text-blue-600 mt-1">
+                                                      Rack: {batch.rack_location}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                            {medicine.batches.length > 5 && (
+                                              <div className="text-xs text-slate-400 pl-2 italic">
+                                                ... and {medicine.batches.length - 5} more batches
                                               </div>
                                             )}
                                           </div>
-                                          );
-                                        })}
-                                        {medicine.batches.length > 5 && (
-                                          <div className="text-xs text-slate-400 pl-2 italic">
-                                            ... and {medicine.batches.length - 5} more batches
-                                          </div>
-                                        )}
-                                      </div>
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
+                                  </div>
+                                );
+                              })
+                            )}
                           </>
                         )}
                       </div>
@@ -2724,7 +2882,7 @@ function NewBillingPageInner() {
                         // Find the best matching batch based on search term
                         let targetBatch = medicine.batches[0];
                         if (searchTermTrimmed.length > 0) {
-                          const matchingBatches = medicine.batches.filter(b => 
+                          const matchingBatches = medicine.batches.filter(b =>
                             (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
                             (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
                             ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
@@ -2757,247 +2915,247 @@ function NewBillingPageInner() {
               </div>
             </div>
 
-          {/* Right side: Bill Items + Billing Summary - Hide for intent */}
-          {customer.type !== 'intent' && (
-            <div className="flex flex-col gap-4">
-            {/* Bill Items in table style */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5 text-purple-600" />
-                  <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">Bill Items</h2>
-                </div>
-              </div>
-
-              {billItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-sm text-slate-500">
-                  <ShoppingCart className="h-10 w-10 text-slate-200 mb-2" />
-                  No items added yet
-                </div>
-              ) : (
-                <div className="border border-slate-100 rounded-xl overflow-hidden">
-                  <div className="grid grid-cols-[40px,1.7fr,0.7fr,0.9fr,0.9fr,60px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
-                    <span>Sl.</span>
-                    <span>Drug / Batch</span>
-                    <span className="text-right">Rate</span>
-                    <span className="text-center">Qty (Units)</span>
-                    <span className="text-right">Total</span>
-                    <span className="text-center">Action</span>
+            {/* Right side: Bill Items + Billing Summary - Hide for intent */}
+            {customer.type !== 'intent' && (
+              <div className="flex flex-col gap-4">
+                {/* Bill Items in table style */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <ShoppingCart className="h-5 w-5 text-purple-600" />
+                      <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">Bill Items</h2>
+                    </div>
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-[11px]">
-                    {billItems.map((item, index) => (
-                      <div
-                        key={`${item.medicine.id}-${item.batch.id}`}
-                        className="grid grid-cols-[40px,1.7fr,0.7fr,0.9fr,0.9fr,60px] items-center px-3 py-2 text-slate-700"
-                      >
-                        <span>{index + 1}</span>
-                        <div className="flex flex-col">
-                          <span className="font-medium truncate">{item.medicine.name}</span>
-                          <span className="text-[10px] text-slate-500 truncate">Batch: {item.medicine.is_external ? 'EXT' : item.batch.batch_number.slice(-4)}</span>
-                          {item.medicine.location && (
-                            <span className="text-[10px] text-blue-600 truncate">Shelf: {item.medicine.location}</span>
-                          )}
-                          {item.batch.rack_location && (
-                            <span className="text-[10px] text-green-600 truncate">Rack: {item.batch.rack_location}</span>
-                          )}
-                        </div>
-                        {item.medicine.is_external ? (
-                          <div className="flex justify-end">
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={item.unit_price}
-                              onChange={(e) => updateBillItemPrice(index, parseFloat(e.target.value) || 0)}
-                              className="w-20 rounded border border-slate-200 bg-white text-right text-[11px] py-1 px-1 focus:ring-2 focus:ring-blue-500 outline-none"
-                              onClick={(e) => e.stopPropagation()}
-                            />
+
+                  {billItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-sm text-slate-500">
+                      <ShoppingCart className="h-10 w-10 text-slate-200 mb-2" />
+                      No items added yet
+                    </div>
+                  ) : (
+                    <div className="border border-slate-100 rounded-xl overflow-hidden">
+                      <div className="grid grid-cols-[40px,1.7fr,0.7fr,0.9fr,0.9fr,60px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
+                        <span>Sl.</span>
+                        <span>Drug / Batch</span>
+                        <span className="text-right">Rate</span>
+                        <span className="text-center">Qty (Units)</span>
+                        <span className="text-right">Total</span>
+                        <span className="text-center">Action</span>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-[11px]">
+                        {billItems.map((item, index) => (
+                          <div
+                            key={`${item.medicine.id}-${item.batch.id}`}
+                            className="grid grid-cols-[40px,1.7fr,0.7fr,0.9fr,0.9fr,60px] items-center px-3 py-2 text-slate-700"
+                          >
+                            <span>{index + 1}</span>
+                            <div className="flex flex-col">
+                              <span className="font-medium truncate">{item.medicine.name}</span>
+                              <span className="text-[10px] text-slate-500 truncate">Batch: {item.medicine.is_external ? 'EXT' : item.batch.batch_number.slice(-4)}</span>
+                              {item.medicine.location && (
+                                <span className="text-[10px] text-blue-600 truncate">Shelf: {item.medicine.location}</span>
+                              )}
+                              {item.batch.rack_location && (
+                                <span className="text-[10px] text-green-600 truncate">Rack: {item.batch.rack_location}</span>
+                              )}
+                            </div>
+                            {item.medicine.is_external ? (
+                              <div className="flex justify-end">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={item.unit_price}
+                                  onChange={(e) => updateBillItemPrice(index, parseFloat(e.target.value) || 0)}
+                                  className="w-20 rounded border border-slate-200 bg-white text-right text-[11px] py-1 px-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-right font-medium">₹{item.unit_price.toFixed(2)}</span>
+                            )}
+                            <div className="flex items-center justify-center">
+                              <input
+                                type="number"
+                                min={1}
+                                max={item.batch.current_quantity}
+                                value={Number.isFinite(item.quantity as any) ? item.quantity : 0}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  if (raw === '') {
+                                    updateBillItemQuantity(index, 0);
+                                    return;
+                                  }
+                                  const val = parseInt(raw, 10);
+                                  if (Number.isNaN(val)) {
+                                    updateBillItemQuantity(index, 0);
+                                    return;
+                                  }
+                                  updateBillItemQuantity(index, val);
+                                }}
+                                onBlur={(e) => {
+                                  let val = parseInt(e.target.value || '0', 10);
+                                  if (!val || val < 1) val = 1;
+                                  if (val > item.batch.current_quantity) val = item.batch.current_quantity;
+                                  updateBillItemQuantity(index, val);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const allQtyInputs = Array.from(document.querySelectorAll('.max-h-72 input[type="number"]'));
+                                    const currentIndex = allQtyInputs.indexOf(e.currentTarget);
+                                    if (currentIndex < allQtyInputs.length - 1) {
+                                      (allQtyInputs[currentIndex + 1] as HTMLElement).focus();
+                                    } else {
+                                      // Move to discount type select
+                                      const discountSelect = document.querySelector('select[value="amount"], select[value="percent"]');
+                                      if (discountSelect) {
+                                        (discountSelect as HTMLElement).focus();
+                                      }
+                                    }
+                                  }
+                                }}
+                                className="w-14 rounded border border-slate-200 bg-white text-center text-[11px] py-1"
+                              />
+                            </div>
+                            <span className="text-right font-semibold text-emerald-600">₹{item.total.toFixed(2)}</span>
+                            <div className="flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => removeBillItem(index)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
-                        ) : (
-                          <span className="text-right font-medium">₹{item.unit_price.toFixed(2)}</span>
-                        )}
-                        <div className="flex items-center justify-center">
-                          <input
-                            type="number"
-                            min={1}
-                            max={item.batch.current_quantity}
-                            value={Number.isFinite(item.quantity as any) ? item.quantity : 0}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              if (raw === '') {
-                                updateBillItemQuantity(index, 0);
-                                return;
-                              }
-                              const val = parseInt(raw, 10);
-                              if (Number.isNaN(val)) {
-                                updateBillItemQuantity(index, 0);
-                                return;
-                              }
-                              updateBillItemQuantity(index, val);
-                            }}
-                            onBlur={(e) => {
-                              let val = parseInt(e.target.value || '0', 10);
-                              if (!val || val < 1) val = 1;
-                              if (val > item.batch.current_quantity) val = item.batch.current_quantity;
-                              updateBillItemQuantity(index, val);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const allQtyInputs = Array.from(document.querySelectorAll('.max-h-72 input[type="number"]'));
-                                const currentIndex = allQtyInputs.indexOf(e.currentTarget);
-                                if (currentIndex < allQtyInputs.length - 1) {
-                                  (allQtyInputs[currentIndex + 1] as HTMLElement).focus();
-                                } else {
-                                  // Move to discount type select
-                                  const discountSelect = document.querySelector('select[value="amount"], select[value="percent"]');
-                                  if (discountSelect) {
-                                    (discountSelect as HTMLElement).focus();
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Billing Summary */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5 text-amber-500" />
+                      <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">Billing Summary</h2>
+                    </div>
+                  </div>
+
+                  {billItems.length === 0 ? (
+                    <p className="text-xs text-slate-500">Add items to see billing details.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                        <h4 className="text-xs font-semibold text-slate-700 mb-2">Discount & Tax</h4>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">Discount Type</label>
+                            <select
+                              value={billTotals.discountType}
+                              onChange={(e) => setBillTotals(prev => ({ ...prev, discountType: e.target.value as 'amount' | 'percent' }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const container = e.currentTarget.closest('.grid');
+                                  const nextElement = container?.querySelectorAll('input')[0];
+                                  if (nextElement) {
+                                    (nextElement as HTMLElement).focus();
                                   }
                                 }
-                              }
-                            }}
-                            className="w-14 rounded border border-slate-200 bg-white text-center text-[11px] py-1"
-                          />
-                        </div>
-                        <span className="text-right font-semibold text-emerald-600">₹{item.total.toFixed(2)}</span>
-                        <div className="flex items-center justify-center">
-                          <button
-                            type="button"
-                            onClick={() => removeBillItem(index)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                              }}
+                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value="amount">Amount (₹)</option>
+                              <option value="percent">Percentage (%)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Discount {billTotals.discountType === 'percent' ? '(%)' : '(₹)'}
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max={billTotals.discountType === 'percent' ? '100' : undefined}
+                              value={billTotals.discountValue}
+                              onChange={(e) => setBillTotals(prev => ({ ...prev, discountValue: parseFloat(e.target.value) || 0 }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const container = e.currentTarget.closest('.grid');
+                                  const nextElement = container?.querySelectorAll('input')[1];
+                                  if (nextElement) {
+                                    (nextElement as HTMLElement).focus();
+                                  }
+                                }
+                              }}
+                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">GST / Tax (%)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={billTotals.taxPercent}
+                              onChange={(e) => setBillTotals(prev => ({ ...prev, taxPercent: parseFloat(e.target.value) || 0 }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  // Focus on Receive Payment button
+                                  const receivePaymentBtn = document.querySelector('button:has(> .lucide-check-circle)');
+                                  if (receivePaymentBtn && !receivePaymentBtn.hasAttribute('disabled')) {
+                                    (receivePaymentBtn as HTMLElement).focus();
+                                  }
+                                }
+                              }}
+                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
 
-            {/* Billing Summary */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-amber-500" />
-                  <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">Billing Summary</h2>
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs flex flex-col gap-2">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Subtotal</span>
+                          <span className="font-medium text-slate-900">₹{Math.round(billTotals.subtotal)}</span>
+                        </div>
+                        {billTotals.discountAmount > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-600">Discount</span>
+                            <span className="font-medium text-red-600">-₹{Math.round(billTotals.discountAmount)}</span>
+                          </div>
+                        )}
+                        <div className="mt-2 flex items-center justify-between border-top border-emerald-200 pt-1">
+                          <span className="text-[13px] font-semibold text-slate-900">Total Amount</span>
+                          <span className="text-lg font-bold text-emerald-700">₹{Math.round(billTotals.totalAmount)}</span>
+                        </div>
+                      </div>
+
+                      {/* Actions: Receive Payment / Print Receipt */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowPaymentModal(true)}
+                          disabled={!canReceivePayment}
+                          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Receive Payment
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {billItems.length === 0 ? (
-                <p className="text-xs text-slate-500">Add items to see billing details.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                    <h4 className="text-xs font-semibold text-slate-700 mb-2">Discount & Tax</h4>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Discount Type</label>
-                        <select
-                          value={billTotals.discountType}
-                          onChange={(e) => setBillTotals(prev => ({ ...prev, discountType: e.target.value as 'amount' | 'percent' }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const container = e.currentTarget.closest('.grid');
-                              const nextElement = container?.querySelectorAll('input')[0];
-                              if (nextElement) {
-                                (nextElement as HTMLElement).focus();
-                              }
-                            }
-                          }}
-                          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="amount">Amount (₹)</option>
-                          <option value="percent">Percentage (%)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Discount {billTotals.discountType === 'percent' ? '(%)' : '(₹)'}
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max={billTotals.discountType === 'percent' ? '100' : undefined}
-                          value={billTotals.discountValue}
-                          onChange={(e) => setBillTotals(prev => ({ ...prev, discountValue: parseFloat(e.target.value) || 0 }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const container = e.currentTarget.closest('.grid');
-                              const nextElement = container?.querySelectorAll('input')[1];
-                              if (nextElement) {
-                                (nextElement as HTMLElement).focus();
-                              }
-                            }
-                          }}
-                          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">GST / Tax (%)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={billTotals.taxPercent}
-                          onChange={(e) => setBillTotals(prev => ({ ...prev, taxPercent: parseFloat(e.target.value) || 0 }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              // Focus on Receive Payment button
-                              const receivePaymentBtn = document.querySelector('button:has(> .lucide-check-circle)');
-                              if (receivePaymentBtn && !receivePaymentBtn.hasAttribute('disabled')) {
-                                (receivePaymentBtn as HTMLElement).focus();
-                              }
-                            }
-                          }}
-                          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs flex flex-col gap-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Subtotal</span>
-                      <span className="font-medium text-slate-900">₹{Math.round(billTotals.subtotal)}</span>
-                    </div>
-                    {billTotals.discountAmount > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Discount</span>
-                        <span className="font-medium text-red-600">-₹{Math.round(billTotals.discountAmount)}</span>
-                      </div>
-                    )}
-                    <div className="mt-2 flex items-center justify-between border-top border-emerald-200 pt-1">
-                      <span className="text-[13px] font-semibold text-slate-900">Total Amount</span>
-                      <span className="text-lg font-bold text-emerald-700">₹{Math.round(billTotals.totalAmount)}</span>
-                    </div>
-                  </div>
-
-                  {/* Actions: Receive Payment / Print Receipt */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowPaymentModal(true)}
-                      disabled={!canReceivePayment}
-                      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      Receive Payment
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            </div>
-          )}
+            )}
 
             {/* Transfer Section for Intent Type */}
             {customer.type === 'intent' && (
@@ -3153,7 +3311,7 @@ function NewBillingPageInner() {
                           <div className="text-red-600">-₹{Math.round(billTotals.discountAmount)}</div>
                         </div>
                       )}
-                                          </div>
+                    </div>
                   </div>
 
                   {/* Payment Methods */}
@@ -3599,120 +3757,120 @@ function NewBillingPageInner() {
           </div>
         )}
 
-      {showExternalPriceModal && pendingExternalAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => {
-              setShowExternalPriceModal(false);
-              setPendingExternalAdd(null);
-              setExternalPriceInput('');
-            }}
-          ></div>
-          <div className="relative bg-white w-full max-w-md mx-auto rounded-2xl shadow-xl border border-gray-100 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">External Item Price</h3>
-              <button
-                onClick={() => {
-                  setShowExternalPriceModal(false);
-                  setPendingExternalAdd(null);
-                  setExternalPriceInput('');
-                }}
-                className="text-slate-500 hover:text-slate-700"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <div className="text-sm text-slate-700 font-medium truncate">{pendingExternalAdd.medicine.name}</div>
-              <div className="text-xs text-slate-500">Quantity: {pendingExternalAdd.quantity}</div>
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price (₹)</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={externalPriceInput}
-                onChange={(e) => setExternalPriceInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    confirmAddExternalWithPrice();
-                  }
-                }}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowExternalPriceModal(false);
-                  setPendingExternalAdd(null);
-                  setExternalPriceInput('');
-                }}
-                className="rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmAddExternalWithPrice}
-                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Unlisted Medicine Modal */}
-      {showUnlistedModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnlistedModal(false)}></div>
-          <div className="relative bg-white w-full max-w-md mx-auto rounded-2xl shadow-xl border border-gray-100 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Add Unlisted Medicine</h3>
-              <button onClick={() => setShowUnlistedModal(false)} className="text-slate-500 hover:text-slate-700">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Medicine Name <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={unlistedForm.name}
-                  onChange={e => setUnlistedForm({...unlistedForm, name: e.target.value})}
-                  placeholder="e.g., Dolopar 650"
-                  autoFocus
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  This medicine will be logged for future inventory creation. It will not be added to the current bill.
-                </p>
+        {showExternalPriceModal && pendingExternalAdd && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/40"
+              onClick={() => {
+                setShowExternalPriceModal(false);
+                setPendingExternalAdd(null);
+                setExternalPriceInput('');
+              }}
+            ></div>
+            <div className="relative bg-white w-full max-w-md mx-auto rounded-2xl shadow-xl border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">External Item Price</h3>
+                <button
+                  onClick={() => {
+                    setShowExternalPriceModal(false);
+                    setPendingExternalAdd(null);
+                    setExternalPriceInput('');
+                  }}
+                  className="text-slate-500 hover:text-slate-700"
+                >
+                  <X className="h-6 w-6" />
+                </button>
               </div>
 
-              <div className="pt-2">
+              <div className="mb-4">
+                <div className="text-sm text-slate-700 font-medium truncate">{pendingExternalAdd.medicine.name}</div>
+                <div className="text-xs text-slate-500">Quantity: {pendingExternalAdd.quantity}</div>
+              </div>
+
+              <div className="mb-5">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price (₹)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={externalPriceInput}
+                  onChange={(e) => setExternalPriceInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      confirmAddExternalWithPrice();
+                    }
+                  }}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end">
                 <button
-                  onClick={handleSaveUnlisted}
-                  disabled={loading}
-                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium shadow-sm"
+                  type="button"
+                  onClick={() => {
+                    setShowExternalPriceModal(false);
+                    setPendingExternalAdd(null);
+                    setExternalPriceInput('');
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50"
                 >
-                  {loading ? 'Saving...' : 'Save Request'}
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmAddExternalWithPrice}
+                  className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700"
+                >
+                  Add
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Unlisted Medicine Modal */}
+        {showUnlistedModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnlistedModal(false)}></div>
+            <div className="relative bg-white w-full max-w-md mx-auto rounded-2xl shadow-xl border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">Add Unlisted Medicine</h3>
+                <button onClick={() => setShowUnlistedModal(false)} className="text-slate-500 hover:text-slate-700">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Medicine Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={unlistedForm.name}
+                    onChange={e => setUnlistedForm({ ...unlistedForm, name: e.target.value })}
+                    placeholder="e.g., Dolopar 650"
+                    autoFocus
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    This medicine will be logged for future inventory creation. It will not be added to the current bill.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={handleSaveUnlisted}
+                    disabled={loading}
+                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium shadow-sm"
+                  >
+                    {loading ? 'Saving...' : 'Save Request'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Hospital Details Modal */}
         {showHospitalModal && (

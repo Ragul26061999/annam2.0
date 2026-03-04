@@ -128,7 +128,7 @@ export default function PurchaseReturnPage() {
   // ─── Load ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       try {
         const [r, s, m] = await Promise.all([
           getPurchaseReturns(), getSuppliers({ status: 'active' }), getMedications()
@@ -162,11 +162,24 @@ export default function PurchaseReturnPage() {
   const loadPurchasesForSupplier = async (supplierId: string) => {
     setLoadingPurchases(true)
     try {
-      // If no supplier selected, show recent 50 purchases from all suppliers
-      const data = supplierId 
+      // If no supplier selected, show recent purchases from all suppliers
+      const data = supplierId
         ? await getDrugPurchases({ supplier_id: supplierId })
         : await getDrugPurchases({})
-      setPurchases(data.slice(0, 50)) // Limit to 50 most recent
+
+      // Sort: Date descending, then purchase_number descending (numeric comparison)
+      const sorted = [...data].sort((a, b) => {
+        const dA = a.purchase_date ? new Date(a.purchase_date).getTime() : 0;
+        const dB = b.purchase_date ? new Date(b.purchase_date).getTime() : 0;
+        if (dB !== dA) return dB - dA;
+
+        return (b.purchase_number || '').localeCompare(a.purchase_number || '', undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        });
+      });
+
+      setPurchases(sorted.slice(0, 50)) // Limit to 50 most recent
     } catch (e) { console.error(e) }
     finally { setLoadingPurchases(false) }
   }
@@ -190,10 +203,10 @@ export default function PurchaseReturnPage() {
             .select('medicine_id, batch_number, current_quantity')
             .in('medicine_id', Array.from(new Set(batchPairs.map((p: any) => p.medication_id))))
 
-          ;(batchRows || []).forEach((r: any) => {
-            const k = `${r.medicine_id}::${r.batch_number}`
-            stockMap.set(k, num(r.current_quantity))
-          })
+            ; (batchRows || []).forEach((r: any) => {
+              const k = `${r.medicine_id}::${r.batch_number}`
+              stockMap.set(k, num(r.current_quantity))
+            })
         }
 
         setItems(
@@ -644,17 +657,17 @@ export default function PurchaseReturnPage() {
                               min="0" />
                           </td>
                           <td className="px-1 py-1.5">
-                            <input type="number" value={item.unit_price.toFixed(2)} 
+                            <input type="number" value={item.unit_price.toFixed(2)}
                               onChange={e => updateItem(item.key, 'unit_price', parseFloat(e.target.value) || 0)}
                               className="w-full border rounded px-1.5 py-1 text-sm text-right focus:ring-2 focus:ring-orange-500" step="0.01" min="0" />
                           </td>
                           <td className="px-1 py-1.5">
-                            <input type="number" value={item.gst_percent.toFixed(2)} 
+                            <input type="number" value={item.gst_percent.toFixed(2)}
                               onChange={e => updateItem(item.key, 'gst_percent', parseFloat(e.target.value) || 0)}
                               className="w-full border rounded px-1.5 py-1 text-sm text-center focus:ring-2 focus:ring-orange-500" min="0" max="28" />
                           </td>
                           <td className="px-1 py-1.5">
-                            <input type="number" value={item.discount_percent.toFixed(2)} 
+                            <input type="number" value={item.discount_percent.toFixed(2)}
                               onChange={e => updateItem(item.key, 'discount_percent', parseFloat(e.target.value) || 0)}
                               className="w-full border rounded px-1.5 py-1 text-sm text-center focus:ring-2 focus:ring-orange-500" min="0" max="100" />
                           </td>

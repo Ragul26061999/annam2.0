@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Suspense, useState, useEffect } from 'react';
-import { Target, Plus, Search, X, Pill, Package, ArrowRight, Filter, Calendar, BarChart3, CheckCircle, Bell, ArrowRightLeft, ArrowLeft, Eye, Info } from 'lucide-react';
+import { Target, Plus, Search, X, Pill, Package, ArrowRight, Filter, Calendar, BarChart3, CheckCircle, Bell, ArrowRightLeft, ArrowLeft, Eye, Info, User } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { getComprehensiveMedicineData, getBatchPurchaseHistory, getBatchStockStats } from '@/src/lib/pharmacyService';
 
@@ -93,6 +93,19 @@ function IntentPageInner() {
   const [comprehensiveMedicineData, setComprehensiveMedicineData] = useState<any | null>(null);
   const [loadingMedicineDetail, setLoadingMedicineDetail] = useState(false);
   const [batchStatsMap, setBatchStatsMap] = useState<Record<string, { remainingUnits: number; soldUnitsThisMonth: number; purchasedUnitsThisMonth: number }>>({});
+
+  // Patient Usage tracking state
+  const [showUsageModal, setShowUsageModal] = useState(false);
+  const [selectedUsageMedicine, setSelectedUsageMedicine] = useState<IntentMedicine | null>(null);
+  const [usagePatientSearch, setUsagePatientSearch] = useState('');
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
+  const [usageQuantity, setUsageQuantity] = useState(1);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [usageCart, setUsageCart] = useState<{ medicine: IntentMedicine, quantity: number }[]>([]);
+  const [usageMedicineSearch, setUsageMedicineSearch] = useState('');
+  const [medicineSearchResults, setMedicineSearchResults] = useState<IntentMedicine[]>([]);
+  const [showUsageMedicineDropdown, setShowUsageMedicineDropdown] = useState(false);
 
   const loadAllMedicines = async () => {
     try {
@@ -239,7 +252,7 @@ function IntentPageInner() {
     setLoading(true);
     try {
       const newQuantity = selectedMoveMedicine.quantity - moveQuantity;
-      
+
       // Update intent medicine quantity
       const { error: updateError } = await supabase
         .from('intent_medicines')
@@ -308,6 +321,124 @@ function IntentPageInner() {
       setLoading(false);
     }
   };
+
+  // Patient search for usage
+  useEffect(() => {
+    const searchPatients = async () => {
+      if (usagePatientSearch.length < 2) {
+        setPatientResults([]);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('patients')
+          .select('id, patient_id, name, phone')
+          .or(`name.ilike.%${usagePatientSearch}%,patient_id.ilike.%${usagePatientSearch}%`)
+          .limit(10);
+
+        if (error) throw error;
+        setPatientResults(data || []);
+      } catch (error) {
+        console.error('Error searching patients:', error);
+      }
+    };
+
+    const timer = setTimeout(searchPatients, 300);
+    return () => clearTimeout(timer);
+  }, [usagePatientSearch]);
+
+  // Helper functions for usage cart
+  // Helper functions for usage cart
+  const addToUsageCart = (medicine: IntentMedicine, qty: number) => {
+    setUsageCart(prev => {
+      const existing = prev.find(item => item.medicine.id === medicine.id);
+      if (existing) {
+        const newQty = existing.quantity + qty;
+        if (newQty <= 0) return prev.filter(item => item.medicine.id !== medicine.id);
+        if (newQty > medicine.quantity) {
+          alert(`Cannot exceed available stock (${medicine.quantity})`);
+          return prev;
+        }
+        return prev.map(item =>
+          item.medicine.id === medicine.id ? { ...item, quantity: newQty } : item
+        );
+      }
+      if (qty <= 0) return prev;
+      return [...prev, { medicine, quantity: Math.min(qty, medicine.quantity) }];
+    });
+    setUsageMedicineSearch('');
+    setMedicineSearchResults([]);
+    setShowUsageMedicineDropdown(false);
+  };
+
+  const removeFromUsageCart = (medId: string) => {
+    setUsageCart(prev => prev.filter(item => item.medicine.id !== medId));
+  };
+
+  const recordPatientUsage = async () => {
+    if (usageCart.length === 0 || !selectedPatient) {
+      alert('Please select a patient and add at least one medicine');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Record all items in the cart
+      const usageRecords = usageCart.map(item => ({
+        patient_id: selectedPatient.id,
+        patient_uhid: selectedPatient.patient_id,
+        patient_name: selectedPatient.name,
+        medication_id: item.medicine.medication_id,
+        intent_medicine_id: item.medicine.id,
+        intent_type: item.medicine.intent_type,
+        batch_number: item.medicine.batch_number,
+        quantity: item.quantity,
+        unit_price: item.medicine.mrp,
+        status: 'pending'
+      }));
+
+      const { error: usageError } = await supabase
+        .from('patient_intent_usage')
+        .insert(usageRecords);
+
+      if (usageError) throw usageError;
+
+      alert(`Usage recorded for ${selectedPatient.name} (${usageCart.length} items). These will be shown in New Pharmacy Bill.`);
+
+      // Reset modal
+      setShowUsageModal(false);
+      setUsageCart([]);
+      setUsagePatientSearch('');
+      setSelectedPatient(null);
+      setUsageMedicineSearch('');
+
+    } catch (error) {
+      console.error('Error recording usage:', error);
+      alert('Error recording patient usage. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Medicine search within usage modal
+  useEffect(() => {
+    const searchMedicines = () => {
+      if (usageMedicineSearch.length < 1) {
+        setMedicineSearchResults([]);
+        setShowUsageMedicineDropdown(false);
+        return;
+      }
+      const matches = allIntentMedicines.filter(med =>
+        med.medication_name.toLowerCase().includes(usageMedicineSearch.toLowerCase()) ||
+        med.batch_number.toLowerCase().includes(usageMedicineSearch.toLowerCase())
+      ).slice(0, 10);
+      setMedicineSearchResults(matches);
+      setShowUsageMedicineDropdown(true);
+    };
+
+    const timer = setTimeout(searchMedicines, 200);
+    return () => clearTimeout(timer);
+  }, [usageMedicineSearch, allIntentMedicines]);
 
   const openMoveModal = (medicine: IntentMedicine) => {
     setSelectedMoveMedicine(medicine);
@@ -775,20 +906,20 @@ function IntentPageInner() {
                   <Target className="w-9 h-9 text-white" />
                 </div>
                 <div className="flex items-center gap-4">
-                <button
-                  onClick={() => window.history.back()}
-                  className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <div>
-                  <h1 className="text-4xl font-bold text-white tracking-tight leading-tight">Intent Medicine Management</h1>
-                  <p className="text-purple-100 text-base mt-2">Streamlined medicine distribution across hospital departments</p>
+                  <button
+                    onClick={() => window.history.back()}
+                    className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/20 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <div>
+                    <h1 className="text-4xl font-bold text-white tracking-tight leading-tight">Intent Medicine Management</h1>
+                    <p className="text-purple-100 text-base mt-2">Streamlined medicine distribution across hospital departments</p>
+                  </div>
                 </div>
               </div>
-              </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4"> 
+            <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowBellNotifications(true)}
@@ -819,1092 +950,1316 @@ function IntentPageInner() {
 
       <div className="max-w-full px-8 py-10 space-y-10">
 
-      {/* Enhanced Filters Section */}
-      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Filter className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Advanced Filters</h3>
-              <p className="text-sm text-slate-500">Search and filter medicines across all departments</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setFilterType('all');
-            }}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-all duration-200 flex items-center gap-2"
-          >
-            <X className="w-4 h-4" />
-            Clear Filters
-          </button>
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Search Bar */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search medicines across all departments..."
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-200"
-            />
-          </div>
-
-          {/* Filter Dropdowns */}
-          <div className="flex gap-3">
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="pl-10 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white/50 backdrop-blur-sm appearance-none cursor-pointer transition-all duration-200"
-              >
-                <option value="all">All Medicines</option>
-                <option value="recent">Recently Added</option>
-                <option value="high-value">High Value</option>
-                <option value="low-stock">Low Stock</option>
-              </select>
-            </div>
-
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className="pl-10 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white/50 backdrop-blur-sm appearance-none cursor-pointer transition-all duration-200"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Intent Type Navigation */}
-      <div className="border-b border-gray-200 mb-6">
-        <div className="flex items-center justify-between">
-          <nav className="-mb-px flex space-x-8 overflow-x-auto">
-            {intentTypes.map((intent) => (
-              <button
-                key={intent.key}
-                onClick={() => setSelectedIntentType(intent.key)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${selectedIntentType === intent.key
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <span className="inline mr-2">{intent.icon}</span>
-                {intent.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
+        {/* Enhanced Filters Section */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 p-8 space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Pill className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Filter className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="text-3xl font-bold text-slate-900">{intentMedicines.length}</p>
-                <p className="text-sm font-medium text-slate-600">Medicines</p>
+                <h3 className="text-lg font-semibold text-slate-900">Advanced Filters</h3>
+                <p className="text-sm text-slate-500">Search and filter medicines across all departments</p>
               </div>
             </div>
-          </div>
-        </div>
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-slate-900">
-                  {new Set(intentMedicines.map(med => med.batch_number)).size}
-                </p>
-                <p className="text-sm font-medium text-slate-600">Total Batches</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-lg">!</span>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-slate-900">
-                  {intentMedicines.filter(med => med.quantity < 10).length}
-                </p>
-                <p className="text-sm font-medium text-slate-600">Low Stock</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-lg">⚠️</span>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-slate-900">{getExpiringSoonCount()}</p>
-                <p className="text-sm font-medium text-slate-600">Expiring Soon</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-lg">✗</span>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-slate-900">{getExpiredCount()}</p>
-                <p className="text-sm font-medium text-slate-600">Expired</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Search Results */}
-      {showSearchResults && searchResults.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <Search className="w-5 h-5 text-blue-600" />
-              Search Results ({searchResults.length} medicines found)
-            </h3>
             <button
               onClick={() => {
-                setShowSearchResults(false);
                 setSearchTerm('');
-                setSearchResults([]);
+                setFilterType('all');
               }}
-              className="text-slate-500 hover:text-slate-700"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-all duration-200 flex items-center gap-2"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
+              Clear Filters
             </button>
           </div>
-          
-          <div className="space-y-3">
-            {searchResults.map((result: any, index: number) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h4 className="font-medium text-slate-900">{result.name}</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {result.sections.map((section: string) => (
-                        <span key={section} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          {section.split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                        </span>
-                      ))}
+
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search Bar */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search medicines across all departments..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-200"
+              />
+            </div>
+
+            {/* Filter Dropdowns */}
+            <div className="flex gap-3">
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="pl-10 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white/50 backdrop-blur-sm appearance-none cursor-pointer transition-all duration-200"
+                >
+                  <option value="all">All Medicines</option>
+                  <option value="recent">Recently Added</option>
+                  <option value="high-value">High Value</option>
+                  <option value="low-stock">Low Stock</option>
+                </select>
+              </div>
+
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <select
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="pl-10 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white/50 backdrop-blur-sm appearance-none cursor-pointer transition-all duration-200"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Intent Type Navigation */}
+        <div className="border-b border-gray-200 mb-6">
+          <div className="flex items-center justify-between">
+            <nav className="-mb-px flex space-x-8 overflow-x-auto">
+              {intentTypes.map((intent) => (
+                <button
+                  key={intent.key}
+                  onClick={() => setSelectedIntentType(intent.key)}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${selectedIntentType === intent.key
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  <span className="inline mr-2">{intent.icon}</span>
+                  {intent.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <Pill className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-slate-900">{intentMedicines.length}</p>
+                  <p className="text-sm font-medium text-slate-600">Medicines</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <Package className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-slate-900">
+                    {new Set(intentMedicines.map(med => med.batch_number)).size}
+                  </p>
+                  <p className="text-sm font-medium text-slate-600">Total Batches</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-lg">!</span>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-slate-900">
+                    {intentMedicines.filter(med => med.quantity < 10).length}
+                  </p>
+                  <p className="text-sm font-medium text-slate-600">Low Stock</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-lg">⚠️</span>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-slate-900">{getExpiringSoonCount()}</p>
+                  <p className="text-sm font-medium text-slate-600">Expiring Soon</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100/50 p-6 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-lg">✗</span>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-slate-900">{getExpiredCount()}</p>
+                  <p className="text-sm font-medium text-slate-600">Expired</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Search Results */}
+        {showSearchResults && searchResults.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Search className="w-5 h-5 text-blue-600" />
+                Search Results ({searchResults.length} medicines found)
+              </h3>
+              <button
+                onClick={() => {
+                  setShowSearchResults(false);
+                  setSearchTerm('');
+                  setSearchResults([]);
+                }}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {searchResults.map((result: any, index: number) => (
+                <div key={index} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h4 className="font-medium text-slate-900">{result.name}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {result.sections.map((section: string) => (
+                          <span key={section} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {section.split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                          </span>
+                        ))}
+                      </div>
                     </div>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Available in {result.sections.length} department{result.sections.length > 1 ? 's' : ''}
+                    </p>
                   </div>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Available in {result.sections.length} department{result.sections.length > 1 ? 's' : ''}
+                  <div className="flex gap-2">
+                    {result.sections.map((section: string) => (
+                      <button
+                        key={section}
+                        onClick={() => {
+                          setSelectedIntentType(section);
+                          setShowSearchResults(false);
+                          setSearchTerm('');
+                          setSearchResults([]);
+                        }}
+                        className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                      >
+                        View in {section.split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Enhanced Medicines Table */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden">
+          <div className="p-6 border-b border-gray-200/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <Pill className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Medicines in Department</h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {selectedIntentType.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} • {filteredMedicines.length} items
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  {result.sections.map((section: string) => (
-                    <button
-                      key={section}
-                      onClick={() => {
-                        setSelectedIntentType(section);
-                        setShowSearchResults(false);
-                        setSearchTerm('');
-                        setSearchResults([]);
-                      }}
-                      className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    // Don't reset cart here, just show it
+                    setShowUsageModal(true);
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl shadow-lg hover:shadow-indigo-200/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                >
+                  <div className="relative">
+                    <User className="w-5 h-5" />
+                    {usageCart.length > 0 && (
+                      <span className="absolute -top-3 -right-3 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white animate-bounce">
+                        {usageCart.length}
+                      </span>
+                    )}
+                  </div>
+                  Record Patient Usage
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {filteredMedicines.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Package className="w-8 h-8 text-slate-400" />
+              </div>
+              <p className="text-slate-500 text-lg font-medium mb-2">No medicines found</p>
+              <p className="text-slate-400 text-sm mb-6">
+                Click "Buy Medicine" to add medicines to inventory
+              </p>
+              <button
+                onClick={() => setShowBuyMedicineModal(true)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <Package className="w-5 h-5" />
+                Buy Medicine
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Medicine Name
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Combination
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Dosage Type
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Manufacturer
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Stock
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Batch
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Actions
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Price
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {filteredMedicines.map((medicine, index) => (
+                    <tr
+                      key={medicine.id}
+                      className={`hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 cursor-pointer transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                      onClick={() => openMedicineDetail(medicine)}
                     >
-                      View in {section.split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                    </button>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg flex items-center justify-center">
+                            <Pill className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div className="ml-3">
+                            <div className="text-sm font-medium text-slate-900">
+                              {medicine.medication_name}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-900 font-medium">
+                          {medicine.combination || '—'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
+                          {medicine.dosage_type || '—'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-900">
+                          {medicine.manufacturer || '—'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="text-sm font-medium text-slate-900 mr-2">
+                            {medicine.quantity}
+                          </div>
+                          {medicine.quantity < 10 && (
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
+                              Low
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-slate-900 font-mono">
+                          {medicine.batch_number}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${medicine.medicine_status === 'active'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
+                          }`}>
+                          {medicine.medicine_status || 'active'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center gap-2">
+                          <button
+                            className={`px-3 py-1 rounded-md transition-all text-xs font-bold shadow-md transform hover:scale-105 flex items-center gap-1 ${usageCart.some(item => item.medicine.id === medicine.id)
+                              ? 'bg-green-500 text-white'
+                              : 'bg-indigo-600 text-white'
+                              }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToUsageCart(medicine, 1);
+                              // Auto open modal on first add? Optional. 
+                              // Let's NOT open it so they can add many.
+                            }}
+                          >
+                            {usageCart.some(item => item.medicine.id === medicine.id) ? (
+                              <><CheckCircle className="w-3 h-3" /> Added</>
+                            ) : (
+                              'Use for Patient'
+                            )}
+                          </button>
+                          <button
+                            className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(medicine);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded-md transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openMoveModal(medicine);
+                            }}
+                          >
+                            Move
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteIntentMedicine(medicine);
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-slate-900">
+                          ₹{medicine.mrp.toFixed(0)}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Total: ₹{(medicine.quantity * medicine.mrp).toFixed(0)}
+                        </div>
+                      </td>
+                    </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Move Modal */}
+        {
+          showMoveModal && selectedMoveMedicine && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <ArrowRightLeft className="w-6 h-6 text-green-600" />
+                    Move Medicine
+                  </h3>
+                  <button
+                    onClick={() => setShowMoveModal(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-lg font-semibold text-slate-900 mb-2">
+                      {selectedMoveMedicine.medication_name}
+                    </h4>
+                    <p className="text-sm text-slate-600">
+                      Current quantity: {selectedMoveMedicine.quantity}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      From: {selectedMoveMedicine.intent_type}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      To: Updated Stock Medicine
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Quantity to Move
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={selectedMoveMedicine.quantity}
+                      value={moveQuantity}
+                      onChange={(e) => setMoveQuantity(Math.min(selectedMoveMedicine.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Enter quantity to move"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Remaining quantity: {selectedMoveMedicine.quantity - moveQuantity}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowMoveModal(false)}
+                      className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors"
+                      disabled={loading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={moveMedicine}
+                      disabled={loading}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50"
+                    >
+                      {loading ? (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Moving...
+                        </div>
+                      ) : (
+                        'Move Medicine'
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Enhanced Medicines Table */}
-      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden">
-        <div className="p-6 border-b border-gray-200/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Pill className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-slate-900">Medicines in Department</h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  {selectedIntentType.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} • {filteredMedicines.length} items
-                </p>
-              </div>
             </div>
-          </div>
-        </div>
+          )
+        }
 
-        {filteredMedicines.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Package className="w-8 h-8 text-slate-400" />
-            </div>
-            <p className="text-slate-500 text-lg font-medium mb-2">No medicines found</p>
-            <p className="text-slate-400 text-sm mb-6">
-              Click "Buy Medicine" to add medicines to inventory
-            </p>
-            <button
-              onClick={() => setShowBuyMedicineModal(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
-            >
-              <Package className="w-5 h-5" />
-              Buy Medicine
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Medicine Name
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Combination
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Dosage Type
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Manufacturer
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Stock
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Batch
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Actions
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Price
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {filteredMedicines.map((medicine, index) => (
-                  <tr 
-                    key={medicine.id} 
-                    className={`hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 cursor-pointer transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
-                    onClick={() => openMedicineDetail(medicine)}
+        {/* Edit Modal */}
+        {
+          showEditModal && selectedEditMedicine && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900">Edit Medicine Quantity</h3>
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="text-slate-400 hover:text-slate-600"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg flex items-center justify-center">
-                          <Pill className="w-5 h-5 text-blue-600" />
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-lg font-semibold text-slate-900 mb-2">
+                      {selectedEditMedicine.medication_name}
+                    </h4>
+                    <p className="text-sm text-slate-600">
+                      Current quantity: {selectedEditMedicine.quantity}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      New Quantity
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editQuantity}
+                      onChange={(e) => setEditQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="Enter quantity"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowEditModal(false)}
+                      className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors"
+                      disabled={loading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={editIntentMedicine}
+                      disabled={loading}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50"
+                    >
+                      {loading ? (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Updating...
                         </div>
-                        <div className="ml-3">
-                          <div className="text-sm font-medium text-slate-900">
-                            {medicine.medication_name}
+                      ) : (
+                        'Update'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Buy Medicine Modal */}
+        {
+          showBuyMedicineModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <Package className="w-6 h-6 text-purple-600" />
+                    Buy Medicine
+                  </h3>
+                  <button
+                    onClick={() => setShowBuyMedicineModal(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Medicine Name *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={medicineSearchTerm}
+                          onChange={(e) => {
+                            setMedicineSearchTerm(e.target.value);
+                            if (e.target.value !== buyMedicineData.name) {
+                              setSelectedMedicineFromIntent(null);
+                              setBuyMedicineData(prev => ({
+                                ...prev,
+                                name: e.target.value,
+                                manufacturer: '',
+                                mrp: 0,
+                                category: ''
+                              }));
+                            }
+                            setShowMedicineDropdown(e.target.value.trim() !== '');
+                          }}
+                          onFocus={() => setShowMedicineDropdown(medicineSearchTerm.trim() !== '')}
+                          onBlur={() => {
+                            // Delay hiding dropdown to allow clicks on options
+                            setTimeout(() => setShowMedicineDropdown(false), 200);
+                          }}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Search medicine in intent..."
+                        />
+                        {medicineSearchTerm && (
+                          <button
+                            type="button"
+                            onClick={clearMedicineSelection}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                        {showMedicineDropdown && getFilteredIntentMedicines().length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                            {getFilteredIntentMedicines().map((medicine) => (
+                              <div
+                                key={medicine.id}
+                                onClick={() => selectMedicineFromIntent(medicine)}
+                                className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0"
+                              >
+                                <div className="font-medium text-slate-900">{medicine.medication_name}</div>
+                                <div className="text-sm text-slate-600">
+                                  {medicine.manufacturer || 'No manufacturer'} • ₹{medicine.mrp} • Qty: {medicine.quantity}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {selectedMedicineFromIntent && (
+                        <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" />
+                          Auto-filled from intent medicine
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Manufacturer *
+                      </label>
+                      <input
+                        type="text"
+                        value={buyMedicineData.manufacturer}
+                        onChange={(e) => setBuyMedicineData(prev => ({ ...prev, manufacturer: e.target.value }))}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter manufacturer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Category
+                    </label>
+                    <select
+                      value={buyMedicineData.category}
+                      onChange={(e) => setBuyMedicineData(prev => ({ ...prev, category: e.target.value }))}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select Category</option>
+                      <option value="Antibiotics">Antibiotics</option>
+                      <option value="Pain Killers">Pain Killers</option>
+                      <option value="Vitamins">Vitamins</option>
+                      <option value="Cardiac">Cardiac</option>
+                      <option value="Diabetes">Diabetes</option>
+                      <option value="Respiratory">Respiratory</option>
+                      <option value="Gastrointestinal">Gastrointestinal</option>
+                      <option value="Dermatology">Dermatology</option>
+                      <option value="Neurology">Neurology</option>
+                      <option value="General">General</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Quantity *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={buyMedicineData.quantity}
+                        onChange={(e) => setBuyMedicineData(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter quantity"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        MRP (₹) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={buyMedicineData.mrp}
+                        onChange={(e) => setBuyMedicineData(prev => ({ ...prev, mrp: parseFloat(e.target.value) || 0 }))}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter MRP"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Batch Number
+                      </label>
+                      <input
+                        type="text"
+                        value={buyMedicineData.batch_number}
+                        onChange={(e) => setBuyMedicineData(prev => ({ ...prev, batch_number: e.target.value }))}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="AUTO (optional)"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Expiry Date
+                      </label>
+                      <input
+                        type="date"
+                        value={buyMedicineData.expiry_date}
+                        onChange={(e) => setBuyMedicineData(prev => ({ ...prev, expiry_date: e.target.value }))}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Reports Modal */}
+        {
+          showReportsModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 max-w-7xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <BarChart3 className="w-6 h-6 text-blue-600" />
+                    Buy Medicine Reports
+                  </h3>
+                  <button
+                    onClick={() => setShowReportsModal(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="bg-slate-50 rounded-xl p-6">
+                    <h4 className="text-lg font-semibold text-slate-900 mb-4">Medicine Inventory Summary</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="bg-white rounded-lg p-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <Package className="w-8 h-8 text-green-600" />
+                          <div>
+                            <p className="text-2xl font-bold text-slate-900">{allMedicines.length}</p>
+                            <p className="text-sm text-slate-600">Total Medicines</p>
                           </div>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-slate-900 font-medium">
-                        {medicine.combination || '—'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
-                        {medicine.dosage_type || '—'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-slate-900">
-                        {medicine.manufacturer || '—'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="text-sm font-medium text-slate-900 mr-2">
-                          {medicine.quantity}
+                      <div className="bg-white rounded-lg p-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <Package className="w-8 h-8 text-blue-600" />
+                          <div>
+                            <p className="text-2xl font-bold text-slate-900">
+                              {allMedicines.reduce((sum, med) => sum + med.available_stock, 0)}
+                            </p>
+                            <p className="text-sm text-slate-600">Total Stock</p>
+                          </div>
                         </div>
-                        {medicine.quantity < 10 && (
-                          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
-                            Low
-                          </span>
-                        )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-slate-900 font-mono">
-                        {medicine.batch_number}
+                      <div className="bg-white rounded-lg p-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <Package className="w-8 h-8 text-purple-600" />
+                          <div>
+                            <p className="text-2xl font-bold text-slate-900">
+                              ₹{allMedicines.reduce((sum, med) => sum + (med.available_stock * med.mrp), 0).toLocaleString()}
+                            </p>
+                            <p className="text-sm text-slate-600">Total Value</p>
+                          </div>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                        medicine.medicine_status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {medicine.medicine_status || 'active'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditModal(medicine);
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded-md transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openMoveModal(medicine);
-                          }}
-                        >
-                          Move
-                        </button>
-                        <button
-                          className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteIntentMedicine(medicine);
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-slate-900">
-                        ₹{medicine.mrp.toFixed(0)}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Total: ₹{(medicine.quantity * medicine.mrp).toFixed(0)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      </div>
-
-      {/* Move Modal */}
-      {showMoveModal && selectedMoveMedicine && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <ArrowRightLeft className="w-6 h-6 text-green-600" />
-                Move Medicine
-              </h3>
-              <button
-                onClick={() => setShowMoveModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-lg font-semibold text-slate-900 mb-2">
-                  {selectedMoveMedicine.medication_name}
-                </h4>
-                <p className="text-sm text-slate-600">
-                  Current quantity: {selectedMoveMedicine.quantity}
-                </p>
-                <p className="text-sm text-slate-600">
-                  From: {selectedMoveMedicine.intent_type}
-                </p>
-                <p className="text-sm text-slate-600">
-                  To: Updated Stock Medicine
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Quantity to Move
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max={selectedMoveMedicine.quantity}
-                  value={moveQuantity}
-                  onChange={(e) => setMoveQuantity(Math.min(selectedMoveMedicine.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter quantity to move"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Remaining quantity: {selectedMoveMedicine.quantity - moveQuantity}
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowMoveModal(false)}
-                  className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={moveMedicine}
-                  disabled={loading}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Moving...
                     </div>
-                  ) : (
-                    'Move Medicine'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                  </div>
 
-      {/* Edit Modal */}
-      {showEditModal && selectedEditMedicine && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Edit Medicine Quantity</h3>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-lg font-semibold text-slate-900 mb-2">
-                  {selectedEditMedicine.medication_name}
-                </h4>
-                <p className="text-sm text-slate-600">
-                  Current quantity: {selectedEditMedicine.quantity}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  New Quantity
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={editQuantity}
-                  onChange={(e) => setEditQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Enter quantity"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={editIntentMedicine}
-                  disabled={loading}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Updating...
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100">
+                      <h4 className="text-lg font-semibold text-slate-900">Moved Medicines History</h4>
+                      <p className="text-sm text-slate-600 mt-1">Recent medicine movements and transfers</p>
                     </div>
-                  ) : (
-                    'Update'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Buy Medicine Modal */}
-      {showBuyMedicineModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Package className="w-6 h-6 text-purple-600" />
-                Buy Medicine
-              </h3>
-              <button
-                onClick={() => setShowBuyMedicineModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="relative">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Medicine Name *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={medicineSearchTerm}
-                      onChange={(e) => {
-                        setMedicineSearchTerm(e.target.value);
-                        if (e.target.value !== buyMedicineData.name) {
-                          setSelectedMedicineFromIntent(null);
-                          setBuyMedicineData(prev => ({
-                            ...prev,
-                            name: e.target.value,
-                            manufacturer: '',
-                            mrp: 0,
-                            category: ''
-                          }));
-                        }
-                        setShowMedicineDropdown(e.target.value.trim() !== '');
-                      }}
-                      onFocus={() => setShowMedicineDropdown(medicineSearchTerm.trim() !== '')}
-                      onBlur={() => {
-                        // Delay hiding dropdown to allow clicks on options
-                        setTimeout(() => setShowMedicineDropdown(false), 200);
-                      }}
-                      className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      placeholder="Search medicine in intent..."
-                    />
-                    {medicineSearchTerm && (
-                      <button
-                        type="button"
-                        onClick={clearMedicineSelection}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Medicine</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">From</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">To</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Quantity</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {movedMedicines.slice(0, 10).map((move) => (
+                            <tr key={move.id} className="hover:bg-slate-50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                                {move.medicine_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                {move.moved_from}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                {move.moved_to}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
+                                {move.moved_quantity}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                {new Date(move.moved_at).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                {move.reason}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {movedMedicines.length === 0 && (
+                      <div className="p-12 text-center">
+                        <ArrowRightLeft className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                        <p className="text-slate-500">No medicine movements recorded</p>
+                      </div>
                     )}
-                    {showMedicineDropdown && getFilteredIntentMedicines().length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                        {getFilteredIntentMedicines().map((medicine) => (
-                          <div
-                            key={medicine.id}
-                            onClick={() => selectMedicineFromIntent(medicine)}
-                            className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0"
-                          >
-                            <div className="font-medium text-slate-900">{medicine.medication_name}</div>
-                            <div className="text-sm text-slate-600">
-                              {medicine.manufacturer || 'No manufacturer'} • ₹{medicine.mrp} • Qty: {medicine.quantity}
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Medicine Detail Modal */}
+        {
+          showMedicineDetail && selectedMedicineDetail && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg max-w-7xl w-full max-h-[95vh] overflow-hidden shadow-2xl">
+                {/* Modal Header */}
+                <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 shadow-lg">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-4">
+                        <h2 className="text-3xl font-bold text-white tracking-tight">{selectedMedicineDetail.medication_name}</h2>
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold shadow-sm bg-purple-600 text-white">
+                          {selectedMedicineDetail.intent_type.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                        </span>
+                      </div>
+
+                      {/* Medicine Info Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm mb-4">
+                        <div>
+                          <div className="text-slate-300 text-xs font-medium mb-1">Batch</div>
+                          <div className="text-white font-semibold">{selectedMedicineDetail.batch_number}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-300 text-xs font-medium mb-1">Dosage Type</div>
+                          <div className="text-white font-semibold">{selectedMedicineDetail.dosage_type || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-300 text-xs font-medium mb-1">Manufacturer</div>
+                          <div className="text-white font-semibold">{selectedMedicineDetail.manufacturer || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-300 text-xs font-medium mb-1">Combination</div>
+                          <div className="text-white font-semibold">{selectedMedicineDetail.combination || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-300 text-xs font-medium mb-1">Dept. Stock</div>
+                          <div className="text-white font-semibold">{selectedMedicineDetail.quantity}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-300 text-xs font-medium mb-1">MRP</div>
+                          <div className="text-white font-semibold">₹{selectedMedicineDetail.mrp.toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      {/* Stock Summary Cards */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 border border-white border-opacity-20">
+                          <div className="text-slate-300 text-xs font-medium mb-2">Department Stock</div>
+                          <div className="text-2xl font-bold text-white">{selectedMedicineDetail.quantity}</div>
+                          <div className="text-slate-300 text-xs mt-1">units available</div>
+                        </div>
+                        <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 border border-white border-opacity-20">
+                          <div className="text-slate-300 text-xs font-medium mb-2">Total Batches</div>
+                          <div className="text-2xl font-bold text-blue-300">{comprehensiveMedicineData?.batches?.length || 0}</div>
+                          <div className="text-slate-300 text-xs mt-1">in inventory</div>
+                        </div>
+                        <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 border border-white border-opacity-20">
+                          <div className="text-slate-300 text-xs font-medium mb-2">Total Value</div>
+                          <div className="text-2xl font-bold text-green-300">₹{(selectedMedicineDetail.quantity * selectedMedicineDetail.mrp).toFixed(0)}</div>
+                          <div className="text-slate-300 text-xs mt-1">department value</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Close Button */}
+                    <button
+                      onClick={() => {
+                        setShowMedicineDetail(false)
+                        setSelectedMedicineDetail(null)
+                        setComprehensiveMedicineData(null)
+                        setBatchStatsMap({})
+                      }}
+                      className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors ml-4"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-6 overflow-y-auto max-h-[calc(95vh-200px)]">
+                  {loadingMedicineDetail ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading medicine details...</p>
+                    </div>
+                  ) : !comprehensiveMedicineData?.batches || comprehensiveMedicineData.batches.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                      <p className="text-lg mb-2">No batch information available</p>
+                      <p className="text-sm">This medicine might not have detailed inventory records</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                        <Package className="w-5 h-5 text-blue-600" />
+                        Batch-wise Inventory Details
+                      </h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {comprehensiveMedicineData.batches.map((batch: any) => {
+                          const isExpired = new Date(batch.expiry_date) < new Date()
+                          const expSoon = isExpiringSoon(batch.expiry_date)
+                          const batchStats = batchStatsMap[batch.batch_number]
+                          const remaining = batch.current_quantity || batch.quantity || 0
+
+                          return (
+                            <div key={batch.id} className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                              {/* Batch Header */}
+                              <div className="p-4 border-b border-gray-100">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <h4 className="text-lg font-semibold text-gray-900">{batch.batch_number}</h4>
+                                    <p className="text-sm text-gray-500">Supplier: {batch.supplier_name || batch.supplier || 'N/A'}</p>
+                                  </div>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${isExpired ? 'bg-red-100 text-red-800' :
+                                    expSoon ? 'bg-orange-100 text-orange-800' :
+                                      remaining <= 10 ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-green-100 text-green-800'
+                                    }`}>
+                                    {isExpired ? 'Expired' : expSoon ? 'Expiring Soon' : remaining <= 10 ? 'Low Stock' : 'Active'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Batch Details */}
+                              <div className="p-4 space-y-4">
+                                {/* Quantity */}
+                                <div className="bg-gray-50 rounded-lg p-3">
+                                  <div className="text-xs text-gray-500 uppercase tracking-wide">Current Stock</div>
+                                  <div className="text-xl font-bold text-gray-900">{remaining}</div>
+                                  <div className="text-xs text-gray-500">
+                                    Received: {batch.received_quantity || batch.original_quantity || 'N/A'}
+                                  </div>
+                                  {batchStats && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Sold this month: {batchStats.soldUnitsThisMonth || 0}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Dates */}
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Manufacturing:</span>
+                                    <span className="text-sm font-medium">{new Date(batch.manufacturing_date).toLocaleDateString()}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Expiry:</span>
+                                    <span className={`text-sm font-medium ${isExpired ? 'text-red-600' : expSoon ? 'text-orange-600' : 'text-gray-900'}`}>
+                                      {new Date(batch.expiry_date).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Pricing */}
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                    <div className="text-xs text-blue-600 uppercase tracking-wide font-medium">Purchase Price</div>
+                                    <div className="text-sm font-semibold text-blue-700">₹{Number(batch.purchase_price || 0).toFixed(2)}</div>
+                                  </div>
+                                  <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                                    <div className="text-xs text-green-600 uppercase tracking-wide font-medium">Selling Price</div>
+                                    <div className="text-sm font-semibold text-green-700">₹{Number(batch.selling_price || 0).toFixed(2)}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Bell Notifications Modal */}
+        {
+          showBellNotifications && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <Bell className="w-6 h-6 text-orange-600" />
+                    Notifications
+                  </h3>
+                  <button
+                    onClick={() => setShowBellNotifications(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {zeroQuantityAlerts.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                      <h4 className="text-lg font-semibold text-red-900 mb-4 flex items-center gap-2">
+                        <span className="text-red-600">⚠️</span>
+                        Zero Quantity Medicines
+                      </h4>
+                      <p className="text-sm text-red-700 mb-4">
+                        The following medicines have reached zero quantity and have been moved to "Updated Stock Medicine":
+                      </p>
+                      <div className="space-y-3">
+                        {zeroQuantityAlerts.map((medicine, index) => (
+                          <div key={medicine.id} className="bg-white rounded-lg p-4 border border-red-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h5 className="font-medium text-slate-900">{medicine.medication_name}</h5>
+                                <p className="text-sm text-slate-600">
+                                  {medicine.manufacturer || 'Unknown manufacturer'} • Batch: {medicine.batch_number}
+                                </p>
+                                <p className="text-sm text-slate-600">
+                                  Originally from: {medicine.intent_type}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Out of Stock
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                  {selectedMedicineFromIntent && (
-                    <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      Auto-filled from intent medicine
+                    </div>
+                  )}
+
+                  {zeroQuantityAlerts.length === 0 && (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-8 h-8 text-green-600" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-green-900 mb-2">All Good!</h4>
+                      <p className="text-sm text-green-700">
+                        No medicines with zero quantity. All departments have sufficient stock.
+                      </p>
                     </div>
                   )}
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Manufacturer *
-                  </label>
-                  <input
-                    type="text"
-                    value={buyMedicineData.manufacturer}
-                    onChange={(e) => setBuyMedicineData(prev => ({ ...prev, manufacturer: e.target.value }))}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Enter manufacturer"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Category
-                </label>
-                <select
-                  value={buyMedicineData.category}
-                  onChange={(e) => setBuyMedicineData(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  <option value="">Select Category</option>
-                  <option value="Antibiotics">Antibiotics</option>
-                  <option value="Pain Killers">Pain Killers</option>
-                  <option value="Vitamins">Vitamins</option>
-                  <option value="Cardiac">Cardiac</option>
-                  <option value="Diabetes">Diabetes</option>
-                  <option value="Respiratory">Respiratory</option>
-                  <option value="Gastrointestinal">Gastrointestinal</option>
-                  <option value="Dermatology">Dermatology</option>
-                  <option value="Neurology">Neurology</option>
-                  <option value="General">General</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Quantity *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={buyMedicineData.quantity}
-                    onChange={(e) => setBuyMedicineData(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Enter quantity"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    MRP (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={buyMedicineData.mrp}
-                    onChange={(e) => setBuyMedicineData(prev => ({ ...prev, mrp: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Enter MRP"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Batch Number
-                  </label>
-                  <input
-                    type="text"
-                    value={buyMedicineData.batch_number}
-                    onChange={(e) => setBuyMedicineData(prev => ({ ...prev, batch_number: e.target.value }))}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="AUTO (optional)"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Expiry Date
-                  </label>
-                  <input
-                    type="date"
-                    value={buyMedicineData.expiry_date}
-                    onChange={(e) => setBuyMedicineData(prev => ({ ...prev, expiry_date: e.target.value }))}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    min={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reports Modal */}
-      {showReportsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-7xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <BarChart3 className="w-6 h-6 text-blue-600" />
-                Buy Medicine Reports
-              </h3>
-              <button
-                onClick={() => setShowReportsModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-slate-50 rounded-xl p-6">
-                <h4 className="text-lg font-semibold text-slate-900 mb-4">Medicine Inventory Summary</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-white rounded-lg p-4 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Package className="w-8 h-8 text-green-600" />
-                      <div>
-                        <p className="text-2xl font-bold text-slate-900">{allMedicines.length}</p>
-                        <p className="text-sm text-slate-600">Total Medicines</p>
-                      </div>
-                    </div>
+          )
+        }
+        {/* Multi-Medicine Patient Usage Modal */}
+        {showUsageModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-3xl p-0 max-w-4xl w-full shadow-2xl overflow-hidden border border-slate-200">
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 flex items-center justify-between text-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                    <User className="w-6 h-6 text-white" />
                   </div>
-                  <div className="bg-white rounded-lg p-4 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Package className="w-8 h-8 text-blue-600" />
-                      <div>
-                        <p className="text-2xl font-bold text-slate-900">
-                          {allMedicines.reduce((sum, med) => sum + med.available_stock, 0)}
-                        </p>
-                        <p className="text-sm text-slate-600">Total Stock</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Package className="w-8 h-8 text-purple-600" />
-                      <div>
-                        <p className="text-2xl font-bold text-slate-900">
-                          ₹{allMedicines.reduce((sum, med) => sum + (med.available_stock * med.mrp), 0).toLocaleString()}
-                        </p>
-                        <p className="text-sm text-slate-600">Total Value</p>
-                      </div>
-                    </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Record Patient Usage</h3>
+                    <p className="text-sm text-indigo-100">Add multiple medicines for an emergency/OT patient</p>
                   </div>
                 </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                <div className="p-6 border-b border-slate-100">
-                  <h4 className="text-lg font-semibold text-slate-900">Moved Medicines History</h4>
-                  <p className="text-sm text-slate-600 mt-1">Recent medicine movements and transfers</p>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Medicine</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">From</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">To</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Quantity</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {movedMedicines.slice(0, 10).map((move) => (
-                        <tr key={move.id} className="hover:bg-slate-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                            {move.medicine_name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                            {move.moved_from}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                            {move.moved_to}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                            {move.moved_quantity}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                            {new Date(move.moved_at).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                            {move.reason}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {movedMedicines.length === 0 && (
-                  <div className="p-12 text-center">
-                    <ArrowRightLeft className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                    <p className="text-slate-500">No medicine movements recorded</p>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Medicine Detail Modal */}
-      {showMedicineDetail && selectedMedicineDetail && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-7xl w-full max-h-[95vh] overflow-hidden shadow-2xl">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 shadow-lg">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-3xl font-bold text-white tracking-tight">{selectedMedicineDetail.medication_name}</h2>
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold shadow-sm bg-purple-600 text-white">
-                      {selectedMedicineDetail.intent_type.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                    </span>
-                  </div>
-
-                  {/* Medicine Info Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm mb-4">
-                    <div>
-                      <div className="text-slate-300 text-xs font-medium mb-1">Batch</div>
-                      <div className="text-white font-semibold">{selectedMedicineDetail.batch_number}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-300 text-xs font-medium mb-1">Dosage Type</div>
-                      <div className="text-white font-semibold">{selectedMedicineDetail.dosage_type || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-300 text-xs font-medium mb-1">Manufacturer</div>
-                      <div className="text-white font-semibold">{selectedMedicineDetail.manufacturer || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-300 text-xs font-medium mb-1">Combination</div>
-                      <div className="text-white font-semibold">{selectedMedicineDetail.combination || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-300 text-xs font-medium mb-1">Dept. Stock</div>
-                      <div className="text-white font-semibold">{selectedMedicineDetail.quantity}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-300 text-xs font-medium mb-1">MRP</div>
-                      <div className="text-white font-semibold">₹{selectedMedicineDetail.mrp.toFixed(2)}</div>
-                    </div>
-                  </div>
-
-                  {/* Stock Summary Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 border border-white border-opacity-20">
-                      <div className="text-slate-300 text-xs font-medium mb-2">Department Stock</div>
-                      <div className="text-2xl font-bold text-white">{selectedMedicineDetail.quantity}</div>
-                      <div className="text-slate-300 text-xs mt-1">units available</div>
-                    </div>
-                    <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 border border-white border-opacity-20">
-                      <div className="text-slate-300 text-xs font-medium mb-2">Total Batches</div>
-                      <div className="text-2xl font-bold text-blue-300">{comprehensiveMedicineData?.batches?.length || 0}</div>
-                      <div className="text-slate-300 text-xs mt-1">in inventory</div>
-                    </div>
-                    <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 border border-white border-opacity-20">
-                      <div className="text-slate-300 text-xs font-medium mb-2">Total Value</div>
-                      <div className="text-2xl font-bold text-green-300">₹{(selectedMedicineDetail.quantity * selectedMedicineDetail.mrp).toFixed(0)}</div>
-                      <div className="text-slate-300 text-xs mt-1">department value</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Close Button */}
                 <button
                   onClick={() => {
-                    setShowMedicineDetail(false)
-                    setSelectedMedicineDetail(null)
-                    setComprehensiveMedicineData(null)
-                    setBatchStatsMap({})
+                    setShowUsageModal(false);
+                    // Preserve cart items but clear UI search state
+                    setUsagePatientSearch('');
+                    setShowPatientDropdown(false);
                   }}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors ml-4"
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
-            </div>
 
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(95vh-200px)]">
-              {loadingMedicineDetail ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading medicine details...</p>
-                </div>
-              ) : !comprehensiveMedicineData?.batches || comprehensiveMedicineData.batches.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-lg mb-2">No batch information available</p>
-                  <p className="text-sm">This medicine might not have detailed inventory records</p>
-                </div>
-              ) : (
+              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[80vh] overflow-y-auto">
                 <div className="space-y-6">
-                  <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-blue-600" />
-                    Batch-wise Inventory Details
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {comprehensiveMedicineData.batches.map((batch: any) => {
-                      const isExpired = new Date(batch.expiry_date) < new Date()
-                      const expSoon = isExpiringSoon(batch.expiry_date)
-                      const batchStats = batchStatsMap[batch.batch_number]
-                      const remaining = batch.current_quantity || batch.quantity || 0
-
-                      return (
-                        <div key={batch.id} className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                          {/* Batch Header */}
-                          <div className="p-4 border-b border-gray-100">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h4 className="text-lg font-semibold text-gray-900">{batch.batch_number}</h4>
-                                <p className="text-sm text-gray-500">Supplier: {batch.supplier_name || batch.supplier || 'N/A'}</p>
-                              </div>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                isExpired ? 'bg-red-100 text-red-800' :
-                                expSoon ? 'bg-orange-100 text-orange-800' :
-                                remaining <= 10 ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {isExpired ? 'Expired' : expSoon ? 'Expiring Soon' : remaining <= 10 ? 'Low Stock' : 'Active'}
-                              </span>
+                  {/* Patient Selection Step */}
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                      <Search className="w-4 h-4 text-indigo-500" />
+                      1. Select Patient *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search by UHID or Name..."
+                        value={usagePatientSearch}
+                        onChange={(e) => {
+                          setUsagePatientSearch(e.target.value);
+                          setShowPatientDropdown(true);
+                        }}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-medium"
+                      />
+                      {showPatientDropdown && patientResults.length > 0 && !selectedPatient && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-[60] py-2 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                          {patientResults.map((patient) => (
+                            <div
+                              key={patient.id}
+                              className="px-4 py-3 hover:bg-indigo-50 cursor-pointer transition-colors"
+                              onClick={() => {
+                                setSelectedPatient(patient);
+                                setUsagePatientSearch(patient.name);
+                                setShowPatientDropdown(false);
+                              }}
+                            >
+                              <div className="font-bold text-slate-900">{patient.name}</div>
+                              <div className="text-xs text-slate-500">UHID: {patient.patient_id} • {patient.phone}</div>
                             </div>
-                          </div>
-
-                          {/* Batch Details */}
-                          <div className="p-4 space-y-4">
-                            {/* Quantity */}
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <div className="text-xs text-gray-500 uppercase tracking-wide">Current Stock</div>
-                              <div className="text-xl font-bold text-gray-900">{remaining}</div>
-                              <div className="text-xs text-gray-500">
-                                Received: {batch.received_quantity || batch.original_quantity || 'N/A'}
-                              </div>
-                              {batchStats && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Sold this month: {batchStats.soldUnitsThisMonth || 0}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Dates */}
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-600">Manufacturing:</span>
-                                <span className="text-sm font-medium">{new Date(batch.manufacturing_date).toLocaleDateString()}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-600">Expiry:</span>
-                                <span className={`text-sm font-medium ${isExpired ? 'text-red-600' : expSoon ? 'text-orange-600' : 'text-gray-900'}`}>
-                                  {new Date(batch.expiry_date).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Pricing */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                                <div className="text-xs text-blue-600 uppercase tracking-wide font-medium">Purchase Price</div>
-                                <div className="text-sm font-semibold text-blue-700">₹{Number(batch.purchase_price || 0).toFixed(2)}</div>
-                              </div>
-                              <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                                <div className="text-xs text-green-600 uppercase tracking-wide font-medium">Selling Price</div>
-                                <div className="text-sm font-semibold text-green-700">₹{Number(batch.selling_price || 0).toFixed(2)}</div>
-                              </div>
-                            </div>
-                          </div>
+                          ))}
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bell Notifications Modal */}
-      {showBellNotifications && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Bell className="w-6 h-6 text-orange-600" />
-                Notifications
-              </h3>
-              <button
-                onClick={() => setShowBellNotifications(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              {zeroQuantityAlerts.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-red-900 mb-4 flex items-center gap-2">
-                    <span className="text-red-600">⚠️</span>
-                    Zero Quantity Medicines
-                  </h4>
-                  <p className="text-sm text-red-700 mb-4">
-                    The following medicines have reached zero quantity and have been moved to "Updated Stock Medicine":
-                  </p>
-                  <div className="space-y-3">
-                    {zeroQuantityAlerts.map((medicine, index) => (
-                      <div key={medicine.id} className="bg-white rounded-lg p-4 border border-red-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h5 className="font-medium text-slate-900">{medicine.medication_name}</h5>
-                            <p className="text-sm text-slate-600">
-                              {medicine.manufacturer || 'Unknown manufacturer'} • Batch: {medicine.batch_number}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              Originally from: {medicine.intent_type}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              Out of Stock
-                            </span>
-                          </div>
-                        </div>
+                      )}
+                    </div>
+                    {selectedPatient && (
+                      <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-xl text-sm border border-green-100 font-medium animate-in zoom-in-95">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        Patient Selected: <b>{selectedPatient.name}</b>
+                        <button
+                          onClick={() => {
+                            setSelectedPatient(null);
+                            setUsagePatientSearch('');
+                          }}
+                          className="ml-auto hover:text-red-500"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
-              )}
 
-              {zeroQuantityAlerts.length === 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
+                  {/* Medicine Search Step */}
+                  <div className={!selectedPatient ? 'opacity-40 pointer-events-none transition-opacity' : 'animate-in fade-in'}>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                      <Pill className="w-4 h-4 text-purple-500" />
+                      2. Add Medicines to List
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search intent stock..."
+                        value={usageMedicineSearch}
+                        onChange={(e) => setUsageMedicineSearch(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-purple-100 focus:border-purple-500 outline-none transition-all font-medium"
+                      />
+                      {showUsageMedicineDropdown && medicineSearchResults.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-[60] py-2 overflow-hidden animate-in fade-in slide-in-from-top-2 max-h-60 overflow-y-auto">
+                          {medicineSearchResults.map((med) => (
+                            <div
+                              key={med.id}
+                              className="px-4 py-3 hover:bg-purple-50 cursor-pointer transition-colors flex justify-between items-center"
+                              onClick={() => addToUsageCart(med, 1)}
+                            >
+                              <div className="flex-1">
+                                <div className="font-bold text-slate-900">{med.medication_name}</div>
+                                <div className="text-xs text-slate-500">Batch: {med.batch_number} • Stock: {med.quantity}</div>
+                              </div>
+                              <Plus className="w-5 h-5 text-purple-500" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <h4 className="text-lg font-semibold text-green-900 mb-2">All Good!</h4>
-                  <p className="text-sm text-green-700">
-                    No medicines with zero quantity. All departments have sufficient stock.
-                  </p>
                 </div>
-              )}
+
+                {/* Cart Preview */}
+                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-200 flex flex-col h-full min-h-[400px]">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                      <Package className="w-5 h-5 text-indigo-500" />
+                      List of Medicines ({usageCart.length})
+                    </h4>
+                    {usageCart.length > 0 && (
+                      <button
+                        onClick={() => setUsageCart([])}
+                        className="text-xs font-semibold text-red-500 hover:text-red-600 transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-3 overflow-y-auto mb-6 pr-1">
+                    {usageCart.length === 0 ? (
+                      <div className="text-center py-12 text-slate-400">
+                        <Plus className="w-8 h-8 opacity-20 mx-auto mb-2" />
+                        <p className="text-sm">No items added</p>
+                      </div>
+                    ) : (
+                      usageCart.map((item) => (
+                        <div key={item.medicine.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 animate-in zoom-in-95">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="font-bold text-slate-900 text-sm">{item.medicine.medication_name}</div>
+                            <button
+                              onClick={() => removeFromUsageCart(item.medicine.id)}
+                              className="text-slate-300 hover:text-red-500"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs text-slate-500">Batch: {item.medicine.batch_number}</div>
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => addToUsageCart(item.medicine, -1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50">-</button>
+                              <span className="font-bold text-slate-900">{item.quantity}</span>
+                              <button onClick={() => addToUsageCart(item.medicine, 1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50">+</button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <button
+                    onClick={recordPatientUsage}
+                    disabled={loading || !selectedPatient || usageCart.length === 0}
+                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-2xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 mt-auto flex items-center justify-center gap-2"
+                  >
+                    {loading ? "Processing..." : `Confirm Usage for ${selectedPatient?.name || 'Patient'}`}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
+        )}
+      </div>
     </div>
   );
 }
