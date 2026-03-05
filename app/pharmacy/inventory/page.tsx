@@ -612,6 +612,7 @@ export default function InventoryPage() {
           final_total_stock: finalTotalStock,
           min_stock_level: Number(m.minimum_stock_level ?? 0),
           location: m.location || null,
+          combination: m.combination || null,
           batches: batchesMapped
         }
       })
