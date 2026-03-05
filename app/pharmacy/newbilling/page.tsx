@@ -1162,14 +1162,26 @@ function NewBillingPageInner() {
       return;
     }
 
-    // Find the correct batch from the medicine's batches
-    const batch = (medicine.batches || []).find(b => b.batch_number === usage.batch_number);
+    // Find the best matching batch from the medicine's batches
+    // 1. First try to find the exact batch number mentioned in usage
+    let batch = (medicine.batches || []).find(b => b.batch_number === usage.batch_number);
+
+    // 2. If not found or if that batch has no stock, find any other batch that HAS stock
+    if (!batch || (Number(batch.current_quantity) || 0) <= 0) {
+      const availableBatches = (medicine.batches || [])
+        .filter(b => (Number(b.current_quantity) || 0) > 0)
+        .sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+
+      if (availableBatches.length > 0) {
+        batch = availableBatches[0];
+      }
+    }
 
     // If batch doesn't exist, create a temporary one for the bill
     const billBatch = batch || {
-      id: `temp-${Date.now()}`,
-      batch_number: usage.batch_number,
-      expiry_date: usage.expiry_date || new Date().toISOString(),
+      id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      batch_number: usage.batch_number || 'UNKNOWN',
+      expiry_date: usage.expiry_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       current_quantity: usage.quantity,
       purchase_price: usage.unit_price,
       selling_price: usage.unit_price,
@@ -1177,12 +1189,15 @@ function NewBillingPageInner() {
       status: 'active'
     };
 
+    // Use the unit price from the selected batch if it's a real batch, otherwise use usage unit price
+    const unitPrice = (batch && (batch as any).selling_price) ? (batch as any).selling_price : usage.unit_price;
+
     const newItem: BillItem = {
       medicine,
       batch: billBatch as MedicineBatch,
       quantity: usage.quantity,
-      unit_price: usage.unit_price,
-      total: usage.quantity * usage.unit_price,
+      unit_price: unitPrice,
+      total: usage.quantity * unitPrice,
       // Store the intent linkage for stock update after payment
       intent_usage_id: usage.id,
       intent_medicine_id: usage.intent_medicine_id
@@ -1555,7 +1570,7 @@ function NewBillingPageInner() {
           billing_id: billData!.id,
           line_type_id: '3a0ca26e-7dc1-4ede-9872-d798cf39d248', // Medicine line type from ref_code table
           medicine_id: item.medicine.id,
-          batch_id: item.medicine.is_external ? null : item.batch.id,
+          batch_id: item.medicine.is_external ? null : (item.batch.id.startsWith('temp-') ? null : item.batch.id),
           ref_id: linked?.prescription_item_id ?? null,
           description: item.medicine.name,
           qty: item.quantity,
@@ -1751,21 +1766,50 @@ function NewBillingPageInner() {
             })
             .eq('id', item.intent_usage_id);
 
-          // 2. Reduce stock from intent_medicines
-          // First, get current quantity
-          const { data: intentMed } = await supabase
-            .from('intent_medicines')
-            .select('quantity')
-            .eq('id', item.intent_medicine_id)
-            .maybeSingle();
+          // 2. Auto-restock the intent medicine from the pharmacy's main inventory.
+          // By default, billing deducts from Main Pharmacy stock (via trigger).
+          // Now seamlessly restock that billed medicine (with its specific batch from the bill) into intent_medicines!
+          const { data: intentUsageData } = await supabase
+            .from('patient_intent_usage')
+            .select('intent_type')
+            .eq('id', item.intent_usage_id)
+            .single();
 
-          if (intentMed) {
-            await supabase
+          if (intentUsageData && intentUsageData.intent_type) {
+            // Check if exact medication ID and batch number exists in intent_medicines for this intent_type
+            const { data: existingIntentMed } = await supabase
               .from('intent_medicines')
-              .update({
-                quantity: Math.max(0, (intentMed.quantity || 0) - item.quantity)
-              })
-              .eq('id', item.intent_medicine_id);
+              .select('id, quantity')
+              .eq('medication_id', item.medicine.id)
+              .eq('batch_number', item.batch.batch_number)
+              .eq('intent_type', intentUsageData.intent_type)
+              .maybeSingle();
+
+            if (existingIntentMed) {
+              // Increment quantity of existing
+              await supabase
+                .from('intent_medicines')
+                .update({ quantity: (existingIntentMed.quantity || 0) + item.quantity })
+                .eq('id', existingIntentMed.id);
+            } else {
+              // Insert a new intent_medicine row for this new batch from Main Pharmacy
+              await supabase
+                .from('intent_medicines')
+                .insert({
+                  intent_type: intentUsageData.intent_type,
+                  medication_id: item.medicine.id,
+                  medication_name: item.medicine.name,
+                  batch_number: item.batch.batch_number,
+                  quantity: item.quantity,
+                  mrp: item.unit_price,
+                  combination: item.medicine.combination || '',
+                  dosage_type: item.medicine.unit || '',
+                  manufacturer: item.medicine.manufacturer || '',
+                  medicine_status: 'active',
+                  medicine_code: item.medicine.medicine_code || '',
+                  expiry_date: item.batch.expiry_date || null
+                });
+            }
           }
         }
       }
@@ -2514,11 +2558,12 @@ function NewBillingPageInner() {
                             <div key={usage.id} className="bg-white p-3 rounded-lg border border-indigo-100 flex justify-between items-center group hover:border-indigo-300 transition-all">
                               <div>
                                 <div className="text-sm font-bold text-slate-900">{usage.medication_name}</div>
-                                <div className="text-[10px] text-slate-500 flex gap-2">
+                                <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
                                   <span>Batch: <span className="text-indigo-600 font-medium">{usage.batch_number}</span></span>
                                   <span>Dept: <span className="text-indigo-600 font-medium uppercase">{usage.intent_type}</span></span>
+                                  <span>Used: <span className="text-slate-600">{new Date(usage.created_at).toLocaleDateString()}</span></span>
                                 </div>
-                                <div className="text-xs font-semibold text-slate-700 mt-0.5">₹{usage.unit_price} x {usage.quantity} units</div>
+                                <div className="text-xs font-semibold text-slate-700 mt-1">₹{usage.unit_price} x {usage.quantity} units</div>
                               </div>
                               <button
                                 type="button"

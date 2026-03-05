@@ -42,6 +42,21 @@ interface IntentMedicine {
   expiry_date?: string;
 }
 
+interface PatientUsageRecord {
+  id: string;
+  patient_name: string;
+  intent_type: string;
+  medication_id: string;
+  medications?: {
+    name: string;
+  };
+  quantity: number;
+  unit_price: number;
+  created_at: string;
+  status: string;
+  batch_number: string;
+}
+
 interface Medication {
   id: string;
   name: string;
@@ -106,6 +121,36 @@ function IntentPageInner() {
   const [usageMedicineSearch, setUsageMedicineSearch] = useState('');
   const [medicineSearchResults, setMedicineSearchResults] = useState<IntentMedicine[]>([]);
   const [showUsageMedicineDropdown, setShowUsageMedicineDropdown] = useState(false);
+  const [patientUsageRecords, setPatientUsageRecords] = useState<PatientUsageRecord[]>([]);
+  const [loadingUsageRecords, setLoadingUsageRecords] = useState(false);
+
+  // Group usage records by patient and time (minute precision) to show bulk entries together
+  const groupedUsageHistory = React.useMemo(() => {
+    const groups: any[] = [];
+    patientUsageRecords.forEach(record => {
+      const date = new Date(record.created_at);
+      // Grouping by minute precision to capture bulk entries recorded at the same time
+      const timeKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+      const groupKey = `${record.patient_name}-${record.intent_type}-${timeKey}`;
+
+      let group = groups.find(g => g.groupKey === groupKey);
+      if (!group) {
+        group = {
+          groupKey,
+          id: record.id,
+          patient_name: record.patient_name,
+          intent_type: record.intent_type,
+          created_at: record.created_at,
+          status: record.status,
+          items: []
+        };
+        groups.push(group);
+      }
+      group.items.push(record);
+    });
+    return groups;
+  }, [patientUsageRecords]);
+
 
   const loadAllMedicines = async () => {
     try {
@@ -403,7 +448,26 @@ function IntentPageInner() {
 
       if (usageError) throw usageError;
 
+      // Reduce stock from intent_medicines
+      for (const item of usageCart) {
+        const medicine = allIntentMedicines.find(m => m.id === item.medicine.id);
+        if (medicine) {
+          const newQty = Math.max(0, medicine.quantity - item.quantity);
+          const { error: updateError } = await supabase
+            .from('intent_medicines')
+            .update({ quantity: newQty })
+            .eq('id', item.medicine.id);
+
+          if (updateError) {
+            console.error('Failed to update intent_medicine stock:', updateError);
+          }
+        }
+      }
+
       alert(`Usage recorded for ${selectedPatient.name} (${usageCart.length} items). These will be shown in New Pharmacy Bill.`);
+      fetchPatientUsageRecords();
+      loadAllIntentMedicines();
+      fetchIntentMedicines();
 
       // Reset modal
       setShowUsageModal(false);
@@ -485,6 +549,24 @@ function IntentPageInner() {
       setIntentMedicines(data || []);
     } catch (error) {
       console.error('Error fetching intent medicines:', error);
+    }
+  };
+
+  const fetchPatientUsageRecords = async () => {
+    try {
+      setLoadingUsageRecords(true);
+      const { data, error } = await supabase
+        .from('patient_intent_usage')
+        .select('*, medications(name)')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setPatientUsageRecords((data as any[]) || []);
+    } catch (error) {
+      console.error('Error fetching patient usage records:', error);
+    } finally {
+      setLoadingUsageRecords(false);
     }
   };
 
@@ -798,6 +880,7 @@ function IntentPageInner() {
   useEffect(() => {
     loadAllMedicines();
     loadAllIntentMedicines();
+    fetchPatientUsageRecords();
   }, []);
 
   const getFilteredIntentMedicines = () => {
@@ -1386,6 +1469,134 @@ function IntentPageInner() {
           )}
         </div>
 
+        {/* Patient Usage History Table */}
+        <div className="mt-8 bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden">
+          <div className="p-6 border-b border-gray-200/50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Calendar className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">Recent Patient Usage History</h2>
+                <p className="text-sm text-slate-500 mt-1">Recently recorded medication usage for patients</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchPatientUsageRecords}
+              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Patient Name</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Intent Type</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Medication Name</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Batch</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Qty</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Price (total)</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-100">
+                {loadingUsageRecords ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                        Loading records...
+                      </div>
+                    </td>
+                  </tr>
+                ) : groupedUsageHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                      No usage records found.
+                    </td>
+                  </tr>
+                ) : (
+                  groupedUsageHistory.map((group, index) => {
+                    const totalAmount = group.items.reduce((sum: number, item: any) => sum + (item.unit_price * item.quantity), 0);
+                    const isAllBilled = group.items.every((item: any) => item.status === 'billed');
+                    const isAnyCancelled = group.items.some((item: any) => item.status === 'cancelled');
+
+                    // Determine overall status
+                    let statusLabel = 'Pending Bill';
+                    let statusClass = 'bg-yellow-100 text-yellow-800';
+
+                    if (isAllBilled) {
+                      statusLabel = 'Billed & Stock Updated';
+                      statusClass = 'bg-green-100 text-green-800';
+                    } else if (isAnyCancelled) {
+                      statusLabel = 'Cancelled';
+                      statusClass = 'bg-red-100 text-red-800';
+                    }
+
+                    return (
+                      <tr key={group.groupKey + group.id} className={`hover:bg-slate-50/50 transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <div className="text-sm font-bold text-slate-900">{group.patient_name}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <span className="inline-flex px-2 py-1 text-xs font-medium bg-slate-100 text-slate-800 rounded-full">
+                            {group.intent_type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 align-top">
+                          <div className="space-y-1.5">
+                            {group.items.map((item: any) => (
+                              <div key={item.id} className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                                {item.medications?.name || 'Unknown'}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 align-top">
+                          <div className="space-y-1.5">
+                            {group.items.map((item: any) => (
+                              <div key={item.id} className="text-sm text-slate-600 font-mono h-[20px] flex items-center">
+                                {item.batch_number}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 align-top">
+                          <div className="space-y-1.5">
+                            {group.items.map((item: any) => (
+                              <div key={item.id} className="text-sm font-bold text-slate-900 h-[20px] flex items-center">
+                                {item.quantity}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 align-top">
+                          {new Date(group.created_at).toLocaleDateString()} {new Date(group.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-6 py-4 align-top">
+                          <div className="text-sm font-bold text-slate-900">₹{totalAmount.toFixed(0)}</div>
+                          <div className="text-[10px] text-slate-400">{group.items.length} item(s)</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${statusClass}`}>
+                            {statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+
         {/* Move Modal */}
         {
           showMoveModal && selectedMoveMedicine && (
@@ -1774,6 +1985,61 @@ function IntentPageInner() {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100">
+                      <h4 className="text-lg font-semibold text-slate-900">Patient Usage History</h4>
+                      <p className="text-sm text-slate-600 mt-1">History of medicines used for patients across sections</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Patient</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Medicine</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Section</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Qty</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {patientUsageRecords.map((usage) => (
+                            <tr key={usage.id} className="hover:bg-slate-50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                                {usage.patient_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                {usage.medications?.name || 'Unknown'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                {usage.intent_type}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-bold">
+                                {usage.quantity}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                {new Date(usage.created_at).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${usage.status === 'billed' ? 'bg-green-100 text-green-700' :
+                                  usage.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                    'bg-blue-100 text-blue-700'
+                                  }`}>
+                                  {usage.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {patientUsageRecords.length === 0 && (
+                      <div className="p-12 text-center text-slate-400">
+                        No patient usage records found
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
