@@ -434,7 +434,7 @@ export async function getDrugPurchases(filters?: {
       query = query.or(`purchase_number.ilike.%${filters.search}%,invoice_number.ilike.%${filters.search}%`);
     }
 
-    const { data, error } = await query.order('purchase_date', { ascending: false });
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching drug purchases:', error);
