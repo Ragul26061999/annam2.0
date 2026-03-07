@@ -120,7 +120,7 @@ interface BillTab {
   showMedicineDropdown: boolean;
   selectedMedicine: Medicine | null;
   selectedBatch: MedicineBatch | null;
-  quantity: number;
+  quantity: number | string;
   patientIntentUsages: any[];
   showIntentSelector: boolean;
   showPaymentModal: boolean;
@@ -233,7 +233,7 @@ function NewBillingPageInner() {
   const [selectedBatchIndex, setSelectedBatchIndex] = useState(0);
   const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<MedicineBatch | null>(null);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState<number | string>(1);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
   const [phoneError, setPhoneError] = useState<string>('');
@@ -3251,8 +3251,25 @@ function NewBillingPageInner() {
                     min="1"
                     placeholder="Quantity"
                     value={quantity}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setQuantity('');
+                      } else {
+                        const num = parseInt(val);
+                        if (!isNaN(num)) {
+                          setQuantity(num);
+                        }
+                      }
+                    }}
                     onKeyDown={handleQuantityKeyDown}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (isNaN(val) || val < 1) {
+                        setQuantity(1);
+                      }
+                    }}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
