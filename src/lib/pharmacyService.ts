@@ -28,6 +28,12 @@ export interface Medication {
   barcode?: string;
   created_at: string;
   updated_at: string;
+  // GST fields
+  gst_percent?: number;
+  gst_percentage?: number;
+  cgst_percent?: number;
+  sgst_percent?: number;
+  igst_percent?: number;
 }
 
 // =====================================================

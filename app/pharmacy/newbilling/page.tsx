@@ -41,7 +41,7 @@ interface Medicine {
   is_external?: boolean;
   available_stock?: number;
   total_stock?: number;
-  gst_percentage?: number; // Default GST for this medicine
+  gst_percent?: number; // Default GST for this medicine
 }
 
 interface MedicineBatch {
@@ -1082,7 +1082,7 @@ function NewBillingPageInner() {
       setLoading(true);
       const { data: medicinesData, error: medicinesError } = await supabase
         .from('medications')
-        .select('id, name, medication_code, manufacturer, category, dosage_form, combination, available_stock, total_stock, location, gst_percentage')
+        .select('id, name, medication_code, manufacturer, category, dosage_form, combination, available_stock, total_stock, location, gst_percent')
         .eq('status', 'active')
         .order('name');
 
@@ -1121,7 +1121,7 @@ function NewBillingPageInner() {
         location: m.location || '',
         available_stock: m.available_stock || 0,
         total_stock: m.total_stock || 0,
-        gst_percentage: m.gst_percentage || 0,
+        gst_percent: m.gst_percent || 0,
         batches: batchesByMedicine[m.id] || []
       }));
 
@@ -1279,7 +1279,7 @@ function NewBillingPageInner() {
           // Calculate GST
           const gstPercent = (batch.gst_percentage != null && batch.gst_percentage > 0) 
             ? batch.gst_percentage 
-            : (medicine.gst_percentage || 0);
+            : (medicine.gst_percent || 0);
           
           let subtotal = total;
           let gstAmount = 0;
@@ -1517,7 +1517,7 @@ function NewBillingPageInner() {
     const unitPrice = (batch && (batch as any).selling_price) ? (batch as any).selling_price : usage.unit_price;
 
     // Determine GST percentage (batch level takes precedence over medicine level)
-    const gstPercentage = (billBatch as any)?.gst_percentage || medicine.gst_percentage || 0;
+    const gstPercentage = (billBatch as any)?.gst_percentage || medicine.gst_percent || 0;
     
     // Calculate total (MRP is inclusive of GST)
     const total = usage.quantity * unitPrice;
@@ -1595,7 +1595,7 @@ function NewBillingPageInner() {
         const unitRate = getBatchUnitMrp(batch);
         
         // Determine GST percentage (batch level takes precedence over medicine level)
-        const gstPercentage = batch.gst_percentage || medicine.gst_percentage || 0;
+        const gstPercentage = batch.gst_percentage || medicine.gst_percent || 0;
         
         // Calculate total (MRP is inclusive of GST)
         const total = quantity * unitRate;

@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom'
 import { getSuppliers, Supplier } from '@/src/lib/enhancedPharmacyService'
 import { getDrugPurchaseById } from '@/src/lib/enhancedPharmacyService'
 import { getMedications } from '@/src/lib/pharmacyService'
+import { supabase } from '@/src/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ const emptyLine = (): DrugLineItem => ({
   batch_number: '',
   quantity: 0,
   free_quantity: 0,
-  gst_percent: 5,
+  gst_percent: 0,
   discount_percent: 0,
   total_amount: 0,
   single_unit_rate: 0,
@@ -362,6 +363,31 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
     setItems(prev => prev.filter(i => i.key !== key))
   }
 
+  const updateMedicationGst = async (medicationId: string, gstPercent: number) => {
+    try {
+      const { error } = await supabase
+        .from('medications')
+        .update({ 
+          gst_percent: gstPercent,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', medicationId)
+
+      if (error) {
+        console.error('Error updating medication GST:', error)
+      } else {
+        // Update local medications state to reflect the change
+        setMedications(prev => prev.map(med => 
+          med.id === medicationId 
+            ? { ...med, gst_percent: gstPercent }
+            : med
+        ))
+      }
+    } catch (err) {
+      console.error('Error updating medication GST:', err)
+    }
+  }
+
   const updateItem = (key: string, field: keyof DrugLineItem, value: any) => {
     setItems(prev => prev.map(item => {
       if (item.key !== key) return item
@@ -374,8 +400,13 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
           updated.medication_name = med.name
           updated.rate = med.purchase_price || 0
           updated.mrp = med.mrp || med.selling_price || 0
-          updated.gst_percent = med.gst_percent || 5
+          updated.gst_percent = med.gst_percent || med.gst_percentage || 5
         }
+      }
+
+      // Update medication GST when GST field is changed
+      if (field === 'gst_percent' && item.medication_id) {
+        updateMedicationGst(item.medication_id, value)
       }
 
       return recalcLine(updated)
@@ -391,7 +422,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
         medication_name: med.name,
         rate: med.purchase_price || 0,
         mrp: med.mrp || med.selling_price || 0,
-        gst_percent: med.gst_percent || 5,
+        gst_percent: med.gst_percent || med.gst_percentage || 5,
       })
     }))
     setShowDrugDropdown(false)
@@ -693,7 +724,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
   useEffect(() => {
     setHeader(prev => ({
       ...prev,
-      gst_amount: summary.total_gst,
+      gst_amt: summary.total_gst,
       bill_amount: summary.total_amount,
       disc_amt: summary.total_discount,
     }))
