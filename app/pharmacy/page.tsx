@@ -576,7 +576,7 @@ export default function PharmacyPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="max-w-[1800px] mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
           <button

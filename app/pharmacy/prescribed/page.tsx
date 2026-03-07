@@ -476,7 +476,7 @@ export default function PrescribedListPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
+      <div className="max-w-[1800px] mx-auto p-6">
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -485,7 +485,7 @@ export default function PrescribedListPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="max-w-[1800px] mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">

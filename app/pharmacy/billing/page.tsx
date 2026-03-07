@@ -1459,7 +1459,7 @@ export default function PharmacyBillingPage() {
   }
 
   return (
-    <div className={embedded ? "space-y-6" : "container mx-auto p-6 space-y-6"}>
+    <div className={embedded ? "space-y-6" : "max-w-[1800px] mx-auto p-6 space-y-6"}>
       {/* Header (hidden when embedded) */}
       {!embedded && (
         <div className="flex justify-between items-center">

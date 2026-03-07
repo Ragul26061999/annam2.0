@@ -95,10 +95,60 @@ interface Payment {
   reference?: string;
 }
 
+interface BillTab {
+  id: string;
+  name: string;
+  billItems: BillItem[];
+  customer: Customer;
+  billTotals: BillTotals;
+  payments: Payment[];
+  searchTerm: string;
+  patientSearch: string;
+  intentType: string;
+  linkedPrescriptionId: string | null;
+  linkedPrescriptionEncounterId: string | null;
+  linkedPrescriptionItems: any[];
+  prescribedMedications: any[];
+  paymentAmountInputs: string[];
+  patientResults: any[];
+  showPatientDropdown: boolean;
+  showMedicineDropdown: boolean;
+  selectedMedicine: Medicine | null;
+  selectedBatch: MedicineBatch | null;
+  quantity: number;
+  patientIntentUsages: any[];
+  showIntentSelector: boolean;
+  showPaymentModal: boolean;
+  showBillSuccess: boolean;
+  generatedBill: any;
+  error: string | null;
+  viewMode: 'compact' | 'detailed';
+  selectedPatientIndex: number;
+  selectedMedicineIndex: number;
+  selectedBatchIndex: number;
+  prescribedSearchTerm: string;
+  unlistedForm: any;
+  showUnlistedModal: boolean;
+  showExternalPriceModal: boolean;
+  externalPriceInput: string;
+  pendingExternalAdd: any;
+  qrPreviewBatch: MedicineBatch | null;
+  phoneError: string;
+}
+
+
 function NewBillingPageInner() {
   const searchParams = useSearchParams();
   const prescriptionIdFromUrl = searchParams?.get('prescriptionId') || null;
   const typeFromUrl = searchParams?.get('type') || null;
+  const hasLoadedPrescriptionRef = useRef(false);
+
+  // Tab Management State
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const isSwitchingRef = useRef(false);
+  const [tabs, setTabs] = useState<BillTab[]>([]);
+
+  // Core Billing State
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [billItems, setBillItems] = useState<BillItem[]>([]);
@@ -117,7 +167,6 @@ function NewBillingPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrPreviewBatch, setQrPreviewBatch] = useState<MedicineBatch | null>(null);
-  // Unlisted Medicine State
   const [showUnlistedModal, setShowUnlistedModal] = useState(false);
   const [unlistedForm, setUnlistedForm] = useState({
     name: '',
@@ -130,18 +179,275 @@ function NewBillingPageInner() {
     stock: '100'
   });
 
-  // Payment modal state
+  // Payment/Staff State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([
     { method: 'cash', amount: 0, reference: '' }
   ]);
+  const [paymentAmountInputs, setPaymentAmountInputs] = useState<string[]>([]);
   const [staffId, setStaffId] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentStaff, setCurrentStaff] = useState<any>(null);
 
-  // Patient Intent Usage state
+  // Patient/Intent State
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
   const [patientIntentUsages, setPatientIntentUsages] = useState<any[]>([]);
   const [showIntentSelector, setShowIntentSelector] = useState(false);
+  const [linkedPrescriptionId, setLinkedPrescriptionId] = useState<string | null>(null);
+  const [linkedPrescriptionEncounterId, setLinkedPrescriptionEncounterId] = useState<string | null>(null);
+  const [linkedPrescriptionItems, setLinkedPrescriptionItems] = useState<Array<{ prescription_item_id: string; medication_id: string; quantity: number; dispensed_quantity: number }>>([]);
+  const [prescribedSearchTerm, setPrescribedSearchTerm] = useState('');
+  const [prescribedMedications, setPrescribedMedications] = useState<Array<{
+    prescription_item_id: string;
+    medication_id: string;
+    medication_name: string;
+    dosage: string;
+    quantity: number;
+    dispensed_quantity: number;
+    frequency: string;
+    duration: string;
+  }>>([]);
+
+  // UI/Control State
+  const [billTotals, setBillTotals] = useState<BillTotals>({
+    subtotal: 0,
+    discountType: 'amount',
+    discountValue: 0,
+    discountAmount: 0,
+    taxPercent: 5,
+    taxAmount: 0,
+    totalAmount: 0
+  });
+  const [showBillSuccess, setShowBillSuccess] = useState(false);
+  const [generatedBill, setGeneratedBill] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
+  const [selectedPatientIndex, setSelectedPatientIndex] = useState(0);
+  const [selectedMedicineIndex, setSelectedMedicineIndex] = useState(0);
+  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0);
+  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<MedicineBatch | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
+  const [phoneError, setPhoneError] = useState<string>('');
+  const medicineDropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Hospital settings
+  const [hospitalDetails, setHospitalDetails] = useState({
+    name: 'ANNAM PHARMACY',
+    department: 'Pharmacy Department',
+    address: '2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur - 628002',
+    contactNumber: 'Ph.No: 04639-252592',
+    gstNumber: 'GST29ABCDE1234F1Z5'
+  });
+  const [showHospitalModal, setShowHospitalModal] = useState(false);
+
+
+  // Functions for tab management
+  const createNewTabState = (name: string): BillTab => ({
+    id: Math.random().toString(36).substr(2, 9),
+    name,
+    customer: { type: 'walk_in', name: '', phone: '' },
+    billItems: [],
+    billTotals: { subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 5, taxAmount: 0, totalAmount: 0 },
+    payments: [{ method: 'cash', amount: 0, reference: '' }],
+    searchTerm: '',
+    patientSearch: '',
+    intentType: '',
+    linkedPrescriptionId: null,
+    linkedPrescriptionEncounterId: null,
+    linkedPrescriptionItems: [],
+    prescribedMedications: [],
+    paymentAmountInputs: [],
+    patientResults: [],
+    showPatientDropdown: false,
+    showMedicineDropdown: false,
+    selectedMedicine: null,
+    selectedBatch: null,
+    quantity: 1,
+    patientIntentUsages: [],
+    showIntentSelector: false,
+    showPaymentModal: false,
+    showBillSuccess: false,
+    generatedBill: null,
+    error: null,
+    viewMode: 'compact',
+    selectedPatientIndex: 0,
+    selectedMedicineIndex: 0,
+    selectedBatchIndex: 0,
+    prescribedSearchTerm: '',
+    unlistedForm: {
+      name: '',
+      manufacturer: '',
+      category: 'Unlisted',
+      mrp: '',
+      selling_price: '',
+      batch_number: 'TEMP-' + Math.floor(Math.random() * 10000),
+      expiry_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+      stock: '100'
+    },
+    showUnlistedModal: false,
+    showExternalPriceModal: false,
+    externalPriceInput: '',
+    pendingExternalAdd: null,
+    qrPreviewBatch: null,
+    phoneError: ''
+  });
+
+  // Initialize first tab
+  useEffect(() => {
+    if (tabs.length === 0) {
+      const firstTab = createNewTabState('Tab 1');
+      // Set initial state from URL if provided
+      if (typeFromUrl === 'intent') firstTab.customer.type = 'intent';
+      setTabs([firstTab]);
+    }
+  }, []);
+
+  const addNewTab = () => {
+    const newTabName = `Tab ${tabs.length + 1}`;
+    const newTab = createNewTabState(newTabName);
+    setTabs([...tabs, newTab]);
+    switchTab(tabs.length);
+  };
+
+  const closeTab = (index: number) => {
+    if (tabs.length <= 1) return;
+    
+    const newTabs = tabs.filter((_, i) => i !== index);
+    setTabs(newTabs);
+    
+    if (activeTabIndex === index) {
+      const nextIndex = Math.max(0, index - 1);
+      switchTab(nextIndex, newTabs);
+    } else if (activeTabIndex > index) {
+      setActiveTabIndex(activeTabIndex - 1);
+    }
+  };
+
+  const switchTab = (index: number, currentTabs?: BillTab[]) => {
+    const targetTabs = currentTabs || tabs;
+    const tab = targetTabs[index];
+    if (!tab) return;
+
+    isSwitchingRef.current = true;
+    setActiveTabIndex(index);
+    
+    // Set all states from tab
+    setBillItems(tab.billItems);
+    setCustomer(tab.customer);
+    setBillTotals(tab.billTotals);
+    setPayments(tab.payments);
+    setSearchTerm(tab.searchTerm);
+    setPatientSearch(tab.patientSearch);
+    setIntentType(tab.intentType);
+    setLinkedPrescriptionId(tab.linkedPrescriptionId);
+    setLinkedPrescriptionEncounterId(tab.linkedPrescriptionEncounterId);
+    setLinkedPrescriptionItems(tab.linkedPrescriptionItems);
+    setPrescribedMedications(tab.prescribedMedications);
+    setViewMode(tab.viewMode);
+    setPaymentAmountInputs(tab.paymentAmountInputs);
+    setPatientResults(tab.patientResults);
+    setShowPatientDropdown(tab.showPatientDropdown);
+    setShowMedicineDropdown(tab.showMedicineDropdown || false);
+    setSelectedMedicine(tab.selectedMedicine);
+    setSelectedBatch(tab.selectedBatch);
+    setQuantity(tab.quantity);
+    setError(tab.error);
+    setPatientIntentUsages(tab.patientIntentUsages);
+    setShowIntentSelector(tab.showIntentSelector);
+    setShowPaymentModal(tab.showPaymentModal);
+    setShowBillSuccess(tab.showBillSuccess);
+    setGeneratedBill(tab.generatedBill);
+    setSelectedPatientIndex(tab.selectedPatientIndex);
+    setSelectedMedicineIndex(tab.selectedMedicineIndex);
+    setSelectedBatchIndex(tab.selectedBatchIndex);
+    setPrescribedSearchTerm(tab.prescribedSearchTerm);
+    setUnlistedForm(tab.unlistedForm);
+    setShowUnlistedModal(tab.showUnlistedModal);
+    setShowExternalPriceModal(tab.showExternalPriceModal);
+    setExternalPriceInput(tab.externalPriceInput);
+    setPendingExternalAdd(tab.pendingExternalAdd);
+    setQrPreviewBatch(tab.qrPreviewBatch);
+    setPhoneError(tab.phoneError);
+
+    // Reset switching flag after states are updated
+    setTimeout(() => {
+      isSwitchingRef.current = false;
+    }, 100);
+  };
+
+  // Sync current active state back to tabs array
+  useEffect(() => {
+    if (isSwitchingRef.current || tabs.length === 0) return;
+
+    setTabs(prev => {
+      if (prev[activeTabIndex]) {
+        const updatedTab = {
+          ...prev[activeTabIndex],
+          billItems,
+          customer,
+          billTotals,
+          payments,
+          searchTerm,
+          patientSearch,
+          intentType,
+          linkedPrescriptionId,
+          linkedPrescriptionEncounterId,
+          linkedPrescriptionItems,
+          prescribedMedications,
+          viewMode,
+          paymentAmountInputs,
+          patientResults,
+          showPatientDropdown,
+          showMedicineDropdown,
+          selectedMedicine,
+          selectedBatch,
+          quantity,
+          error,
+          patientIntentUsages,
+          showIntentSelector,
+          showPaymentModal,
+          showBillSuccess,
+          generatedBill,
+          selectedPatientIndex,
+          selectedMedicineIndex,
+          selectedBatchIndex,
+          prescribedSearchTerm,
+          unlistedForm,
+          showUnlistedModal,
+          showExternalPriceModal,
+          externalPriceInput,
+          pendingExternalAdd,
+          qrPreviewBatch,
+          phoneError
+        };
+        
+        // Only update if something actually changed to avoid infinite loops
+        if (JSON.stringify(prev[activeTabIndex]) !== JSON.stringify(updatedTab)) {
+          const next = [...prev];
+          next[activeTabIndex] = updatedTab;
+          return next;
+        }
+      }
+      return prev;
+    });
+  }, [
+    billItems, customer, billTotals, payments, searchTerm, patientSearch, 
+    intentType, linkedPrescriptionId, linkedPrescriptionEncounterId, 
+    linkedPrescriptionItems, prescribedMedications, viewMode, 
+    paymentAmountInputs, patientResults, showPatientDropdown, 
+    showMedicineDropdown, selectedMedicine, selectedBatch, quantity, 
+    error, patientIntentUsages, showIntentSelector, showPaymentModal, 
+    showBillSuccess, generatedBill, selectedPatientIndex, 
+    selectedMedicineIndex, selectedBatchIndex, prescribedSearchTerm,
+    unlistedForm, showUnlistedModal, showExternalPriceModal,
+    externalPriceInput, pendingExternalAdd, qrPreviewBatch, phoneError,
+    activeTabIndex, tabs.length
+  ]);
 
   // Load current user on component mount
   useEffect(() => {
@@ -184,8 +490,9 @@ function NewBillingPageInner() {
 
     loadCurrentUser();
   }, []);
+
   // Smooth typing buffer for payment amounts per row
-  const [paymentAmountInputs, setPaymentAmountInputs] = useState<string[]>([]);
+
   // Initialize/expand buffer when modal opens
   useEffect(() => {
     if (showPaymentModal) {
@@ -274,55 +581,7 @@ function NewBillingPageInner() {
         return '💰'
     }
   }
-  const [billTotals, setBillTotals] = useState<BillTotals>({
-    subtotal: 0,
-    discountType: 'amount',
-    discountValue: 0,
-    discountAmount: 0,
-    taxPercent: 5, // Default GST changed to 5%
-    taxAmount: 0,
-    totalAmount: 0
-  });
-  const [showBillSuccess, setShowBillSuccess] = useState(false);
-  const [generatedBill, setGeneratedBill] = useState<any>(null);
-  // Patient search state used in UI below
-  const [patientSearch, setPatientSearch] = useState('');
-  const [patientResults, setPatientResults] = useState<any[]>([]);
-  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
-  const [linkedPrescriptionId, setLinkedPrescriptionId] = useState<string | null>(null);
-  const [linkedPrescriptionEncounterId, setLinkedPrescriptionEncounterId] = useState<string | null>(null);
-  const [linkedPrescriptionItems, setLinkedPrescriptionItems] = useState<Array<{ prescription_item_id: string; medication_id: string; quantity: number; dispensed_quantity: number }>>([]);
-  // Prescribed medications search state
-  const [prescribedSearchTerm, setPrescribedSearchTerm] = useState('');
-  const [prescribedMedications, setPrescribedMedications] = useState<Array<{
-    prescription_item_id: string;
-    medication_id: string;
-    medication_name: string;
-    dosage: string;
-    quantity: number;
-    dispensed_quantity: number;
-    frequency: string;
-    duration: string;
-  }>>([]);
-  // Hospital details for receipt (persisted)
-  const [hospitalDetails, setHospitalDetails] = useState({
-    name: 'ANNAM PHARMACY',
-    department: 'Pharmacy Department',
-    address: '2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur - 628002',
-    contactNumber: 'Ph.No: 04639-252592',
-    gstNumber: 'GST29ABCDE1234F1Z5'
-  });
-  const [showHospitalModal, setShowHospitalModal] = useState(false);
-  const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
-  const [selectedPatientIndex, setSelectedPatientIndex] = useState(0);
-  const [selectedMedicineIndex, setSelectedMedicineIndex] = useState(0);
-  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0);
-  const medicineDropdownRef = useRef<HTMLDivElement>(null);
-  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
-  const [selectedBatch, setSelectedBatch] = useState<MedicineBatch | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
   // Debounced search handler to prevent hanging
   const handleMedicineSearch = (value: string) => {
@@ -389,7 +648,7 @@ function NewBillingPageInner() {
     }
   };
   const embedded = false;
-  const [phoneError, setPhoneError] = useState<string>('');
+
   const printCss = `
     /* 7.7 cm thermal roll style */
     @page {
@@ -768,7 +1027,7 @@ function NewBillingPageInner() {
   };
 
   // Medicine dropdown state
-  const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
+
 
   // Utility: get QR image URL for given data
   const getQrUrl = (data: string, size: number = 200) => {
@@ -871,8 +1130,10 @@ function NewBillingPageInner() {
 
   useEffect(() => {
     const loadFromPrescription = async () => {
-      if (!prescriptionIdFromUrl) return;
+      if (!prescriptionIdFromUrl || hasLoadedPrescriptionRef.current || activeTabIndex !== 0) return;
+      hasLoadedPrescriptionRef.current = true;
       try {
+
         setLoading(true);
         setError(null);
 
@@ -2236,7 +2497,7 @@ function NewBillingPageInner() {
 
   return (
     <div className={embedded ? '' : 'min-h-screen bg-slate-100 px-6 py-4'}>
-      <div className={embedded ? '' : 'max-w-7xl mx-auto flex flex-col gap-4'}>
+      <div className={embedded ? '' : 'max-w-[1800px] mx-auto flex flex-col gap-4'}>
         {/* Desktop-style top status bar (hidden when embedded) */}
         {!embedded && (
           <div className="flex flex-col gap-3">
@@ -2257,21 +2518,47 @@ function NewBillingPageInner() {
                 </span>
               </div>
               <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">Active Bill</span>
-                  <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white shadow-sm">
-                    Tab 1
-                  </span>
+                <div className="flex items-center gap-4">
+                  <span className="text-slate-500 font-medium whitespace-nowrap">Active Bill</span>
+                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1 max-w-2xl scrollbar-hide">
+                    {tabs.map((tab, idx) => (
+                      <div key={tab.id} className="flex items-center">
+                        <div
+                          className={`group flex items-center gap-3 px-5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border-2 ${idx === activeTabIndex
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                            : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200 shadow-sm'
+                            }`}
+                          onClick={() => switchTab(idx)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span>{tab.customer?.name ? (tab.customer.name.length > 20 ? tab.customer.name.substring(0, 18) + '...' : tab.customer.name) : (tab.name)}</span>
+                            {tabs.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  closeTab(idx);
+                                }}
+                                className={`rounded-full p-1 transition-colors ${idx === activeTabIndex ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-600'}`}
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      onClick={addNewTab}
+                      className="flex items-center justify-center min-w-[36px] h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 border-2 border-blue-100 transition-all shadow-sm ml-2"
+                      title="Add New Bill Tab"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="h-6 w-px bg-slate-200" />
-                <div className="flex items-center gap-3">
-                  <span className="text-slate-500">Items:</span>
-                  <span className="font-semibold text-slate-900">{billItems.length}</span>
-                  <span className="h-6 w-px bg-slate-200 ml-2" />
-                  <span className="text-slate-500">Total:</span>
-                  <span className="text-lg font-semibold text-emerald-600">₹{Math.round(billTotals.totalAmount)}</span>
-                </div>
+
               </div>
+
             </div>
           </div>
         )}
@@ -2298,35 +2585,19 @@ function NewBillingPageInner() {
                   {customer.type === 'patient' ? 'Patient' : customer.type === 'intent' ? 'Intent' : 'Walk-in'}
                 </span>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-slate-500">Items:</span>
-                  <span className="font-semibold text-slate-900">{billItems.length}</span>
-                  <span className="h-6 w-px bg-slate-200 ml-2" />
-                  <span className="text-slate-500">Total:</span>
-                  <span className="text-lg font-semibold text-emerald-600">₹{Math.round(billTotals.totalAmount)}</span>
+              <div className="flex items-center gap-6 pr-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500 font-medium">Items:</span>
+                  <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-md font-bold text-sm min-w-[2rem] text-center">
+                    {billItems.length}
+                  </span>
                 </div>
-                <div className="flex items-center bg-slate-100 rounded-lg p-1">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('compact')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'compact'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                  >
-                    Compact
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('detailed')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'detailed'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                  >
-                    Detailed
-                  </button>
+                <div className="h-8 w-px bg-slate-100 mx-1" />
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-500 font-medium">Total:</span>
+                  <span className="text-2xl font-black text-emerald-600 tracking-tight">
+                    ₹{Math.round(billTotals.totalAmount)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -3630,9 +3901,26 @@ function NewBillingPageInner() {
                 <button
                   onClick={() => {
                     setShowBillSuccess(false);
-                    // Refresh page after successful bill
-                    window.location.reload();
+                    if (tabs.length > 1) {
+                      closeTab(activeTabIndex);
+                    } else {
+                      // Reset current tab to fresh state instead of reloading
+                      setBillItems([]);
+                      setCustomer({ type: 'walk_in', name: '', phone: '' });
+                      setBillTotals({ subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 5, taxAmount: 0, totalAmount: 0 });
+                      setPayments([{ method: 'cash', amount: 0, reference: '' }]);
+                      setSearchTerm('');
+                      setPatientSearch('');
+                      setIntentType('');
+                      setLinkedPrescriptionId(null);
+                      setLinkedPrescriptionEncounterId(null);
+                      setLinkedPrescriptionItems([]);
+                      setPrescribedMedications([]);
+                      setGeneratedBill(null);
+                      setError(null);
+                    }
                   }}
+
                   className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   Close

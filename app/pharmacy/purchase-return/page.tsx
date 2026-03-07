@@ -399,7 +399,7 @@ export default function PurchaseReturnPage() {
     <div className="min-h-screen bg-gray-100">
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-20">
-        <div className="max-w-[1400px] mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-[1800px] mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => window.history.back()}
@@ -419,7 +419,7 @@ export default function PurchaseReturnPage() {
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-4 py-5 space-y-5">
+      <div className="max-w-[1800px] mx-auto px-4 py-5 space-y-5">
         {/* ── Filters ─────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-lg shadow-sm border p-4 flex gap-4 items-center">
           <div className="flex-1 relative">
