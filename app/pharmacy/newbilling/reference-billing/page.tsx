@@ -100,60 +100,10 @@ interface Payment {
   reference?: string;
 }
 
-interface BillTab {
-  id: string;
-  name: string;
-  billItems: BillItem[];
-  customer: Customer;
-  billTotals: BillTotals;
-  payments: Payment[];
-  searchTerm: string;
-  patientSearch: string;
-  intentType: string;
-  linkedPrescriptionId: string | null;
-  linkedPrescriptionEncounterId: string | null;
-  linkedPrescriptionItems: any[];
-  prescribedMedications: any[];
-  paymentAmountInputs: string[];
-  patientResults: any[];
-  showPatientDropdown: boolean;
-  showMedicineDropdown: boolean;
-  selectedMedicine: Medicine | null;
-  selectedBatch: MedicineBatch | null;
-  quantity: number;
-  patientIntentUsages: any[];
-  showIntentSelector: boolean;
-  showPaymentModal: boolean;
-  showBillSuccess: boolean;
-  generatedBill: any;
-  error: string | null;
-  viewMode: 'compact' | 'detailed';
-  selectedPatientIndex: number;
-  selectedMedicineIndex: number;
-  selectedBatchIndex: number;
-  prescribedSearchTerm: string;
-  unlistedForm: any;
-  showUnlistedModal: boolean;
-  showExternalPriceModal: boolean;
-  externalPriceInput: string;
-  pendingExternalAdd: any;
-  qrPreviewBatch: MedicineBatch | null;
-  phoneError: string;
-}
-
-
 function NewBillingPageInner() {
   const searchParams = useSearchParams();
   const prescriptionIdFromUrl = searchParams?.get('prescriptionId') || null;
   const typeFromUrl = searchParams?.get('type') || null;
-  const hasLoadedPrescriptionRef = useRef(false);
-
-  // Tab Management State
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
-  const isSwitchingRef = useRef(false);
-  const [tabs, setTabs] = useState<BillTab[]>([]);
-
-  // Core Billing State
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [billItems, setBillItems] = useState<BillItem[]>([]);
@@ -172,6 +122,7 @@ function NewBillingPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrPreviewBatch, setQrPreviewBatch] = useState<MedicineBatch | null>(null);
+  // Unlisted Medicine State
   const [showUnlistedModal, setShowUnlistedModal] = useState(false);
   const [unlistedForm, setUnlistedForm] = useState({
     name: '',
@@ -184,275 +135,18 @@ function NewBillingPageInner() {
     stock: '100'
   });
 
-  // Payment/Staff State
+  // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([
     { method: 'cash', amount: 0, reference: '' }
   ]);
-  const [paymentAmountInputs, setPaymentAmountInputs] = useState<string[]>([]);
   const [staffId, setStaffId] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentStaff, setCurrentStaff] = useState<any>(null);
 
-  // Patient/Intent State
-  const [patientSearch, setPatientSearch] = useState('');
-  const [patientResults, setPatientResults] = useState<any[]>([]);
-  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  // Patient Intent Usage state
   const [patientIntentUsages, setPatientIntentUsages] = useState<any[]>([]);
   const [showIntentSelector, setShowIntentSelector] = useState(false);
-  const [linkedPrescriptionId, setLinkedPrescriptionId] = useState<string | null>(null);
-  const [linkedPrescriptionEncounterId, setLinkedPrescriptionEncounterId] = useState<string | null>(null);
-  const [linkedPrescriptionItems, setLinkedPrescriptionItems] = useState<Array<{ prescription_item_id: string; medication_id: string; quantity: number; dispensed_quantity: number }>>([]);
-  const [prescribedSearchTerm, setPrescribedSearchTerm] = useState('');
-  const [prescribedMedications, setPrescribedMedications] = useState<Array<{
-    prescription_item_id: string;
-    medication_id: string;
-    medication_name: string;
-    dosage: string;
-    quantity: number;
-    dispensed_quantity: number;
-    frequency: string;
-    duration: string;
-  }>>([]);
-
-  // UI/Control State
-  const [billTotals, setBillTotals] = useState<BillTotals>({
-    subtotal: 0,
-    discountType: 'amount',
-    discountValue: 0,
-    discountAmount: 0,
-    taxPercent: 5,
-    taxAmount: 0,
-    totalAmount: 0
-  });
-  const [showBillSuccess, setShowBillSuccess] = useState(false);
-  const [generatedBill, setGeneratedBill] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
-  const [selectedPatientIndex, setSelectedPatientIndex] = useState(0);
-  const [selectedMedicineIndex, setSelectedMedicineIndex] = useState(0);
-  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0);
-  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
-  const [selectedBatch, setSelectedBatch] = useState<MedicineBatch | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
-  const [phoneError, setPhoneError] = useState<string>('');
-  const medicineDropdownRef = useRef<HTMLDivElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Hospital settings
-  const [hospitalDetails, setHospitalDetails] = useState({
-    name: 'ANNAM PHARMACY',
-    department: 'Pharmacy Department',
-    address: '2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur - 628002',
-    contactNumber: 'Ph.No: 04639-252592',
-    gstNumber: 'GST29ABCDE1234F1Z5'
-  });
-  const [showHospitalModal, setShowHospitalModal] = useState(false);
-
-
-  // Functions for tab management
-  const createNewTabState = (name: string): BillTab => ({
-    id: Math.random().toString(36).substr(2, 9),
-    name,
-    customer: { type: 'walk_in', name: '', phone: '' },
-    billItems: [],
-    billTotals: { subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 5, taxAmount: 0, totalAmount: 0 },
-    payments: [{ method: 'cash', amount: 0, reference: '' }],
-    searchTerm: '',
-    patientSearch: '',
-    intentType: '',
-    linkedPrescriptionId: null,
-    linkedPrescriptionEncounterId: null,
-    linkedPrescriptionItems: [],
-    prescribedMedications: [],
-    paymentAmountInputs: [],
-    patientResults: [],
-    showPatientDropdown: false,
-    showMedicineDropdown: false,
-    selectedMedicine: null,
-    selectedBatch: null,
-    quantity: 1,
-    patientIntentUsages: [],
-    showIntentSelector: false,
-    showPaymentModal: false,
-    showBillSuccess: false,
-    generatedBill: null,
-    error: null,
-    viewMode: 'compact',
-    selectedPatientIndex: 0,
-    selectedMedicineIndex: 0,
-    selectedBatchIndex: 0,
-    prescribedSearchTerm: '',
-    unlistedForm: {
-      name: '',
-      manufacturer: '',
-      category: 'Unlisted',
-      mrp: '',
-      selling_price: '',
-      batch_number: 'TEMP-' + Math.floor(Math.random() * 10000),
-      expiry_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-      stock: '100'
-    },
-    showUnlistedModal: false,
-    showExternalPriceModal: false,
-    externalPriceInput: '',
-    pendingExternalAdd: null,
-    qrPreviewBatch: null,
-    phoneError: ''
-  });
-
-  // Initialize first tab
-  useEffect(() => {
-    if (tabs.length === 0) {
-      const firstTab = createNewTabState('Tab 1');
-      // Set initial state from URL if provided
-      if (typeFromUrl === 'intent') firstTab.customer.type = 'intent';
-      setTabs([firstTab]);
-    }
-  }, []);
-
-  const addNewTab = () => {
-    const newTabName = `Tab ${tabs.length + 1}`;
-    const newTab = createNewTabState(newTabName);
-    setTabs([...tabs, newTab]);
-    switchTab(tabs.length);
-  };
-
-  const closeTab = (index: number) => {
-    if (tabs.length <= 1) return;
-    
-    const newTabs = tabs.filter((_, i) => i !== index);
-    setTabs(newTabs);
-    
-    if (activeTabIndex === index) {
-      const nextIndex = Math.max(0, index - 1);
-      switchTab(nextIndex, newTabs);
-    } else if (activeTabIndex > index) {
-      setActiveTabIndex(activeTabIndex - 1);
-    }
-  };
-
-  const switchTab = (index: number, currentTabs?: BillTab[]) => {
-    const targetTabs = currentTabs || tabs;
-    const tab = targetTabs[index];
-    if (!tab) return;
-
-    isSwitchingRef.current = true;
-    setActiveTabIndex(index);
-    
-    // Set all states from tab
-    setBillItems(tab.billItems);
-    setCustomer(tab.customer);
-    setBillTotals(tab.billTotals);
-    setPayments(tab.payments);
-    setSearchTerm(tab.searchTerm);
-    setPatientSearch(tab.patientSearch);
-    setIntentType(tab.intentType);
-    setLinkedPrescriptionId(tab.linkedPrescriptionId);
-    setLinkedPrescriptionEncounterId(tab.linkedPrescriptionEncounterId);
-    setLinkedPrescriptionItems(tab.linkedPrescriptionItems);
-    setPrescribedMedications(tab.prescribedMedications);
-    setViewMode(tab.viewMode);
-    setPaymentAmountInputs(tab.paymentAmountInputs);
-    setPatientResults(tab.patientResults);
-    setShowPatientDropdown(tab.showPatientDropdown);
-    setShowMedicineDropdown(tab.showMedicineDropdown || false);
-    setSelectedMedicine(tab.selectedMedicine);
-    setSelectedBatch(tab.selectedBatch);
-    setQuantity(tab.quantity);
-    setError(tab.error);
-    setPatientIntentUsages(tab.patientIntentUsages);
-    setShowIntentSelector(tab.showIntentSelector);
-    setShowPaymentModal(tab.showPaymentModal);
-    setShowBillSuccess(tab.showBillSuccess);
-    setGeneratedBill(tab.generatedBill);
-    setSelectedPatientIndex(tab.selectedPatientIndex);
-    setSelectedMedicineIndex(tab.selectedMedicineIndex);
-    setSelectedBatchIndex(tab.selectedBatchIndex);
-    setPrescribedSearchTerm(tab.prescribedSearchTerm);
-    setUnlistedForm(tab.unlistedForm);
-    setShowUnlistedModal(tab.showUnlistedModal);
-    setShowExternalPriceModal(tab.showExternalPriceModal);
-    setExternalPriceInput(tab.externalPriceInput);
-    setPendingExternalAdd(tab.pendingExternalAdd);
-    setQrPreviewBatch(tab.qrPreviewBatch);
-    setPhoneError(tab.phoneError);
-
-    // Reset switching flag after states are updated
-    setTimeout(() => {
-      isSwitchingRef.current = false;
-    }, 100);
-  };
-
-  // Sync current active state back to tabs array
-  useEffect(() => {
-    if (isSwitchingRef.current || tabs.length === 0) return;
-
-    setTabs(prev => {
-      if (prev[activeTabIndex]) {
-        const updatedTab = {
-          ...prev[activeTabIndex],
-          billItems,
-          customer,
-          billTotals,
-          payments,
-          searchTerm,
-          patientSearch,
-          intentType,
-          linkedPrescriptionId,
-          linkedPrescriptionEncounterId,
-          linkedPrescriptionItems,
-          prescribedMedications,
-          viewMode,
-          paymentAmountInputs,
-          patientResults,
-          showPatientDropdown,
-          showMedicineDropdown,
-          selectedMedicine,
-          selectedBatch,
-          quantity,
-          error,
-          patientIntentUsages,
-          showIntentSelector,
-          showPaymentModal,
-          showBillSuccess,
-          generatedBill,
-          selectedPatientIndex,
-          selectedMedicineIndex,
-          selectedBatchIndex,
-          prescribedSearchTerm,
-          unlistedForm,
-          showUnlistedModal,
-          showExternalPriceModal,
-          externalPriceInput,
-          pendingExternalAdd,
-          qrPreviewBatch,
-          phoneError
-        };
-        
-        // Only update if something actually changed to avoid infinite loops
-        if (JSON.stringify(prev[activeTabIndex]) !== JSON.stringify(updatedTab)) {
-          const next = [...prev];
-          next[activeTabIndex] = updatedTab;
-          return next;
-        }
-      }
-      return prev;
-    });
-  }, [
-    billItems, customer, billTotals, payments, searchTerm, patientSearch, 
-    intentType, linkedPrescriptionId, linkedPrescriptionEncounterId, 
-    linkedPrescriptionItems, prescribedMedications, viewMode, 
-    paymentAmountInputs, patientResults, showPatientDropdown, 
-    showMedicineDropdown, selectedMedicine, selectedBatch, quantity, 
-    error, patientIntentUsages, showIntentSelector, showPaymentModal, 
-    showBillSuccess, generatedBill, selectedPatientIndex, 
-    selectedMedicineIndex, selectedBatchIndex, prescribedSearchTerm,
-    unlistedForm, showUnlistedModal, showExternalPriceModal,
-    externalPriceInput, pendingExternalAdd, qrPreviewBatch, phoneError,
-    activeTabIndex, tabs.length
-  ]);
 
   // Load current user on component mount
   useEffect(() => {
@@ -495,9 +189,8 @@ function NewBillingPageInner() {
 
     loadCurrentUser();
   }, []);
-
   // Smooth typing buffer for payment amounts per row
-
+  const [paymentAmountInputs, setPaymentAmountInputs] = useState<string[]>([]);
   // Initialize/expand buffer when modal opens
   useEffect(() => {
     if (showPaymentModal) {
@@ -586,7 +279,55 @@ function NewBillingPageInner() {
         return '💰'
     }
   }
-
+  const [billTotals, setBillTotals] = useState<BillTotals>({
+    subtotal: 0,
+    discountType: 'amount',
+    discountValue: 0,
+    discountAmount: 0,
+    taxPercent: 5, // Default GST changed to 5%
+    taxAmount: 0,
+    totalAmount: 0
+  });
+  const [showBillSuccess, setShowBillSuccess] = useState(false);
+  const [generatedBill, setGeneratedBill] = useState<any>(null);
+  // Patient search state used in UI below
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [linkedPrescriptionId, setLinkedPrescriptionId] = useState<string | null>(null);
+  const [linkedPrescriptionEncounterId, setLinkedPrescriptionEncounterId] = useState<string | null>(null);
+  const [linkedPrescriptionItems, setLinkedPrescriptionItems] = useState<Array<{ prescription_item_id: string; medication_id: string; quantity: number; dispensed_quantity: number }>>([]);
+  // Prescribed medications search state
+  const [prescribedSearchTerm, setPrescribedSearchTerm] = useState('');
+  const [prescribedMedications, setPrescribedMedications] = useState<Array<{
+    prescription_item_id: string;
+    medication_id: string;
+    medication_name: string;
+    dosage: string;
+    quantity: number;
+    dispensed_quantity: number;
+    frequency: string;
+    duration: string;
+  }>>([]);
+  // Hospital details for receipt (persisted)
+  const [hospitalDetails, setHospitalDetails] = useState({
+    name: 'ANNAM PHARMACY',
+    department: 'Pharmacy Department',
+    address: '2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur - 628002',
+    contactNumber: 'Ph.No: 04639-252592',
+    gstNumber: 'GST29ABCDE1234F1Z5'
+  });
+  const [showHospitalModal, setShowHospitalModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
+  const [selectedPatientIndex, setSelectedPatientIndex] = useState(0);
+  const [selectedMedicineIndex, setSelectedMedicineIndex] = useState(0);
+  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0);
+  const medicineDropdownRef = useRef<HTMLDivElement>(null);
+  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<MedicineBatch | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Debounced search handler to prevent hanging
   const handleMedicineSearch = (value: string) => {
@@ -653,7 +394,7 @@ function NewBillingPageInner() {
     }
   };
   const embedded = false;
-
+  const [phoneError, setPhoneError] = useState<string>('');
   const printCss = `
     /* 7.7 cm thermal roll style */
     @page {
@@ -1032,7 +773,7 @@ function NewBillingPageInner() {
   };
 
   // Medicine dropdown state
-
+  const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
 
   // Utility: get QR image URL for given data
   const getQrUrl = (data: string, size: number = 200) => {
@@ -1061,13 +802,39 @@ function NewBillingPageInner() {
       // Parse JSONB response to array
       const batchesData = batchesJsonData || [];
 
-      // Group batches by medicine_id
+      // Group batches by medicine_id and map to UI type
       const batchesByMedicine = batchesData.reduce((acc: any, batch: any) => {
         if (!acc[batch.medicine_id]) {
           acc[batch.medicine_id] = [];
         }
         acc[batch.medicine_id].push({
-          ...batch,
+          id: batch.id,
+          medicine_id: batch.medicine_id,
+          batch_number: batch.batch_number,
+          expiry_date: batch.expiry_date,
+          current_quantity: batch.current_quantity,
+          purchase_price: batch.purchase_price,
+          selling_price: batch.selling_price,
+          pack_size: batch.pack_size,
+          pack_mrp: batch.pack_mrp,
+          pack_purchase_price: batch.pack_purchase_price,
+          unit_purchase_price: batch.unit_purchase_price,
+          status: batch.status,
+          batch_barcode: batch.batch_barcode,
+          manufacturing_date: batch.manufacturing_date,
+          received_date: batch.received_date,
+          received_quantity: batch.received_quantity,
+          supplier_name: batch.supplier_name,
+          supplier_batch_id: batch.supplier_batch_id,
+          notes: batch.notes,
+          created_at: batch.created_at,
+          updated_at: batch.updated_at,
+          is_active: batch.is_active,
+          batch_qr_code: batch.batch_qr_code,
+          supplier_id: batch.supplier_id,
+          edited: batch.edited,
+          verified: batch.verified,
+          legacy_code: batch.legacy_code,
           gst_percentage: batch.gst_percentage || 0
         });
         return acc;
@@ -1139,10 +906,8 @@ function NewBillingPageInner() {
 
   useEffect(() => {
     const loadFromPrescription = async () => {
-      if (!prescriptionIdFromUrl || hasLoadedPrescriptionRef.current || activeTabIndex !== 0) return;
-      hasLoadedPrescriptionRef.current = true;
+      if (!prescriptionIdFromUrl) return;
       try {
-
         setLoading(true);
         setError(null);
 
@@ -1239,31 +1004,28 @@ function NewBillingPageInner() {
           if (qty <= 0) continue;
           if (qty > batch.current_quantity) continue;
           const unitRate = getBatchUnitMrp(batch);
+          
+          // Determine GST percentage
+          const gstPercentage = batch.gst_percentage || medicine.gst_percentage || 0;
+          
+          // Calculate total (MRP is inclusive of GST)
           const total = qty * unitRate;
           
-          // Calculate GST
-          const gstPercent = (batch.gst_percentage != null && batch.gst_percentage > 0) 
-            ? batch.gst_percentage 
-            : (medicine.gst_percentage || 0);
+          // Extract GST amount from total (since MRP includes GST)
+          const gstAmount = total * (gstPercentage / (100 + gstPercentage));
           
-          let subtotal = total;
-          let gstAmount = 0;
-          
-          if (gstPercent > 0) {
-            // Assuming MRP is inclusive of GST
-            subtotal = total / (1 + (gstPercent / 100));
-            gstAmount = total - subtotal;
-          }
+          // Calculate net amount (excluding GST)
+          const subtotal = total - gstAmount;
           
           initialBillItems.push({
             medicine,
             batch,
             quantity: qty,
             unit_price: unitRate,
-            gst_percentage: gstPercent,
+            gst_percentage: gstPercentage,
             gst_amount: gstAmount,
-            subtotal: subtotal,
-            total: total
+            subtotal,
+            total
           });
         }
 
@@ -1451,26 +1213,14 @@ function NewBillingPageInner() {
       return;
     }
 
-    // Find the best matching batch from the medicine's batches
-    // 1. First try to find the exact batch number mentioned in usage
-    let batch = (medicine.batches || []).find(b => b.batch_number === usage.batch_number);
-
-    // 2. If not found or if that batch has no stock, find any other batch that HAS stock
-    if (!batch || (Number(batch.current_quantity) || 0) <= 0) {
-      const availableBatches = (medicine.batches || [])
-        .filter(b => (Number(b.current_quantity) || 0) > 0)
-        .sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
-
-      if (availableBatches.length > 0) {
-        batch = availableBatches[0];
-      }
-    }
+    // Find the correct batch from the medicine's batches
+    const batch = (medicine.batches || []).find(b => b.batch_number === usage.batch_number);
 
     // If batch doesn't exist, create a temporary one for the bill
     const billBatch = batch || {
-      id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      batch_number: usage.batch_number || 'UNKNOWN',
-      expiry_date: usage.expiry_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      id: `temp-${Date.now()}`,
+      batch_number: usage.batch_number,
+      expiry_date: usage.expiry_date || new Date().toISOString(),
       current_quantity: usage.quantity,
       purchase_price: usage.unit_price,
       selling_price: usage.unit_price,
@@ -1478,30 +1228,12 @@ function NewBillingPageInner() {
       status: 'active'
     };
 
-    // Use the unit price from the selected batch if it's a real batch, otherwise use usage unit price
-    const unitPrice = (batch && (batch as any).selling_price) ? (batch as any).selling_price : usage.unit_price;
-
-    // Determine GST percentage (batch level takes precedence over medicine level)
-    const gstPercentage = (billBatch as any)?.gst_percentage || medicine.gst_percentage || 0;
-    
-    // Calculate total (MRP is inclusive of GST)
-    const total = usage.quantity * unitPrice;
-    
-    // Extract GST amount from total (since MRP includes GST)
-    const gstAmount = total * (gstPercentage / (100 + gstPercentage));
-    
-    // Calculate net amount (excluding GST)
-    const subtotal = total - gstAmount;
-
     const newItem: BillItem = {
       medicine,
       batch: billBatch as MedicineBatch,
       quantity: usage.quantity,
-      unit_price: unitPrice,
-      gst_percentage: gstPercentage,
-      gst_amount: gstAmount,
-      subtotal,
-      total,
+      unit_price: usage.unit_price,
+      total: usage.quantity * usage.unit_price,
       // Store the intent linkage for stock update after payment
       intent_usage_id: usage.id,
       intent_medicine_id: usage.intent_medicine_id
@@ -1647,7 +1379,7 @@ function NewBillingPageInner() {
 
     const updatedItems = [...billItems];
     const item = updatedItems[index];
-
+    
     // Recalculate total, GST, and subtotal (MRP is inclusive of GST)
     const total = item.quantity * newPrice;
     const gstAmount = total * (item.gst_percentage / (100 + item.gst_percentage));
@@ -1676,9 +1408,14 @@ function NewBillingPageInner() {
   // Custom rounding for total amount (round up if .90+, else round down)
   const customRoundTotal = (amount: number) => {
     const decimal = amount - Math.floor(amount);
-    return decimal >= 0.90 ? Math.ceil(amount) : Math.floor(amount);
+    if (decimal >= 0.90) {
+      return Math.ceil(amount);
+    } else {
+      return Math.floor(amount);
+    }
   };
 
+  // Helper function to format total amount with custom rounding
   const formatTotalAmount = (amount: number) => {
     return `₹${customRoundTotal(amount).toFixed(0)}`;
   };
@@ -1922,7 +1659,7 @@ function NewBillingPageInner() {
           billing_id: billData!.id,
           line_type_id: '3a0ca26e-7dc1-4ede-9872-d798cf39d248', // Medicine line type from ref_code table
           medicine_id: item.medicine.id,
-          batch_id: item.medicine.is_external ? null : (item.batch.id.startsWith('temp-') ? null : item.batch.id),
+          batch_id: item.medicine.is_external ? null : item.batch.id,
           ref_id: linked?.prescription_item_id ?? null,
           description: item.medicine.name,
           qty: item.quantity,
@@ -2118,50 +1855,21 @@ function NewBillingPageInner() {
             })
             .eq('id', item.intent_usage_id);
 
-          // 2. Auto-restock the intent medicine from the pharmacy's main inventory.
-          // By default, billing deducts from Main Pharmacy stock (via trigger).
-          // Now seamlessly restock that billed medicine (with its specific batch from the bill) into intent_medicines!
-          const { data: intentUsageData } = await supabase
-            .from('patient_intent_usage')
-            .select('intent_type')
-            .eq('id', item.intent_usage_id)
-            .single();
+          // 2. Reduce stock from intent_medicines
+          // First, get current quantity
+          const { data: intentMed } = await supabase
+            .from('intent_medicines')
+            .select('quantity')
+            .eq('id', item.intent_medicine_id)
+            .maybeSingle();
 
-          if (intentUsageData && intentUsageData.intent_type) {
-            // Check if exact medication ID and batch number exists in intent_medicines for this intent_type
-            const { data: existingIntentMed } = await supabase
+          if (intentMed) {
+            await supabase
               .from('intent_medicines')
-              .select('id, quantity')
-              .eq('medication_id', item.medicine.id)
-              .eq('batch_number', item.batch.batch_number)
-              .eq('intent_type', intentUsageData.intent_type)
-              .maybeSingle();
-
-            if (existingIntentMed) {
-              // Increment quantity of existing
-              await supabase
-                .from('intent_medicines')
-                .update({ quantity: (existingIntentMed.quantity || 0) + item.quantity })
-                .eq('id', existingIntentMed.id);
-            } else {
-              // Insert a new intent_medicine row for this new batch from Main Pharmacy
-              await supabase
-                .from('intent_medicines')
-                .insert({
-                  intent_type: intentUsageData.intent_type,
-                  medication_id: item.medicine.id,
-                  medication_name: item.medicine.name,
-                  batch_number: item.batch.batch_number,
-                  quantity: item.quantity,
-                  mrp: item.unit_price,
-                  combination: item.medicine.combination || '',
-                  dosage_type: item.medicine.unit || '',
-                  manufacturer: item.medicine.manufacturer || '',
-                  medicine_status: 'active',
-                  medicine_code: item.medicine.medicine_code || '',
-                  expiry_date: item.batch.expiry_date || null
-                });
-            }
+              .update({
+                quantity: Math.max(0, (intentMed.quantity || 0) - item.quantity)
+              })
+              .eq('id', item.intent_medicine_id);
           }
         }
       }
@@ -2588,7 +2296,7 @@ function NewBillingPageInner() {
 
   return (
     <div className={embedded ? '' : 'min-h-screen bg-slate-100 px-6 py-4'}>
-      <div className={embedded ? '' : 'max-w-[1800px] mx-auto flex flex-col gap-4'}>
+      <div className={embedded ? '' : 'max-w-7xl mx-auto flex flex-col gap-4'}>
         {/* Desktop-style top status bar (hidden when embedded) */}
         {!embedded && (
           <div className="flex flex-col gap-3">
@@ -2609,47 +2317,21 @@ function NewBillingPageInner() {
                 </span>
               </div>
               <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-4">
-                  <span className="text-slate-500 font-medium whitespace-nowrap">Active Bill</span>
-                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1 max-w-2xl scrollbar-hide">
-                    {tabs.map((tab, idx) => (
-                      <div key={tab.id} className="flex items-center">
-                        <div
-                          className={`group flex items-center gap-3 px-5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border-2 ${idx === activeTabIndex
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                            : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200 shadow-sm'
-                            }`}
-                          onClick={() => switchTab(idx)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span>{tab.customer?.name ? (tab.customer.name.length > 20 ? tab.customer.name.substring(0, 18) + '...' : tab.customer.name) : (tab.name)}</span>
-                            {tabs.length > 1 && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  closeTab(idx);
-                                }}
-                                className={`rounded-full p-1 transition-colors ${idx === activeTabIndex ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-600'}`}
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <button
-                      onClick={addNewTab}
-                      className="flex items-center justify-center min-w-[36px] h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 border-2 border-blue-100 transition-all shadow-sm ml-2"
-                      title="Add New Bill Tab"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Active Bill</span>
+                  <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white shadow-sm">
+                    Tab 1
+                  </span>
                 </div>
-
+                <div className="h-6 w-px bg-slate-200" />
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-500">Items:</span>
+                  <span className="font-semibold text-slate-900">{billItems.length}</span>
+                  <span className="h-6 w-px bg-slate-200 ml-2" />
+                  <span className="text-slate-500">Total:</span>
+                  <span className="text-lg font-semibold text-emerald-600">₹{Math.round(billTotals.totalAmount)}</span>
+                </div>
               </div>
-
             </div>
           </div>
         )}
@@ -2676,19 +2358,35 @@ function NewBillingPageInner() {
                   {customer.type === 'patient' ? 'Patient' : customer.type === 'intent' ? 'Intent' : 'Walk-in'}
                 </span>
               </div>
-              <div className="flex items-center gap-6 pr-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 font-medium">Items:</span>
-                  <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-md font-bold text-sm min-w-[2rem] text-center">
-                    {billItems.length}
-                  </span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-slate-500">Items:</span>
+                  <span className="font-semibold text-slate-900">{billItems.length}</span>
+                  <span className="h-6 w-px bg-slate-200 ml-2" />
+                  <span className="text-slate-500">Total:</span>
+                  <span className="text-lg font-semibold text-emerald-600">₹{Math.round(billTotals.totalAmount)}</span>
                 </div>
-                <div className="h-8 w-px bg-slate-100 mx-1" />
-                <div className="flex items-center gap-3">
-                  <span className="text-slate-500 font-medium">Total:</span>
-                  <span className="text-2xl font-black text-emerald-600 tracking-tight">
-                    ₹{Math.round(billTotals.totalAmount)}
-                  </span>
+                <div className="flex items-center bg-slate-100 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('compact')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'compact'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                  >
+                    Compact
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('detailed')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'detailed'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                  >
+                    Detailed
+                  </button>
                 </div>
               </div>
             </div>
@@ -2920,12 +2618,11 @@ function NewBillingPageInner() {
                             <div key={usage.id} className="bg-white p-3 rounded-lg border border-indigo-100 flex justify-between items-center group hover:border-indigo-300 transition-all">
                               <div>
                                 <div className="text-sm font-bold text-slate-900">{usage.medication_name}</div>
-                                <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+                                <div className="text-[10px] text-slate-500 flex gap-2">
                                   <span>Batch: <span className="text-indigo-600 font-medium">{usage.batch_number}</span></span>
                                   <span>Dept: <span className="text-indigo-600 font-medium uppercase">{usage.intent_type}</span></span>
-                                  <span>Used: <span className="text-slate-600">{new Date(usage.created_at).toLocaleDateString()}</span></span>
                                 </div>
-                                <div className="text-xs font-semibold text-slate-700 mt-1">₹{usage.unit_price} x {usage.quantity} units</div>
+                                <div className="text-xs font-semibold text-slate-700 mt-0.5">₹{usage.unit_price} x {usage.quantity} units</div>
                               </div>
                               <button
                                 type="button"
@@ -3506,12 +3203,6 @@ function NewBillingPageInner() {
                               placeholder="0"
                             />
                           </div>
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-600 mb-1">Total GST (₹)</label>
-                            <div className="w-full rounded-lg bg-slate-100 border border-slate-200 px-2 py-1.5 text-xs text-slate-600">
-                              {formatCurrency(billItems.reduce((sum, item) => sum + item.gst_amount, 0))}
-                            </div>
-                          </div>
                         </div>
                       </div>
 
@@ -3600,7 +3291,7 @@ function NewBillingPageInner() {
                             <span className="text-right">₹{item.unit_price.toFixed(2)}</span>
                             <span className="text-right text-blue-600 font-medium">{item.gst_percentage}%</span>
                             <span className="text-center">{item.quantity}</span>
-                            <span className="text-right font-medium">₹{(item.quantity * item.unit_price).toFixed(2)}</span>
+                            <span className="text-right font-medium">₹{item.total.toFixed(2)}</span>
                             <button
                               onClick={() => removeBillItem(index)}
                               className="text-red-500 hover:text-red-700 mx-auto"
@@ -3629,7 +3320,7 @@ function NewBillingPageInner() {
                       <div className="flex justify-between">
                         <span className="text-slate-600">Total Value</span>
                         <span className="font-medium text-purple-700">
-                          ₹{Math.round(billTotals.subtotal)}
+                          {formatCurrency(billTotals.subtotal)}
                         </span>
                       </div>
                     </div>
@@ -3693,17 +3384,17 @@ function NewBillingPageInner() {
                   <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-4 mb-6 border border-gray-200">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-lg font-semibold text-gray-900">Bill Summary</h4>
-                      <span className="text-2xl font-bold text-green-600">₹{Math.round(totalDue)}</span>
+                      <span className="text-2xl font-bold text-green-600">{formatTotalAmount(totalDue)}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div className="text-center p-3 bg-white rounded-lg border">
                         <div className="font-medium text-gray-900">Subtotal</div>
-                        <div className="text-gray-600">₹{Math.round(billTotals.subtotal)}</div>
+                        <div className="text-gray-600">{formatCurrency(billTotals.subtotal)}</div>
                       </div>
                       {billTotals.discountAmount > 0 && (
                         <div className="text-center p-3 bg-white rounded-lg border">
                           <div className="font-medium text-gray-900">Discount</div>
-                          <div className="text-red-600">-₹{Math.round(billTotals.discountAmount)}</div>
+                          <div className="text-red-600">-{formatCurrency(billTotals.discountAmount)}</div>
                         </div>
                       )}
                     </div>
@@ -3980,26 +3671,9 @@ function NewBillingPageInner() {
                 <button
                   onClick={() => {
                     setShowBillSuccess(false);
-                    if (tabs.length > 1) {
-                      closeTab(activeTabIndex);
-                    } else {
-                      // Reset current tab to fresh state instead of reloading
-                      setBillItems([]);
-                      setCustomer({ type: 'walk_in', name: '', phone: '' });
-                      setBillTotals({ subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 5, taxAmount: 0, totalAmount: 0 });
-                      setPayments([{ method: 'cash', amount: 0, reference: '' }]);
-                      setSearchTerm('');
-                      setPatientSearch('');
-                      setIntentType('');
-                      setLinkedPrescriptionId(null);
-                      setLinkedPrescriptionEncounterId(null);
-                      setLinkedPrescriptionItems([]);
-                      setPrescribedMedications([]);
-                      setGeneratedBill(null);
-                      setError(null);
-                    }
+                    // Refresh page after successful bill
+                    window.location.reload();
                   }}
-
                   className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   Close
