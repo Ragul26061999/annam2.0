@@ -24,6 +24,7 @@ import {
   BarcodeDisplay,
 } from './ui/FormComponents';
 import { DosageFormSelect } from './ui/DosageFormSelect';
+import { ManufacturerSelect } from './ui/ManufacturerSelect';
 
 interface MedicineFormData {
   medication_code: string;
@@ -607,14 +608,11 @@ const MedicineEntryForm: React.FC<MedicineEntryFormProps> = ({
                         onChange={(e) => setMedicineForm({ ...medicineForm, generic_name: e.target.value })}
                         placeholder="e.g., Acetaminophen"
                       />
-                      <FormInput
-                        label="Manufacturer"
+                      <ManufacturerSelect
                         value={medicineForm.manufacturer}
-                        onChange={(e) => setMedicineForm({ ...medicineForm, manufacturer: e.target.value })}
-                        placeholder="e.g., Pharma Ltd"
+                        onChange={(val) => setMedicineForm({ ...medicineForm, manufacturer: val })}
                         required
                         error={hasError('manufacturer')}
-                        errorMessage={getErrorMessage('manufacturer')}
                       />
                       <FormSelect
                         label="Category"

@@ -27,6 +27,7 @@ import {
   Printer
 } from 'lucide-react';
 import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect';
+import { ManufacturerSelect } from '@/src/components/ui/ManufacturerSelect';
 import { supabase } from '@/src/lib/supabase';
 
 interface Medication {
@@ -716,13 +717,23 @@ export default function PharmacyOverviewPage() {
                             { label: 'Shelf / Location', key: 'location', placeholder: 'e.g. A1, Rack-3' },
                           ].map(({ label, key, placeholder }) => (
                             <div key={key}>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-                              <input
-                                value={(draft as any)[key] ?? ''}
-                                onChange={(e) => setDraft((p) => ({ ...(p || {}), [key]: e.target.value }))}
-                                placeholder={placeholder}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:border-transparent bg-gray-50"
-                              />
+                              {key === 'manufacturer' ? (
+                                <ManufacturerSelect
+                                  value={(draft as any)[key] ?? ''}
+                                  onChange={(val) => setDraft((p) => ({ ...(p || {}), [key]: val }))}
+                                  className="mt-0"
+                                />
+                              ) : (
+                                <>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                                  <input
+                                    value={(draft as any)[key] ?? ''}
+                                    onChange={(e) => setDraft((p) => ({ ...(p || {}), [key]: e.target.value }))}
+                                    placeholder={placeholder}
+                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:border-transparent bg-gray-50"
+                                  />
+                                </>
+                              )}
                             </div>
                           ))}
 

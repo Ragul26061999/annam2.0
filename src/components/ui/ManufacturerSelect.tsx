@@ -1,32 +1,29 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Loader2, Search, Check, Layers } from 'lucide-react';
-import { getDosageForms, addDosageForm, DosageForm } from '@/src/lib/dosageFormService';
+import { Plus, Loader2, Search, Check, Factory } from 'lucide-react';
+import { getManufacturers, addManufacturer } from '@/src/lib/manufacturerService';
 
-interface DosageFormSelectProps {
+interface ManufacturerSelectProps {
   value: string;
   onChange: (value: string) => void;
   error?: boolean;
   className?: string;
   disabled?: boolean;
+  required?: boolean;
 }
 
-const DEFAULT_DOSAGE_FORMS = [
-  'Tablet', 'Capsule', 'Syrup', 'Suspension', 'Injection',
-  'Ointment', 'Cream', 'Drops', 'Inhaler', 'Powder'
-];
-
-export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
+export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
   value,
   onChange,
   error,
   className = '',
   disabled = false,
+  required = false
 }) => {
-  const [options, setOptions] = useState<DosageForm[]>([]);
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
-  const [newFormName, setNewFormName] = useState('');
+  const [newName, setNewName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -35,38 +32,32 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<(HTMLDivElement | null)[]>([]);
 
-  const loadOptions = async () => {
+  const loadManufacturers = async () => {
     setLoading(true);
     try {
-      const data = await getDosageForms();
-      if (data.length === 0) {
-        const initial = DEFAULT_DOSAGE_FORMS.map(name => ({
-          id: name,
-          code: name
-        }));
-        setOptions(initial);
-      } else {
-        setOptions(data);
-      }
+      const data = await getManufacturers();
+      setManufacturers(data);
     } catch (err) {
-      console.error('Failed to load dosage forms:', err);
+      console.error('Failed to load manufacturers:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadOptions();
+    loadManufacturers();
   }, []);
 
-  const filteredOptions = options.filter(opt => 
-    opt.code.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredManufacturers = manufacturers.filter(m => 
+    m.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Reset active index when filtered list changes
   useEffect(() => {
-    setActiveIndex(filteredOptions.length > 0 ? 0 : -1);
-  }, [searchTerm, options]);
+    setActiveIndex(filteredManufacturers.length > 0 ? 0 : -1);
+  }, [searchTerm, manufacturers]);
 
+  // Scroll active item into view
   useEffect(() => {
     if (activeIndex >= 0 && optionsRef.current[activeIndex]) {
       optionsRef.current[activeIndex]?.scrollIntoView({
@@ -77,19 +68,20 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
   }, [activeIndex]);
 
   const handleAdd = async () => {
-    if (!newFormName.trim()) return;
+    if (!newName.trim()) return;
+    
     setSubmitting(true);
     try {
-      const added = await addDosageForm(newFormName.trim());
-      if (added) {
-        await loadOptions();
-        onChange(added.code);
-        setNewFormName('');
+      const success = await addManufacturer(newName.trim());
+      if (success) {
+        await loadManufacturers();
+        onChange(newName.trim());
+        setNewName('');
         setIsAdding(false);
       }
-    } catch (err: any) {
-      console.error('Failed to add dosage form:', err?.message || err);
-      alert('Failed to add dosage form. Please try again.');
+    } catch (err) {
+      console.error('Failed to add manufacturer:', err);
+      alert('Failed to add manufacturer. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -109,7 +101,7 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setActiveIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
+        setActiveIndex(prev => (prev < filteredManufacturers.length - 1 ? prev + 1 : prev));
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -117,10 +109,15 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
         break;
       case 'Enter':
         e.preventDefault();
-        if (activeIndex >= 0 && activeIndex < filteredOptions.length) {
-          onChange(filteredOptions[activeIndex].code);
+        if (activeIndex >= 0 && activeIndex < filteredManufacturers.length) {
+          onChange(filteredManufacturers[activeIndex]);
           setIsOpen(false);
           setSearchTerm('');
+        } else if (filteredManufacturers.length === 0 && searchTerm) {
+          // If no results, offer to add
+          setNewName(searchTerm);
+          setIsAdding(true);
+          setIsOpen(false);
         }
         break;
       case 'Escape':
@@ -133,7 +130,7 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
     <div className={`space-y-2 ${className}`}>
       <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
         <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-        Dosage Form
+        Manufacturer {required && <span className="text-red-500">*</span>}
       </label>
       
       <div className="flex gap-2">
@@ -142,28 +139,32 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
             <div className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
               <input
                 type="text"
-                value={newFormName}
-                onChange={(e) => setNewFormName(e.target.value)}
-                placeholder="New form name..."
-                className="flex-1 px-4 py-2 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Enter new manufacturer..."
+                className="flex-1 px-4 py-2 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm font-medium"
                 autoFocus
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.preventDefault(); handleAdd(); }
-                  else if (e.key === 'Escape') setIsAdding(false);
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAdd();
+                  } else if (e.key === 'Escape') {
+                    setIsAdding(false);
+                  }
                 }}
               />
               <button
                 type="button"
                 onClick={handleAdd}
-                disabled={submitting || !newFormName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm font-semibold"
+                disabled={submitting || !newName.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all font-semibold"
               >
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
               </button>
               <button
                 type="button"
                 onClick={() => setIsAdding(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold"
               >
                 Cancel
               </button>
@@ -179,9 +180,9 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
                 onKeyDown={handleKeyDown}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <Layers className="w-4 h-4 text-gray-400" />
+                  <Factory className="w-4 h-4 text-gray-400" />
                   <span className={value ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}>
-                    {value || 'Select dosage form'}
+                    {value || 'Select Manufacturer'}
                   </span>
                 </div>
                 <svg className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -198,8 +199,8 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search dosage forms..."
-                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-inner font-semibold"
+                        placeholder="Search manufacturers..."
+                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-inner font-semibold"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={handleKeyDown}
                         autoFocus
@@ -213,14 +214,14 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
                         <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                         <span>Loading...</span>
                       </div>
-                    ) : filteredOptions.length === 0 ? (
+                    ) : filteredManufacturers.length === 0 ? (
                       <div className="p-4 text-center">
-                        <p className="text-sm text-gray-500 font-medium">No dosage form found</p>
+                        <p className="text-sm text-gray-500 font-medium">No manufacturer found</p>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setNewFormName(searchTerm);
+                            setNewName(searchTerm);
                             setIsAdding(true);
                             setIsOpen(false);
                           }}
@@ -231,13 +232,13 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-0.5">
-                        {filteredOptions.map((opt, idx) => (
+                        {filteredManufacturers.map((m, idx) => (
                           <div
-                            key={opt.id}
+                            key={m}
                             ref={el => { optionsRef.current[idx] = el; }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onChange(opt.code);
+                              onChange(m);
                               setIsOpen(false);
                               setSearchTerm('');
                             }}
@@ -245,13 +246,13 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
                             className={`px-4 py-2.5 rounded-xl cursor-pointer flex items-center justify-between transition-all duration-200 ${
                               activeIndex === idx 
                                 ? 'bg-blue-600 text-white shadow-md transform scale-[1.02]' 
-                                : value === opt.code 
+                                : value === m 
                                   ? 'bg-blue-50 text-blue-700 font-bold' 
                                   : 'hover:bg-gray-50 text-gray-700'
                             }`}
                           >
-                            <span className="font-semibold">{opt.code}</span>
-                            {value === opt.code && <Check className={`w-4 h-4 ${activeIndex === idx ? 'text-white' : 'text-blue-600'}`} />}
+                            <span className="font-semibold">{m}</span>
+                            {value === m && <Check className={`w-4 h-4 ${activeIndex === idx ? 'text-white' : 'text-blue-600'}`} />}
                           </div>
                         ))}
                       </div>
@@ -269,12 +270,13 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
             onClick={() => setIsAdding(true)}
             disabled={disabled || loading}
             className="p-2 border border-gray-300 rounded-xl text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all flex items-center justify-center min-w-[42px] shadow-sm bg-white"
-            title="Add new dosage form"
+            title="Create new manufacturer"
           >
             <Plus className="w-5 h-5" />
           </button>
         )}
       </div>
+
       {isOpen && <div className="fixed inset-0 z-[90]" onClick={() => setIsOpen(false)} />}
     </div>
   );

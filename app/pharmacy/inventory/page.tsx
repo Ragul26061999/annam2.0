@@ -8,6 +8,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { BatchPurchaseHistoryEntry, StockTransaction, StockTruthRecord, MedicineStockSummary, ComprehensiveMedicineData } from '@/src/lib/pharmacyService'
 import MedicineEntryForm from '@/src/components/MedicineEntryForm'
 import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect'
+import { ManufacturerSelect } from '@/src/components/ui/ManufacturerSelect'
 
 // ... rest of the code remains the same ...
 interface MedicineBatch {
@@ -2076,19 +2077,12 @@ export default function InventoryPage() {
                   </div>
 
                   {/* Manufacturer */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      Manufacturer
-                    </label>
-                    <input
-                      type="text"
-                      value={editingMedicine.manufacturer}
-                      onChange={(e) => setEditingMedicine({ ...editingMedicine, manufacturer: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-200"
-                      placeholder="Enter manufacturer name"
-                    />
-                  </div>
+                  <ManufacturerSelect
+                    value={editingMedicine.manufacturer}
+                    onChange={(val) => setEditingMedicine({ ...editingMedicine, manufacturer: val })}
+                    className="mt-1"
+                    required
+                  />
 
                   <DosageFormSelect
                     value={editingMedicine.unit}
