@@ -80,10 +80,19 @@ export async function addDosageForm(name: string): Promise<DosageForm | null> {
  */
 export async function seedDosageForms(initialForms: string[]) {
   try {
-    const existing = await getDosageForms();
-    if (existing.length > 0) return;
+    // Check for each form individually
+    const { data: existing } = await supabase
+      .from('ref_code')
+      .select('code')
+      .eq('domain', DOSAGE_FORM_DOMAIN);
+    
+    const existingCodes = new Set((existing || []).map((e: { code: string }) => e.code.toLowerCase()));
+    
+    const missingForms = initialForms.filter(f => !existingCodes.has(f.toLowerCase()));
+    
+    if (missingForms.length === 0) return;
 
-    const inserts = initialForms.map(form => ({
+    const inserts = missingForms.map(form => ({
       domain: DOSAGE_FORM_DOMAIN,
       code: form,
       label: `Dosage form: ${form}`,

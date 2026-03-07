@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect';
 import { ManufacturerSelect } from '@/src/components/ui/ManufacturerSelect';
+import { CategorySelect } from '@/src/components/ui/CategorySelect';
 import { supabase } from '@/src/lib/supabase';
 
 interface Medication {
@@ -719,6 +720,12 @@ export default function PharmacyOverviewPage() {
                             <div key={key}>
                               {key === 'manufacturer' ? (
                                 <ManufacturerSelect
+                                  value={(draft as any)[key] ?? ''}
+                                  onChange={(val) => setDraft((p) => ({ ...(p || {}), [key]: val }))}
+                                  className="mt-0"
+                                />
+                              ) : key === 'category' ? (
+                                <CategorySelect
                                   value={(draft as any)[key] ?? ''}
                                   onChange={(val) => setDraft((p) => ({ ...(p || {}), [key]: val }))}
                                   className="mt-0"

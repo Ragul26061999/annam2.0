@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Loader2, Search, Check, Layers } from 'lucide-react';
-import { getDosageForms, addDosageForm, DosageForm } from '@/src/lib/dosageFormService';
+import { Plus, Loader2, Search, Check, Layers, X } from 'lucide-react';
+import { getDosageForms, addDosageForm, DosageForm, seedDosageForms } from '@/src/lib/dosageFormService';
 
 interface DosageFormSelectProps {
   value: string;
@@ -38,16 +38,14 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
   const loadOptions = async () => {
     setLoading(true);
     try {
-      const data = await getDosageForms();
-      if (data.length === 0) {
-        const initial = DEFAULT_DOSAGE_FORMS.map(name => ({
-          id: name,
-          code: name
-        }));
-        setOptions(initial);
-      } else {
-        setOptions(data);
-      }
+      let data = await getDosageForms();
+      
+      // Ensure default forms exist in the DB
+      await seedDosageForms(DEFAULT_DOSAGE_FORMS);
+      // Fetch again to get everything (defaults + custom ones)
+      data = await getDosageForms();
+      
+      setOptions(data);
     } catch (err) {
       console.error('Failed to load dosage forms:', err);
     } finally {
@@ -139,34 +137,37 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
       <div className="flex gap-2">
         <div className="flex-1 relative" ref={dropdownRef}>
           {isAdding ? (
-            <div className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
+            <div className="relative animate-in fade-in slide-in-from-left-2 duration-200">
               <input
                 type="text"
                 value={newFormName}
                 onChange={(e) => setNewFormName(e.target.value)}
-                placeholder="New form name..."
-                className="flex-1 px-4 py-2 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                placeholder="New form..."
+                className="w-full pl-4 pr-32 py-2 border border-blue-400 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-md font-medium"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); handleAdd(); }
                   else if (e.key === 'Escape') setIsAdding(false);
                 }}
               />
-              <button
-                type="button"
-                onClick={handleAdd}
-                disabled={submitting || !newFormName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-sm font-semibold"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAdding(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold"
-              >
-                Cancel
-              </button>
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-1">
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  disabled={submitting || !newFormName.trim()}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 shadow-sm transition-all text-xs font-bold"
+                >
+                  {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAdding(false)}
+                  className="px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-all text-xs font-bold bg-white"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="relative">

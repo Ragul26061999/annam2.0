@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Loader2, Search, Check, Factory, X } from 'lucide-react';
-import { getManufacturers, addManufacturer } from '@/src/lib/manufacturerService';
+import { Plus, Loader2, Search, Check, FolderRoot, X } from 'lucide-react';
+import { getMedicineCategories, addMedicineCategory, MedicineCategory, seedMedicineCategories } from '@/src/lib/categoryService';
 
-interface ManufacturerSelectProps {
+interface CategorySelectProps {
   value: string;
   onChange: (value: string) => void;
   error?: boolean;
@@ -12,7 +12,12 @@ interface ManufacturerSelectProps {
   required?: boolean;
 }
 
-export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
+const DEFAULT_CATEGORIES = [
+  'Antibiotic', 'Analgesic', 'Antipyretic', 'Antihistamine', 'Antacid', 
+  'Vitamin', 'Supplement', 'Antidiabetic', 'Hypertension', 'Other'
+];
+
+export const CategorySelect: React.FC<CategorySelectProps> = ({
   value,
   onChange,
   error,
@@ -20,7 +25,7 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
   disabled = false,
   required = false
 }) => {
-  const [manufacturers, setManufacturers] = useState<string[]>([]);
+  const [categories, setCategories] = useState<MedicineCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -32,32 +37,37 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<(HTMLDivElement | null)[]>([]);
 
-  const loadManufacturers = async () => {
+  const loadCategories = async () => {
     setLoading(true);
     try {
-      const data = await getManufacturers();
-      setManufacturers(data);
+      let data = await getMedicineCategories();
+      
+      if (data.length === 0) {
+        // Seed and reload if empty
+        await seedMedicineCategories(DEFAULT_CATEGORIES);
+        data = await getMedicineCategories();
+      }
+      
+      setCategories(data);
     } catch (err) {
-      console.error('Failed to load manufacturers:', err);
+      console.error('Failed to load categories:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadManufacturers();
+    loadCategories();
   }, []);
 
-  const filteredManufacturers = manufacturers.filter(m => 
-    m.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCategories = categories.filter(cat => 
+    cat.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Reset active index when filtered list changes
   useEffect(() => {
-    setActiveIndex(filteredManufacturers.length > 0 ? 0 : -1);
-  }, [searchTerm, manufacturers]);
+    setActiveIndex(filteredCategories.length > 0 ? 0 : -1);
+  }, [searchTerm, categories]);
 
-  // Scroll active item into view
   useEffect(() => {
     if (activeIndex >= 0 && optionsRef.current[activeIndex]) {
       optionsRef.current[activeIndex]?.scrollIntoView({
@@ -72,16 +82,16 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
     
     setSubmitting(true);
     try {
-      const success = await addManufacturer(newName.trim());
-      if (success) {
-        await loadManufacturers();
-        onChange(newName.trim());
+      const added = await addMedicineCategory(newName.trim());
+      if (added) {
+        await loadCategories();
+        onChange(added.code);
         setNewName('');
         setIsAdding(false);
       }
     } catch (err) {
-      console.error('Failed to add manufacturer:', err);
-      alert('Failed to add manufacturer. Please try again.');
+      console.error('Failed to add category:', err);
+      alert('Failed to add category. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -101,7 +111,7 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setActiveIndex(prev => (prev < filteredManufacturers.length - 1 ? prev + 1 : prev));
+        setActiveIndex(prev => (prev < filteredCategories.length - 1 ? prev + 1 : prev));
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -109,12 +119,11 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
         break;
       case 'Enter':
         e.preventDefault();
-        if (activeIndex >= 0 && activeIndex < filteredManufacturers.length) {
-          onChange(filteredManufacturers[activeIndex]);
+        if (activeIndex >= 0 && activeIndex < filteredCategories.length) {
+          onChange(filteredCategories[activeIndex].code);
           setIsOpen(false);
           setSearchTerm('');
-        } else if (filteredManufacturers.length === 0 && searchTerm) {
-          // If no results, offer to add
+        } else if (filteredCategories.length === 0 && searchTerm) {
           setNewName(searchTerm);
           setIsAdding(true);
           setIsOpen(false);
@@ -130,7 +139,7 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
     <div className={`space-y-2 ${className}`}>
       <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
         <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-        Manufacturer {required && <span className="text-red-500">*</span>}
+        Category {required && <span className="text-red-500">*</span>}
       </label>
       
       <div className="flex gap-2">
@@ -141,7 +150,7 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="New manufacturer..."
+                placeholder="New category..."
                 className="w-full pl-4 pr-32 py-2 border border-blue-400 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-md font-medium"
                 autoFocus
                 onKeyDown={(e) => {
@@ -183,9 +192,9 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
                 onKeyDown={handleKeyDown}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <Factory className="w-4 h-4 text-gray-400" />
+                  <FolderRoot className="w-4 h-4 text-gray-400" />
                   <span className={value ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}>
-                    {value || 'Select Manufacturer'}
+                    {value || 'Select Category'}
                   </span>
                 </div>
                 <svg className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -202,7 +211,7 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search manufacturers..."
+                        placeholder="Search categories..."
                         className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-inner font-semibold"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={handleKeyDown}
@@ -217,9 +226,9 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
                         <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                         <span>Loading...</span>
                       </div>
-                    ) : filteredManufacturers.length === 0 ? (
+                    ) : filteredCategories.length === 0 ? (
                       <div className="p-4 text-center">
-                        <p className="text-sm text-gray-500 font-medium">No manufacturer found</p>
+                        <p className="text-sm text-gray-500 font-medium">No category found</p>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -235,13 +244,13 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-0.5">
-                        {filteredManufacturers.map((m, idx) => (
+                        {filteredCategories.map((cat, idx) => (
                           <div
-                            key={m}
+                            key={cat.id}
                             ref={el => { optionsRef.current[idx] = el; }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onChange(m);
+                              onChange(cat.code);
                               setIsOpen(false);
                               setSearchTerm('');
                             }}
@@ -249,13 +258,13 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
                             className={`px-4 py-2.5 rounded-xl cursor-pointer flex items-center justify-between transition-all duration-200 ${
                               activeIndex === idx 
                                 ? 'bg-blue-600 text-white shadow-md transform scale-[1.02]' 
-                                : value === m 
+                                : value === cat.code 
                                   ? 'bg-blue-50 text-blue-700 font-bold' 
                                   : 'hover:bg-gray-50 text-gray-700'
                             }`}
                           >
-                            <span className="font-semibold">{m}</span>
-                            {value === m && <Check className={`w-4 h-4 ${activeIndex === idx ? 'text-white' : 'text-blue-600'}`} />}
+                            <span className="font-semibold">{cat.code}</span>
+                            {value === cat.code && <Check className={`w-4 h-4 ${activeIndex === idx ? 'text-white' : 'text-blue-600'}`} />}
                           </div>
                         ))}
                       </div>
@@ -273,7 +282,7 @@ export const ManufacturerSelect: React.FC<ManufacturerSelectProps> = ({
             onClick={() => setIsAdding(true)}
             disabled={disabled || loading}
             className="p-2 border border-gray-300 rounded-xl text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all flex items-center justify-center min-w-[42px] shadow-sm bg-white"
-            title="Create new manufacturer"
+            title="Create new category"
           >
             <Plus className="w-5 h-5" />
           </button>

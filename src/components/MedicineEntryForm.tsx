@@ -25,6 +25,7 @@ import {
 } from './ui/FormComponents';
 import { DosageFormSelect } from './ui/DosageFormSelect';
 import { ManufacturerSelect } from './ui/ManufacturerSelect';
+import { CategorySelect } from './ui/CategorySelect';
 
 interface MedicineFormData {
   medication_code: string;
@@ -614,11 +615,9 @@ const MedicineEntryForm: React.FC<MedicineEntryFormProps> = ({
                         required
                         error={hasError('manufacturer')}
                       />
-                      <FormSelect
-                        label="Category"
+                      <CategorySelect
                         value={medicineForm.category}
-                        onChange={(e) => setMedicineForm({ ...medicineForm, category: e.target.value })}
-                        options={['Antibiotic', 'Analgesic', 'Antipyretic', 'Antihistamine', 'Antacid', 'Vitamin', 'Supplement', 'Other']}
+                        onChange={(val) => setMedicineForm({ ...medicineForm, category: val })}
                       />
                       <DosageFormSelect
                         value={medicineForm.dosage_form}

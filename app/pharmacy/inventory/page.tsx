@@ -9,6 +9,7 @@ import type { BatchPurchaseHistoryEntry, StockTransaction, StockTruthRecord, Med
 import MedicineEntryForm from '@/src/components/MedicineEntryForm'
 import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect'
 import { ManufacturerSelect } from '@/src/components/ui/ManufacturerSelect'
+import { CategorySelect } from '@/src/components/ui/CategorySelect'
 
 // ... rest of the code remains the same ...
 interface MedicineBatch {
@@ -2109,20 +2110,11 @@ export default function InventoryPage() {
                     </p>
                   </div>
 
-                  {/* Category */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                      <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                      Category
-                    </label>
-                    <input
-                      type="text"
-                      value={editingMedicine.category || ''}
-                      onChange={(e) => setEditingMedicine({ ...editingMedicine, category: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-200"
-                      placeholder="e.g., Antibiotics, Pain Relief"
-                    />
-                  </div>
+                  <CategorySelect
+                    value={editingMedicine.category || ''}
+                    onChange={(val) => setEditingMedicine({ ...editingMedicine, category: val })}
+                    className="mt-1"
+                  />
 
                   {/* Shelf/Location */}
                   <div>
