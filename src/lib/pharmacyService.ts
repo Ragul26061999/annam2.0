@@ -670,30 +670,23 @@ export async function getPharmacyDashboardStats(): Promise<{
 
     const lowStockCount = lowStockData?.length || 0;
 
-    // Get today's sales - include payments collected today regardless of bill date
-    const today = new Date().toISOString().split('T')[0];
+    // Get today's sales using IST timezone (UTC+5:30)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const todayIST = new Date(now.getTime() + istOffset).toISOString().split('T')[0];
+    
+    // Calculate UTC range for the IST day
+    const istStartInUTC = new Date(new Date(todayIST).getTime() - istOffset).toISOString();
+    const istEndInUTC = new Date(new Date(todayIST).getTime() + (24 * 60 * 60 * 1000) - istOffset).toISOString();
 
-    // Get sales from stock transactions (immediate sales)
-    const { data: todaySalesData } = await supabase
-      .from('stock_transactions')
-      .select('total_amount')
-      .eq('transaction_type', 'sale')
-      .gte('created_at', `${today}T00:00:00`)
-      .lt('created_at', `${today}T23:59:59`);
-
-    const stockSales = todaySalesData?.reduce((sum: number, transaction: any) => sum + (transaction.total_amount || 0), 0) || 0;
-
-    // Get payments collected today (regardless of original bill date)
-    const { data: todayPaymentsData } = await supabase
+    // Sum all bills created within the IST "today" window
+    const { data: todayBillsData } = await supabase
       .from('billing')
       .select('total_amount')
-      .eq('payment_status', 'paid')
-      .gte('updated_at', `${today}T00:00:00`)
-      .lt('updated_at', `${today}T23:59:59`);
+      .gte('created_at', istStartInUTC)
+      .lt('created_at', istEndInUTC);
 
-    const paymentsCollected = todayPaymentsData?.reduce((sum: number, bill: any) => sum + (bill.total_amount || 0), 0) || 0;
-
-    const todaySales = stockSales + paymentsCollected;
+    const todaySales = todayBillsData?.reduce((sum: number, bill: any) => sum + (bill.total_amount || 0), 0) || 0;
 
     // Get pending bills count (align with 'billing')
     const { count: pendingBills } = await supabase
@@ -716,8 +709,8 @@ export async function getPharmacyDashboardStats(): Promise<{
       .from('prescription_items')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'dispensed')
-      .gte('updated_at', `${today}T00:00:00`)
-      .lt('updated_at', `${today}T23:59:59`);
+      .gte('updated_at', istStartInUTC)
+      .lt('updated_at', istEndInUTC);
 
     return {
       totalMedications: totalMedications || 0,
@@ -2112,7 +2105,7 @@ export async function getInventoryAnalytics(): Promise<InventoryAnalytics> {
     // Get all medications with their stock
     const { data: medications, error: medError } = await supabase
       .from('medications')
-      .select('id, name, category, available_stock, purchase_price, selling_price');
+      .select('id, name, category, available_stock, purchase_price, selling_price, minimum_stock_level');
 
     if (medError) throw medError;
 
@@ -2135,25 +2128,39 @@ export async function getInventoryAnalytics(): Promise<InventoryAnalytics> {
 
     if (batchError) throw batchError;
 
-    // Calculate total stock values from medicine_batches (real prices are here)
-    const totalCostValue = (batches || []).reduce((sum: number, batch: any) =>
-      sum + ((batch.current_quantity || 0) * (batch.purchase_price || 0)), 0);
-    const totalRetailValue = (batches || []).reduce((sum: number, batch: any) =>
-      sum + ((batch.current_quantity || 0) * (batch.selling_price || 0)), 0);
+    // Calculate total stock values from medicine_batches with price fallback
+    let totalCostValue = 0;
+    let totalRetailValue = 0;
+    
+    (batches || []).forEach((batch: any) => {
+      const med = (medications || []).find((m: any) => m.id === batch.medicine_id);
+      const cp = batch.purchase_price || med?.purchase_price || 0;
+      const sp = batch.selling_price || med?.selling_price || 0;
+      const qty = batch.current_quantity || 0;
+      
+      totalCostValue += qty * cp;
+      totalRetailValue += qty * sp;
+    });
+
     const profitMargin = totalCostValue > 0 ? ((totalRetailValue - totalCostValue) / totalCostValue) * 100 : 0;
 
-    // Stock summary from medicine_batches
-    const totalUnits = (batches || []).reduce((sum: number, batch: any) => sum + (batch.current_quantity || 0), 0);
+    // Stock summary
+    const totalUnits = (medications || []).reduce((sum: number, med: any) => sum + (med.available_stock || 0), 0);
     const lowStockItems = (medications || []).filter((med: any) =>
-      med.available_stock <= 10 && med.available_stock > 0).length;
+      (med.available_stock <= (med.minimum_stock_level || 10))).length;
 
     const now = new Date();
+    // For expired items, use IST today comparison
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const todayISTStr = new Date(now.getTime() + istOffset).toISOString().split('T')[0];
+    const todayISTStart = new Date(new Date(todayISTStr).getTime() - istOffset);
+    
     const expiredItems = (batches || []).filter((batch: any) =>
-      new Date(batch.expiry_date) < now && batch.current_quantity > 0).length;
+      new Date(batch.expiry_date) < todayISTStart && batch.current_quantity > 0).length;
 
     const ninetyDaysFromNow = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
     const expiringSoonItems = (batches || []).filter((batch: any) =>
-      new Date(batch.expiry_date) >= now &&
+      new Date(batch.expiry_date) >= todayISTStart &&
       new Date(batch.expiry_date) <= ninetyDaysFromNow &&
       batch.current_quantity > 0).length;
 

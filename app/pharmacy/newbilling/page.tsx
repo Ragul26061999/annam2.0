@@ -221,7 +221,7 @@ function NewBillingPageInner() {
     discountType: 'amount',
     discountValue: 0,
     discountAmount: 0,
-    taxPercent: 5,
+    taxPercent: 0,
     taxAmount: 0,
     totalAmount: 0
   });
@@ -257,7 +257,7 @@ function NewBillingPageInner() {
     name,
     customer: { type: 'walk_in', name: '', phone: '' },
     billItems: [],
-    billTotals: { subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 5, taxAmount: 0, totalAmount: 0 },
+    billTotals: { subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 0, taxAmount: 0, totalAmount: 0 },
     payments: [{ method: 'cash', amount: 0, reference: '' }],
     searchTerm: '',
     patientSearch: '',
@@ -4048,7 +4048,7 @@ function NewBillingPageInner() {
                       // Reset current tab to fresh state instead of reloading
                       setBillItems([]);
                       setCustomer({ type: 'walk_in', name: '', phone: '' });
-                      setBillTotals({ subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 5, taxAmount: 0, totalAmount: 0 });
+                      setBillTotals({ subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 0, taxAmount: 0, totalAmount: 0 });
                       setPayments([{ method: 'cash', amount: 0, reference: '' }]);
                       setSearchTerm('');
                       setPatientSearch('');
