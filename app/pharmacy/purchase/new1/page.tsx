@@ -397,6 +397,61 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
     setShowDrugDropdown(false)
     setActiveDrugSearchIndex(null)
     setDrugSearchTerm('')
+
+    // Focus next field in the row (Pack Size) after selection
+    setTimeout(() => {
+      const currentRow = document.querySelectorAll('tbody tr')[index]
+      if (currentRow) {
+        const nextInput = currentRow.querySelector('input[type="number"]') as HTMLInputElement
+        if (nextInput) nextInput.focus()
+      }
+    }, 100)
+  }
+
+  const handleEnterNavigation = (e: React.KeyboardEvent, rowIndex: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const row = (e.currentTarget as HTMLElement).closest('tr')
+      if (!row) return
+
+      const allInputs = Array.from(row.querySelectorAll('input'))
+        .filter(input => !input.readOnly && !input.disabled && input.type !== 'hidden') as HTMLInputElement[]
+      
+      const currentIndex = allInputs.indexOf(e.currentTarget as HTMLInputElement)
+      
+      if (currentIndex < allInputs.length - 1) {
+        // Move to next input in same row
+        allInputs[currentIndex + 1].focus()
+        allInputs[currentIndex + 1].select?.()
+      } else {
+        // Last input in row, move to next row or add one
+        if (rowIndex < items.length - 1) {
+          setTimeout(() => {
+            const nextRow = document.querySelectorAll('tbody tr')[rowIndex + 1]
+            if (nextRow) {
+              const firstInput = nextRow.querySelector('input') as HTMLInputElement
+              if (firstInput) {
+                firstInput.focus()
+                firstInput.select?.()
+              }
+            }
+          }, 10)
+        } else {
+          // Add new row and focus it
+          addItem()
+          setTimeout(() => {
+            const nextRow = document.querySelectorAll('tbody tr')[rowIndex + 1]
+            if (nextRow) {
+              const firstInput = nextRow.querySelector('input') as HTMLInputElement
+              if (firstInput) {
+                firstInput.focus()
+                firstInput.select?.()
+              }
+            }
+          }, 100)
+        }
+      }
+    }
   }
 
   // ─── Print Barcode for Batches ────────────────────────────────────────────────────
@@ -1005,6 +1060,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900 truncate flex-1">{item.medication_name}</span>
                           <button onClick={() => updateItem(item.key, 'medication_id', '')}
+                            tabIndex={-1}
                             className="text-gray-400 hover:text-red-500 shrink-0 p-1 hover:bg-red-50 rounded transition-colors">
                             <RotateCcw className="w-3 h-3" />
                           </button>
@@ -1083,6 +1139,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     <td className="px-2 py-2 border-r border-gray-100">
                       <input type="number" value={item.pack_size || ''}
                         onChange={e => updateItem(item.key, 'pack_size', parseInt(e.target.value) || 1)}
+                        onKeyDown={e => handleEnterNavigation(e, idx)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         min="1" />
                     </td>
@@ -1091,6 +1148,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     <td className="px-2 py-2 border-r border-gray-100">
                       <input type="number" value={item.rate || ''}
                         onChange={e => updateItem(item.key, 'rate', parseFloat(e.target.value) || 0)}
+                        onKeyDown={e => handleEnterNavigation(e, idx)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         step="0.01" min="0" />
                     </td>
@@ -1108,6 +1166,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                         <div>
                           <input type="number" value={item.mrp || ''}
                             onChange={e => updateItem(item.key, 'mrp', parseFloat(e.target.value) || 0)}
+                            onKeyDown={e => handleEnterNavigation(e, idx)}
                             className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             step="0.01" min="0" />
                         </div>
@@ -1116,6 +1175,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                             <label className="text-[10px] text-orange-600 block">Free MRP</label>
                             <input type="number" value={item.free_mrp || ''}
                               onChange={e => updateItem(item.key, 'free_mrp', parseFloat(e.target.value) || 0)}
+                              onKeyDown={e => handleEnterNavigation(e, idx)}
                               className="w-full border border-orange-200 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-orange-50 transition-colors"
                               step="0.01" min="0" />
                           </div>
@@ -1172,11 +1232,21 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                                   updateItem(item.key, 'expiry_date', d)
                                 }
                               }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  if (item.expiry_date.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                                    handleEnterNavigation(e, idx)
+                                  } else {
+                                    e.preventDefault() // Don't move if invalid
+                                  }
+                                }
+                              }}
                               placeholder="DD-MM-YYYY"
                               className="w-full border border-gray-300 rounded px-1 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors pr-8 relative z-10"
                             />
                             <button
                               type="button"
+                              tabIndex={-1}
                               onClick={(e) => {
                                 const button = e.currentTarget
                                 const rect = button.getBoundingClientRect()
@@ -1278,11 +1348,15 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                                     updateItem(item.key, 'free_expiry_date', d)
                                   }
                                 }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') handleEnterNavigation(e, idx)
+                                }}
                                 placeholder="DD-MM-YYYY"
                                 className="w-full border border-orange-200 rounded px-1 py-1 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-orange-50 transition-colors pr-8 relative z-10"
                               />
                               <button
                                 type="button"
+                                tabIndex={-1}
                                 onClick={(e) => {
                                   const button = e.currentTarget
                                   const rect = button.getBoundingClientRect()
@@ -1352,6 +1426,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     <td className="px-2 py-2 border-r border-gray-100">
                       <input type="text" value={item.batch_number}
                         onChange={e => updateItem(item.key, 'batch_number', e.target.value)}
+                        onKeyDown={e => handleEnterNavigation(e, idx)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         placeholder="Batch" />
                     </td>
@@ -1360,6 +1435,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     <td className="px-2 py-2 border-r border-gray-100">
                       <input type="number" value={item.quantity || ''}
                         onChange={e => updateItem(item.key, 'quantity', parseInt(e.target.value) || 0)}
+                        onKeyDown={e => handleEnterNavigation(e, idx)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         min="0" />
                     </td>
@@ -1368,6 +1444,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     <td className="px-2 py-2 border-r border-gray-100">
                       <input type="number" value={item.free_quantity || ''}
                         onChange={e => updateItem(item.key, 'free_quantity', parseInt(e.target.value) || 0)}
+                        onKeyDown={e => handleEnterNavigation(e, idx)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-orange-50 transition-colors"
                         min="0" />
                     </td>
@@ -1376,6 +1453,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     <td className="px-2 py-2 border-r border-gray-100">
                       <input type="number" value={item.gst_percent || ''}
                         onChange={e => updateItem(item.key, 'gst_percent', parseFloat(e.target.value) || 0)}
+                        onKeyDown={e => handleEnterNavigation(e, idx)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         min="0" max="28" step="0.01" />
                     </td>
@@ -1384,6 +1462,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     <td className="px-2 py-2 border-r border-gray-100">
                       <input type="number" value={item.discount_percent || ''}
                         onChange={e => updateItem(item.key, 'discount_percent', parseFloat(e.target.value) || 0)}
+                        onKeyDown={e => handleEnterNavigation(e, idx)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         min="0" max="100" step="0.01" />
                     </td>
@@ -1403,6 +1482,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
                     {/* Delete */}
                     <td className="px-2 py-2 text-center">
                       <button onClick={() => removeItem(item.key)}
+                        tabIndex={-1}
                         className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors"
                         title="Remove">
                         <Trash2 className="w-3.5 h-3.5" />
