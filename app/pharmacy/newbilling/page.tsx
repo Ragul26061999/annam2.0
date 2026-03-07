@@ -302,15 +302,50 @@ function NewBillingPageInner() {
     phoneError: ''
   });
 
-  // Initialize first tab
+  // Persistent Storage Management: Load/Save tabs to localStorage
   useEffect(() => {
+    // Initial Load
+    const saved = localStorage.getItem('annam_pharmacy_billing_tabs_v2');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Normalize some UI states that shouldn't persist across sessions or should reset
+          const sanitized = parsed.map(tab => ({
+            ...tab,
+            showMedicineDropdown: false,
+            showPatientDropdown: false,
+            error: null,
+            // Keep billItems and customer as they are critical
+          }));
+          setTabs(sanitized);
+          // Use switchTab to sync individual states from the first tab
+          switchTab(0, sanitized);
+          return;
+        }
+      } catch (e) {
+        console.error('Error loading saved billing state:', e);
+      }
+    }
+
+    // Default initialization if no saved state
     if (tabs.length === 0) {
       const firstTab = createNewTabState('Tab 1');
-      // Set initial state from URL if provided
       if (typeFromUrl === 'intent') firstTab.customer.type = 'intent';
       setTabs([firstTab]);
     }
   }, []);
+
+  // Save to localStorage whenever tabs array changes
+  useEffect(() => {
+    if (tabs.length > 0) {
+      try {
+        localStorage.setItem('annam_pharmacy_billing_tabs_v2', JSON.stringify(tabs));
+      } catch (e) {
+        console.warn('Storage limit potentially exceeded or error saving billing state:', e);
+      }
+    }
+  }, [tabs]);
 
   const addNewTab = () => {
     const newTabName = `Tab ${tabs.length + 1}`;
