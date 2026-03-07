@@ -7,6 +7,7 @@ import { getBatchPurchaseHistory, getBatchStockStats, editStockTransaction, adju
 import { supabase } from '@/src/lib/supabase'
 import type { BatchPurchaseHistoryEntry, StockTransaction, StockTruthRecord, MedicineStockSummary, ComprehensiveMedicineData } from '@/src/lib/pharmacyService'
 import MedicineEntryForm from '@/src/components/MedicineEntryForm'
+import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect'
 
 // ... rest of the code remains the same ...
 interface MedicineBatch {
@@ -437,7 +438,7 @@ export default function InventoryPage() {
     const batchNumbers = Array.from(new Set(
       medicines.flatMap(m => m.batches.map(b => b.batch_number))
     )).filter(batchNumber => batchNumber && batchNumber.trim() !== ''); // Filter out invalid batch numbers
-    
+
     if (batchNumbers.length === 0) return
       ; (async () => {
         try {
@@ -514,7 +515,7 @@ export default function InventoryPage() {
         // Fetch batches with unit selling prices using RPC function
         const { data: allBatches, error: rpcErr } = await supabase.rpc('get_batches_with_unit_price')
         if (rpcErr) throw rpcErr
-        
+
         // Filter batches by medicine IDs for each chunk
         for (const ids of idChunks) {
           const chunkBatches = allBatches.filter((b: any) => ids.includes(b.medicine_id))
@@ -544,7 +545,7 @@ export default function InventoryPage() {
       // Fetch purchase data for pack size calculations
       const batchNumbers = (batches || []).map((b: any) => b.batch_number).filter(Boolean)
       let purchaseDataMap: Record<string, { quantity: number; pack_size: number }> = {}
-      
+
       if (batchNumbers.length > 0) {
         const chunk = <T,>(arr: T[], size: number) => {
           const out: T[][] = []
@@ -552,13 +553,13 @@ export default function InventoryPage() {
           return out
         }
         const numberChunks = chunk(batchNumbers, 200)
-        
+
         for (const numbers of numberChunks) {
           const { data: purchaseItems } = await supabase
             .from('drug_purchase_items')
             .select('batch_number, quantity, pack_size')
             .in('batch_number', numbers)
-          
+
           if (purchaseItems) {
             purchaseItems.forEach((item: any) => {
               if (item.batch_number) {
@@ -577,7 +578,7 @@ export default function InventoryPage() {
         const batchesMapped: MedicineBatch[] = mBatches.map((b: any) => {
           const purchaseInfo = purchaseDataMap[b.batch_number] || { quantity: 0, pack_size: 1 }
           const totalMedicineCount = purchaseInfo.quantity * purchaseInfo.pack_size
-          
+
           return {
             id: b.id,
             medicine_id: b.medicine_id,
@@ -593,12 +594,12 @@ export default function InventoryPage() {
             total_medicine_count: totalMedicineCount
           }
         })
-        
+
         // Calculate total stock from batches (current stock) and total medicine count
         const calculatedTotalStock = batchesMapped.reduce((sum, batch) => sum + batch.quantity, 0)
         const totalMedicineCount = batchesMapped.reduce((sum, batch) => sum + (batch.total_medicine_count || 0), 0)
         const finalTotalStock = calculatedTotalStock + totalMedicineCount
-        
+
         return {
           id: m.id,
           name: m.name,
@@ -884,7 +885,7 @@ export default function InventoryPage() {
     const totalBatches = medicines.reduce((sum, m) => sum + m.batches.length, 0)
     const lowStock = medicines.filter(m => m.total_stock <= m.min_stock_level && m.total_stock > 0).length
     const expired = medicines.filter(m => m.batches.some(b => new Date(b.expiry_date) < new Date())).length
-    const expiringSoon = medicines.filter(m => 
+    const expiringSoon = medicines.filter(m =>
       m.batches.some(b => {
         const isExpired = new Date(b.expiry_date) < new Date()
         return !isExpired && isExpiringSoon(b.expiry_date)
@@ -1645,36 +1646,36 @@ export default function InventoryPage() {
       {/* Modern Header */}
       {!embedded && (
         <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="container mx-auto px-6 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => window.history.back()}
+                  className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
+                  <Package className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                    Pharmacy Inventory Management
+                  </h1>
+                  <p className="text-gray-600 mt-1">Manage medicines with batch-wise tracking and real-time stock monitoring</p>
+                </div>
+              </div>
               <button
-                onClick={() => window.history.back()}
-                className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => setShowAddMedicine(true)}
+                className="group relative px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+                Add Medicine
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 -z-10"></div>
               </button>
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  Pharmacy Inventory Management
-                </h1>
-                <p className="text-gray-600 mt-1">Manage medicines with batch-wise tracking and real-time stock monitoring</p>
-              </div>
             </div>
-            <button
-              onClick={() => setShowAddMedicine(true)}
-              className="group relative px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-              Add Medicine
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 -z-10"></div>
-            </button>
           </div>
         </div>
-      </div>
       )}
 
       <div className="container mx-auto px-6 py-8 space-y-8">
@@ -2089,23 +2090,11 @@ export default function InventoryPage() {
                     />
                   </div>
 
-                  {/* Dosage Form */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                      Dosage Form
-                    </label>
-                    <select
-                      value={editingMedicine.unit}
-                      onChange={(e) => setEditingMedicine({ ...editingMedicine, unit: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white/50 backdrop-blur-sm appearance-none cursor-pointer transition-all duration-200"
-                    >
-                      <option value="">Select dosage form</option>
-                      {dosageTypes.map((dt) => (
-                        <option key={dt} value={dt}>{dt}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <DosageFormSelect
+                    value={editingMedicine.unit}
+                    onChange={(val) => setEditingMedicine({ ...editingMedicine, unit: val })}
+                    className="mt-1"
+                  />
 
                   {/* Minimum Stock Level */}
                   <div>
@@ -2279,11 +2268,10 @@ export default function InventoryPage() {
               <div className="flex items-center bg-white/50 backdrop-blur-sm border border-gray-200 rounded-xl overflow-hidden">
                 <button
                   onClick={() => setSortOrder('asc')}
-                  className={`px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-                    sortOrder === 'asc'
+                  className={`px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center gap-2 ${sortOrder === 'asc'
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-gray-700 hover:bg-gray-100 hover:text-blue-600'
-                  }`}
+                    }`}
                   title="Sort A-Z (Ascending)"
                 >
                   <span className="text-xs">A-Z</span>
@@ -2291,11 +2279,10 @@ export default function InventoryPage() {
                 </button>
                 <button
                   onClick={() => setSortOrder('desc')}
-                  className={`px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-                    sortOrder === 'desc'
+                  className={`px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center gap-2 ${sortOrder === 'desc'
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-gray-700 hover:bg-gray-100 hover:text-blue-600'
-                  }`}
+                    }`}
                   title="Sort Z-A (Descending)"
                 >
                   <span className="text-xs">Z-A</span>

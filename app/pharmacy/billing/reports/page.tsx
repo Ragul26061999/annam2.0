@@ -22,7 +22,7 @@ import html2canvas from 'html2canvas'
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
-type ReportType = 'dashboard' | 'closing_drug' | 'billwise_sales' | 'drugwise_sales' | 'indent' | 'purchase_gst' | 'purchase' | 'purchase_value' | 'sale'
+type ReportType = 'dashboard' | 'closing_drug' | 'expiring_soon' | 'billwise_sales' | 'drugwise_sales' | 'indent' | 'purchase_gst' | 'purchase' | 'purchase_value' | 'sale'
 
 export default function PharmacyBillingReportsPage() {
     const reportRef = useRef<HTMLDivElement>(null)
@@ -50,6 +50,7 @@ export default function PharmacyBillingReportsPage() {
     const REPORT_OPTIONS: { value: ReportType, label: string, icon: any }[] = [
         { value: 'dashboard', label: 'Operations Overview', icon: <LayoutDashboard className="h-4 w-4" /> },
         { value: 'closing_drug', label: 'Closing Drug Report', icon: <Package className="h-4 w-4" /> },
+        { value: 'expiring_soon', label: 'Expiring Soon', icon: <AlertCircle className="h-4 w-4" /> },
         { value: 'billwise_sales', label: 'Billwise Sales Reports', icon: <Receipt className="h-4 w-4" /> },
         { value: 'drugwise_sales', label: 'Drugwise Sales', icon: <Activity className="h-4 w-4" /> },
         { value: 'indent', label: 'Indent Reports', icon: <FileText className="h-4 w-4" /> },
@@ -173,6 +174,22 @@ export default function PharmacyBillingReportsPage() {
                     data = batches || []
                     break
 
+                case 'expiring_soon':
+                    const today = new Date()
+                    const todayStr = today.toISOString().split('T')[0]
+                    const soon = new Date()
+                    soon.setDate(today.getDate() + 30)
+                    const soonStr = soon.toISOString().split('T')[0]
+
+                    const { data: expBatches } = await supabase
+                        .from('medicine_batches')
+                        .select(`*, medication:medications(name, category, rack_location)`)
+                        .lte('expiry_date', soonStr)
+                        .gte('expiry_date', todayStr)
+                        .order('expiry_date', { ascending: true })
+                    data = expBatches || []
+                    break
+
                 case 'billwise_sales':
                 case 'sale':
                     let saleQuery = supabase
@@ -291,6 +308,7 @@ export default function PharmacyBillingReportsPage() {
 
         switch (selectedReport) {
             case 'closing_drug': return `${deptStr}Closing Drug status Report`
+            case 'expiring_soon': return `${deptStr}Expiring Soon Medicine Report`
             case 'billwise_sales': return `${deptStr}Billwise Sales Report`
             case 'drugwise_sales': return `${deptStr}Drugwise Sales Report`
             case 'indent': return `${deptStr}Indent Reports`
@@ -352,7 +370,7 @@ export default function PharmacyBillingReportsPage() {
         }
 
         // Map columns based on report type
-        if (selectedReport === 'closing_drug') {
+        if (selectedReport === 'closing_drug' || selectedReport === 'expiring_soon') {
             headers = ['MEDICAL FORMULATION', 'BATCH', 'STORAGE RACK', 'QUANTITY', 'EXPIRY']
             data = filteredAndSortedData.map(item => [
                 item.medication?.name || 'Generic',
@@ -764,7 +782,7 @@ export default function PharmacyBillingReportsPage() {
                                 </div>
                             ) : filteredAndSortedData.length > 0 ? (
                                 <div className="overflow-x-auto">
-                                    {selectedReport === 'closing_drug' ? (
+                                    {selectedReport === 'closing_drug' || selectedReport === 'expiring_soon' ? (
                                         <table className="w-full text-left">
                                             <thead className="bg-gray-50/50">
                                                 <tr className="border-b border-gray-100">

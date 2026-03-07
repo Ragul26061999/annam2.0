@@ -23,6 +23,7 @@ import {
   FormSection,
   BarcodeDisplay,
 } from './ui/FormComponents';
+import { DosageFormSelect } from './ui/DosageFormSelect';
 
 interface MedicineFormData {
   medication_code: string;
@@ -621,11 +622,10 @@ const MedicineEntryForm: React.FC<MedicineEntryFormProps> = ({
                         onChange={(e) => setMedicineForm({ ...medicineForm, category: e.target.value })}
                         options={['Antibiotic', 'Analgesic', 'Antipyretic', 'Antihistamine', 'Antacid', 'Vitamin', 'Supplement', 'Other']}
                       />
-                      <FormSelect
-                        label="Dosage Form"
+                      <DosageFormSelect
                         value={medicineForm.dosage_form}
-                        onChange={(e) => setMedicineForm({ ...medicineForm, dosage_form: e.target.value })}
-                        options={['Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Ointment', 'Powder', 'Drops']}
+                        onChange={(val) => setMedicineForm({ ...medicineForm, dosage_form: val })}
+                        error={hasError('dosage_form')}
                       />
                       <FormInput
                         label="Strength"

@@ -26,6 +26,7 @@ import {
   Info,
   Printer
 } from 'lucide-react';
+import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect';
 import { supabase } from '@/src/lib/supabase';
 
 interface Medication {
@@ -736,17 +737,11 @@ export default function PharmacyOverviewPage() {
                           </div>
 
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Dosage Form</label>
-                            <select
+                            <DosageFormSelect
                               value={draft.dosage_form ?? ''}
-                              onChange={(e) => setDraft((p) => ({ ...(p || {}), dosage_form: e.target.value }))}
-                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:border-transparent"
-                            >
-                              <option value="">Select form</option>
-                              {DOSAGE_FORMS.map((df) => (
-                                <option key={df} value={df}>{df}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setDraft((p) => ({ ...(p || {}), dosage_form: val }))}
+                              className="mt-0"
+                            />
                           </div>
 
                           <div>
