@@ -2349,24 +2349,22 @@ export async function createGroupedLabOrder(params: CreateGroupedLabOrderParams)
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
     // Ensure we have a diagnostic_groups row (group_id is a FK and NOT NULL on diagnostic_group_orders)
-    let groupId = params.group_id || null;
-    if (!groupId) {
-      const { data: newGroup, error: groupErr } = await supabase
-        .from('diagnostic_groups')
-        .insert({
-          name: params.group_name || `Lab Order - ${new Date().toLocaleDateString()}`,
-          category: 'Lab',
-          is_active: true
-        })
-        .select('id')
-        .single();
+    // Always create a new group to avoid FK violations from invalid provided group_ids
+    const { data: newGroup, error: groupErr } = await supabase
+      .from('diagnostic_groups')
+      .insert({
+        name: params.group_name || `Lab Order - ${new Date().toLocaleDateString()}`,
+        category: 'Lab',
+        is_active: true
+      })
+      .select('id')
+      .single();
 
-      if (groupErr || !newGroup?.id) {
-        safeLog('Failed to create diagnostic group:', groupErr || new Error('No group id returned'));
-        throw groupErr || new Error('Failed to create diagnostic group');
-      }
-      groupId = newGroup.id;
+    if (groupErr || !newGroup?.id) {
+      safeLog('Failed to create diagnostic group:', groupErr || new Error('No group id returned'));
+      throw groupErr || new Error('Failed to create diagnostic group');
     }
+    const groupId = newGroup.id;
 
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
