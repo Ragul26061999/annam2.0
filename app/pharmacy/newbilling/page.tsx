@@ -2800,15 +2800,20 @@ function NewBillingPageInner() {
                         />
                       </div>
                       <div className="col-span-3">
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+                        <label className="block text-xs font-medium text-slate-600 mb-1 flex justify-between items-center">
+                          <span>Phone</span>
+                          {phoneError && <span className="text-[10px] text-red-500">{phoneError}</span>}
+                        </label>
                         <input
                           type="text"
                           value={customer.phone || ''}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setCustomer({ ...customer, phone: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-slate-50 text-slate-700"
-                          readOnly
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            const raw = e.target.value;
+                            setCustomer({ ...customer, phone: raw });
+                            setPhoneError(raw.replace(/\D/g, '').length > 10 ? 'Max 10 digits' : '');
+                          }}
+                          placeholder="Enter phone number"
+                          className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${phoneError ? 'border-red-300' : 'border-slate-200'}`}
                         />
                       </div>
                     </>
@@ -2827,15 +2832,20 @@ function NewBillingPageInner() {
                         />
                       </div>
                       <div className="col-span-3">
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+                        <label className="block text-xs font-medium text-slate-600 mb-1 flex justify-between items-center">
+                          <span>Phone</span>
+                          {phoneError && <span className="text-[10px] text-red-500">{phoneError}</span>}
+                        </label>
                         <input
                           type="text"
                           value={customer.phone || ''}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setCustomer({ ...customer, phone: e.target.value })
-                          }
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            const raw = e.target.value;
+                            setCustomer({ ...customer, phone: raw });
+                            setPhoneError(raw.replace(/\D/g, '').length > 10 ? 'Max 10 digits' : '');
+                          }}
                           placeholder="Enter phone number"
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${phoneError ? 'border-red-300' : 'border-slate-200'}`}
                         />
                       </div>
                     </>
@@ -3341,7 +3351,7 @@ function NewBillingPageInner() {
                     </div>
                   ) : (
                     <div className="border border-slate-100 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-[40px,1.7fr,0.7fr,0.6fr,0.9fr,60px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
+                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
                         <span>Sl.</span>
                         <span>Drug / Batch</span>
                         <span className="text-right">Rate</span>
@@ -3354,7 +3364,7 @@ function NewBillingPageInner() {
                         {billItems.map((item, index) => (
                           <div
                             key={`${item.medicine.id}-${item.batch.id}`}
-                            className="grid grid-cols-[40px,1.7fr,0.7fr,0.6fr,0.9fr,60px] items-center px-3 py-2 text-slate-700"
+                            className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] items-center px-3 py-2 text-slate-700"
                           >
                             <span>{index + 1}</span>
                             <div className="flex flex-col">
@@ -3571,7 +3581,7 @@ function NewBillingPageInner() {
                     </div>
                   ) : (
                     <div className="border border-slate-100 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-[40px,1.7fr,0.7fr,0.6fr,0.9fr,60px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
+                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
                         <span>Sl.</span>
                         <span>Drug / Batch</span>
                         <span className="text-right">Rate</span>
@@ -3584,7 +3594,7 @@ function NewBillingPageInner() {
                         {billItems.map((item, index) => (
                           <div
                             key={`${item.medicine.id}-${item.batch.id}`}
-                            className="grid grid-cols-[40px,1.7fr,0.7fr,0.6fr,0.9fr,60px] items-center px-3 py-2 text-slate-700"
+                            className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] items-center px-3 py-2 text-slate-700"
                           >
                             <span>{index + 1}</span>
                             <div className="flex flex-col">
