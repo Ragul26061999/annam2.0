@@ -70,7 +70,7 @@ export const DosageFormSelect: React.FC<DosageFormSelectProps> = ({
         setNewFormName('');
         setIsAdding(false);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add dosage form:', err?.message || err);
       alert('Failed to add dosage form. Please try again.');
     } finally {
