@@ -748,7 +748,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
     <div className="min-h-screen bg-gray-100">
       {/* ── Sticky Header ─────────────────────────────────────────────────── */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-[1850px] mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-lg">
               <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -783,7 +783,7 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-4 py-5 space-y-5">
+      <div className="max-w-[1850px] mx-auto px-4 py-5 space-y-5">
 
         {/* ── Search Existing Bill ─────────────────────────────────────────── */}
         <div className="bg-white rounded-lg shadow-sm border p-4">
@@ -974,22 +974,22 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
             <table className="w-full text-xs bg-white">
               <thead>
                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-300">
-                  <th className="px-3 py-3 text-left font-semibold text-gray-700 w-8 border-r border-gray-200">Sl</th>
-                  <th className="px-3 py-3 text-left font-semibold text-gray-700 min-w-[280px] border-r border-gray-200">Drug Name</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[80px] border-r border-gray-200">Pack Size</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[100px] border-r border-gray-200">Pack Rate</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[100px] border-r border-gray-200">Unit Rate</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[100px] border-r border-gray-200">Pack MRP</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[100px] border-r border-gray-200">Unit MRP</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[140px] border-r border-gray-200">Exp.Date</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[120px] border-r border-gray-200">Batch</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[80px] border-r border-gray-200">Pack Qty</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[80px] border-r border-gray-200">Free</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[80px] border-r border-gray-200">GST%</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[80px] border-r border-gray-200">Disc%</th>
+                  <th className="px-2 py-3 text-left font-semibold text-gray-700 w-8 border-r border-gray-200">Sl</th>
+                  <th className="px-3 py-3 text-left font-semibold text-gray-700 min-w-[250px] border-r border-gray-200">Drug Name</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[65px] border-r border-gray-200">Pack size</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[95px] border-r border-gray-200">Pack Rate</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[95px] border-r border-gray-200">Unit Rate</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[95px] border-r border-gray-200">Pack MRP</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[95px] border-r border-gray-200">Unit MRP</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[130px] border-r border-gray-200">Exp.Date</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[110px] border-r border-gray-200">Batch</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[75px] border-r border-gray-200">Pack Qty</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[65px] border-r border-gray-200">Free</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[65px] border-r border-gray-200">GST%</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[65px] border-r border-gray-200">Disc%</th>
                   <th className="px-3 py-3 text-right font-semibold text-gray-700 min-w-[100px] border-r border-gray-200">Total</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 min-w-[80px] border-r border-gray-200">Profit%</th>
-                  <th className="px-3 py-3 text-center font-semibold text-gray-700 w-8"></th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 min-w-[75px] border-r border-gray-200">Profit%</th>
+                  <th className="px-2 py-3 text-center font-semibold text-gray-700 w-8"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
