@@ -1907,46 +1907,35 @@ function NewBillingPageInner() {
       let billData: any = null;
       {
         const base = {
-          bill_number: billNumber, // Use our generated bill number
-          patient_id: customer.type === 'patient' ? customer.patient_uuid : null, // Set to null for walk-in customers
+          bill_number: billNumber,
+          patient_id: customer.type === 'patient' ? customer.patient_uuid : null,
           encounter_id: linkedPrescriptionEncounterId,
           currency: 'INR',
           subtotal: billTotals.subtotal,
           discount_type: billTotals.discountType,
           discount_value: billTotals.discountValue,
-          tax_percent: billTotals.taxPercent,
+          discount_amount: billTotals.discountAmount,
+          tax_percent: billTotals.taxPercent || 0,
+          tax: billTotals.taxAmount || 0,
           payment_method: normalizeMethod(payments[0].method),
           customer_name: customer.name.trim(),
           customer_phone: customer.type === 'patient' ? (customer.phone ?? null) : (customer.phone ?? '').trim(),
           customer_type: customer.type,
-          staff_id: validatedStaffId
+          staff_id: validatedStaffId,
+          payment_status: billTotals.totalAmount <= payments.reduce((sum, p) => sum + (p.amount || 0), 0) ? 'paid' : 'partial'
         } as any;
 
-        // Attempt 1: insert with total_amount
+        // Insert billing record (total is a generated column, so we don't insert it)
         const { data: d1, error: e1 } = await supabase
           .from('billing')
-          .insert({ ...base, total_amount: billTotals.totalAmount })
+          .insert(base)
           .select('*')
           .single();
 
         if (!e1) {
           billData = d1;
         } else {
-          const msg = (e1.message || '').toLowerCase();
-          // If total_amount missing OR total is a generated column, retry WITHOUT any total field
-          const looksLikeColumnMissing = msg.includes("'total_amount'") || msg.includes('total_amount') || (msg.includes('column') && msg.includes('not') && msg.includes('found'));
-          const looksLikeGeneratedTotal = msg.includes('generated') && msg.includes('total') || msg.includes('non-default') && msg.includes('total');
-          if (looksLikeColumnMissing || looksLikeGeneratedTotal) {
-            const { data: d2, error: e2 } = await supabase
-              .from('billing')
-              .insert({ ...base })
-              .select('*')
-              .single();
-            if (e2) throw e2;
-            billData = d2;
-          } else {
-            throw e1;
-          }
+          throw e1;
         }
       }
 
@@ -1989,24 +1978,21 @@ function NewBillingPageInner() {
           // Add to GST ledger
           const gstLedgerData = {
             transaction_date: new Date().toISOString().split('T')[0],
-            transaction_type: 'sale',
-            reference_type: 'billing',
+            transaction_type: 'sales',
             reference_id: billData!.id,
             reference_number: billNumber,
+            party_type: 'customer',
             party_name: customer.name || 'Unknown Customer',
-            party_gstin: null, // Customer GSTIN not collected in current system
-            hsn_code: null, // HSN code not available in current system
+            party_gstin: null,
             taxable_amount: Math.round(taxableAmount * 100) / 100,
-            cgst_rate: billTotals.taxPercent / 2,
+            cgst_percent: billTotals.taxPercent / 2,
             cgst_amount: Math.round(cgstAmount * 100) / 100,
-            sgst_rate: billTotals.taxPercent / 2,
+            sgst_percent: billTotals.taxPercent / 2,
             sgst_amount: Math.round(sgstAmount * 100) / 100,
-            igst_rate: 0,
+            igst_percent: 0,
             igst_amount: 0,
             total_gst: Math.round(gstAmount * 100) / 100,
-            total_amount: Math.round(item.total * 100) / 100,
-            gst_return_period: null,
-            filed_status: 'pending'
+            total_amount: Math.round(item.total * 100) / 100
           };
 
           console.log('GST Ledger Data:', gstLedgerData); // Debug log
@@ -2018,15 +2004,12 @@ function NewBillingPageInner() {
           if (gstError) {
             console.error('GST Ledger Insertion Error:', {
               error: gstError,
-              message: gstError.message,
-              details: gstError.details,
-              hint: gstError.hint,
-              code: gstError.code,
+              errorMessage: (gstError as any)?.message || 'No message',
+              errorDetails: (gstError as any)?.details || 'No details',
+              errorCode: (gstError as any)?.code || 'No code',
               item: item.medicine.name,
               billNumber: billNumber,
-              gstData: gstLedgerData,
-              billId: billData?.id,
-              customerName: customer.name
+              gstData: gstLedgerData
             });
             // Don't throw here - GST failure shouldn't block billing
           } else {
@@ -2086,12 +2069,12 @@ function NewBillingPageInner() {
         try {
           const { data: latestBillRow, error: latestBillErr } = await supabase
             .from('billing')
-            .select('id, total_amount, total, amount_paid, payment_method, payment_status')
+            .select('id, total, amount_paid, payment_method, payment_status')
             .eq('id', billData!.id)
             .single();
 
           if (!latestBillErr && latestBillRow) {
-            const total = Number((latestBillRow as any).total_amount ?? (latestBillRow as any).total ?? 0) || 0;
+            const total = Number((latestBillRow as any).total ?? 0) || 0;
             const paid = Number((latestBillRow as any).amount_paid ?? 0) || 0;
             const method = String((latestBillRow as any).payment_method ?? '').toLowerCase();
             const currentStatus = String((latestBillRow as any).payment_status ?? '').toLowerCase();
