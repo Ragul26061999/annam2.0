@@ -244,9 +244,9 @@ export default function DrugPurchasePage() {
               }
               .label-item.empty { visibility: hidden; }
               .header { text-align: center; font-size: 8px; font-weight: bold; margin-bottom: 0.5mm; }
-              .medicine-name { text-align: center; font-size: 7.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1.5mm; line-height: 1.2; }
-              .barcode-section { text-align: center; height: 11mm; display: flex; align-items: center; justify-content: center; }
-              #barcode { width: 32mm; height: 11mm; display: block; }
+              .medicine-name { text-align: center; font-size: 7.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5mm; line-height: 1.2; }
+              .barcode-section { text-align: center; height: 12mm; display: flex; align-items: center; justify-content: center; }
+              #barcode { width: 32mm; height: 12mm; display: block; }
             </style>
           </head>
           <body>
@@ -266,7 +266,7 @@ export default function DrugPurchasePage() {
                     JsBarcode('#barcode', value, {
                       format: "CODE128", 
                       displayValue: true, 
-                      fontSize: 8, 
+                      fontSize: 12, 
                       margin: 0, 
                       height: 25,
                       width: 1.2
@@ -407,7 +407,7 @@ export default function DrugPurchasePage() {
               }
               .label-item.empty { visibility: hidden; }
               .header { text-align: center; font-size: 8px; font-weight: bold; margin-bottom: 0.5mm; }
-              .medicine-name { text-align: center; font-size: 7.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1.5mm; line-height: 1.2; }
+              .medicine-name { text-align: center; font-size: 7.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.3mm; line-height: 1.2; }
               .barcode-section { text-align: center; height: 11mm; display: flex; align-items: center; justify-content: center; }
               .barcode { width: 32mm; height: 11mm; }
             </style>
@@ -424,7 +424,7 @@ export default function DrugPurchasePage() {
                      JsBarcode(el, val, {
                         format: "CODE128",
                         displayValue: true,
-                        fontSize: 8,
+                        fontSize: 12,
                         margin: 0,
                         height: 25,
                         width: 1.2
