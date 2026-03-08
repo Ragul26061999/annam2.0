@@ -214,14 +214,10 @@ export default function DrugPurchasePage() {
 
       const barcode = batchData?.batch_barcode || item.batch_number
 
-      const quantity = item.quantity
       const safeMedicineName = (item.medication_name || '').trim() || 'Unknown Medicine'
       const shortMedicineName = safeMedicineName.length > 25
         ? safeMedicineName.substring(0, 25) + '...'
         : safeMedicineName
-
-      const expiryDate = item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('en-GB') : (batchData?.expiry_date ? new Date(batchData.expiry_date).toLocaleDateString('en-GB') : 'N/A')
-      const printDate = new Date().toLocaleDateString('en-GB')
 
       const printWindow = window.open('', '_blank')
       if (!printWindow) return
@@ -232,14 +228,21 @@ export default function DrugPurchasePage() {
           <head>
             <title>Standard Medicine Label</title>
             <style>
-              @page { size: 35mm 20mm; margin: 0; }
+              @page { size: 105mm 20mm; margin: 0; }
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body { 
                 font-family: 'Arial', sans-serif;
+                width: 105mm; height: 20mm;
+                display: flex; flex-direction: row; 
+                background: white;
+              }
+              .label-item {
                 width: 35mm; height: 20mm;
                 display: flex; flex-direction: column; justify-content: flex-start;
-                padding: 2.5mm 1.5mm 0.5mm; font-size: 7px; line-height: 1; background: white;
+                padding: 2.5mm 1.5mm 0.5mm; font-size: 7px; line-height: 1;
+                border-right: 0.1mm dashed #eee;
               }
+              .label-item.empty { visibility: hidden; }
               .header { text-align: center; font-size: 8px; font-weight: bold; margin-bottom: 0.5mm; }
               .medicine-name { text-align: center; font-size: 7.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1.5mm; line-height: 1.2; }
               .barcode-section { text-align: center; height: 11mm; display: flex; align-items: center; justify-content: center; }
@@ -247,9 +250,14 @@ export default function DrugPurchasePage() {
             </style>
           </head>
           <body>
-            <div class="header">ANNAM HOSPITAL</div>
-            <div class="medicine-name">${shortMedicineName}</div>
-            <div class="barcode-section"><svg id="barcode"></svg></div>
+            <div class="label-item">
+              <div class="header">ANNAM HOSPITAL</div>
+              <div class="medicine-name">${shortMedicineName}</div>
+              <div class="barcode-section"><svg id="barcode"></svg></div>
+            </div>
+            <div class="label-item empty"></div>
+            <div class="label-item empty"></div>
+
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
             <script>
               (function() {
