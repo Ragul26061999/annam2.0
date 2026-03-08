@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Suspense, useState, useEffect } from 'react';
-import { Target, Plus, Search, X, Pill, Package, ArrowRight, Filter, Calendar, BarChart3, CheckCircle, Bell, ArrowRightLeft, ArrowLeft, Eye, Info, User } from 'lucide-react';
+import { Target, Plus, Search, X, Pill, Package, ArrowRight, Filter, Calendar, BarChart3, CheckCircle, Bell, ArrowRightLeft, ArrowLeft, Eye, Info, User, History as HistoryIcon, Truck, Clock, Layers, RefreshCw, Trash2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { getComprehensiveMedicineData, getBatchPurchaseHistory, getBatchStockStats } from '@/src/lib/pharmacyService';
 
@@ -864,6 +864,45 @@ function IntentPageInner() {
     return true;
   });
 
+  // Grouping logic for the table display ("Same concept as inventory")
+  // Using useMemo to avoid recalculating on every render
+  const groupedMedicines = React.useMemo(() => {
+    const groups: Record<string, any> = {};
+    filteredMedicines.forEach(med => {
+      const key = med.medication_id;
+      if (!groups[key]) {
+        groups[key] = {
+          ...med,
+          total_quantity: 0,
+          intent_batches: [],
+          batch_count: 0
+        };
+      }
+      groups[key].total_quantity += (med.quantity || 0);
+      groups[key].intent_batches.push(med);
+      groups[key].batch_count += 1;
+    });
+    return Object.values(groups);
+  }, [filteredMedicines]);
+
+  // Derive batches to display in the modal for the selected grouped medicine
+  const intentBatchesDisplay = React.useMemo(() => {
+    if (!selectedMedicineDetail || !comprehensiveMedicineData?.batches) return [];
+    
+    // Safely handle both grouped and single medicine objects
+    const intentBatches = (selectedMedicineDetail as any).intent_batches || [selectedMedicineDetail];
+    
+    return intentBatches.map((ib: any) => {
+      const mainBatch = comprehensiveMedicineData.batches.find((mb: any) => mb.batch_number === ib.batch_number);
+      return {
+        ...mainBatch,
+        ...ib, // Override with intent-specific data (quantity, mrp, etc.)
+        current_quantity: ib.quantity,
+        original_quantity: mainBatch?.quantity || ib.original_quantity || ib.quantity
+      };
+    }).sort((a: any, b: any) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+  }, [selectedMedicineDetail, comprehensiveMedicineData]);
+
   // Handle search input change
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
@@ -1133,7 +1172,7 @@ function IntentPageInner() {
                   <Pill className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-slate-900">{intentMedicines.length}</p>
+                  <p className="text-3xl font-bold text-slate-900">{groupedMedicines.length}</p>
                   <p className="text-sm font-medium text-slate-600">Medicines</p>
                 </div>
               </div>
@@ -1268,7 +1307,7 @@ function IntentPageInner() {
                 <div>
                   <h2 className="text-xl font-semibold text-slate-900">Medicines in Department</h2>
                   <p className="text-sm text-slate-500 mt-1">
-                    {selectedIntentType.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} • {filteredMedicines.length} items
+                    {selectedIntentType.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} • {groupedMedicines.length} Medicines ({intentMedicines.length} total batches)
                   </p>
                 </div>
               </div>
@@ -1294,7 +1333,7 @@ function IntentPageInner() {
             </div>
           </div>
 
-          {filteredMedicines.length === 0 ? (
+          {groupedMedicines.length === 0 ? (
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Package className="w-8 h-8 text-slate-400" />
@@ -1346,10 +1385,10 @@ function IntentPageInner() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
-                  {filteredMedicines.map((medicine, index) => (
+                  {groupedMedicines.map((medicine: any, index: number) => (
                     <tr
-                      key={medicine.id}
-                      className={`hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 cursor-pointer transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                      key={medicine.medication_id}
+                      className={`hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 cursor-pointer transition-all duration-200 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
                       onClick={() => openMedicineDetail(medicine)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1366,25 +1405,25 @@ function IntentPageInner() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-slate-900 font-medium">
-                          {medicine.combination || '—'}
+                          {medicine.combination || "—"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
-                          {medicine.dosage_type || '—'}
+                          {medicine.dosage_type || "—"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-slate-900">
-                          {medicine.manufacturer || '—'}
+                          {medicine.manufacturer || "—"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="text-sm font-medium text-slate-900 mr-2">
-                            {medicine.quantity}
+                            {medicine.total_quantity}
                           </div>
-                          {medicine.quantity < 10 && (
+                          {medicine.total_quantity < 10 && (
                             <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
                               Low
                             </span>
@@ -1392,64 +1431,65 @@ function IntentPageInner() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-slate-900 font-mono">
-                          {medicine.batch_number}
-                        </div>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          {medicine.batch_count} {medicine.batch_count === 1 ? 'batch' : 'batches'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${medicine.medicine_status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                          }`}>
-                          {medicine.medicine_status || 'active'}
+                        <span
+                          className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                            medicine.medicine_status === "active"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {medicine.medicine_status || "active"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
-                          <button
-                            className={`px-3 py-1 rounded-md transition-all text-xs font-bold shadow-md transform hover:scale-105 flex items-center gap-1 ${usageCart.some(item => item.medicine.id === medicine.id)
-                              ? 'bg-green-500 text-white'
-                              : 'bg-indigo-600 text-white'
+                          {medicine.batch_count === 1 && (
+                            <button
+                              className={`px-3 py-1 rounded-md transition-all text-xs font-bold shadow-md transform hover:scale-105 flex items-center gap-1 ${
+                                usageCart.some(
+                                  (item) => item.medicine.id === medicine.id
+                                )
+                                  ? "bg-green-500 text-white"
+                                  : "bg-indigo-600 text-white"
                               }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addToUsageCart(medicine, 1);
+                              }}
+                            >
+                              {usageCart.some(
+                                (item) => item.medicine.id === medicine.id
+                              ) ? (
+                                <>
+                                  <CheckCircle className="w-3 h-3" /> Added
+                                </>
+                              ) : (
+                                "Use for Patient"
+                              )}
+                            </button>
+                          )}
+                          <button
+                            className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors text-xs font-bold"
                             onClick={(e) => {
                               e.stopPropagation();
-                              addToUsageCart(medicine, 1);
-                              // Auto open modal on first add? Optional. 
-                              // Let's NOT open it so they can add many.
+                              openMedicineDetail(medicine);
                             }}
                           >
-                            {usageCart.some(item => item.medicine.id === medicine.id) ? (
-                              <><CheckCircle className="w-3 h-3" /> Added</>
-                            ) : (
-                              'Use for Patient'
-                            )}
+                            Details
                           </button>
                           <button
-                            className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
+                            className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded-md transition-colors text-xs font-bold"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openEditModal(medicine);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="text-green-600 hover:text-green-900 hover:bg-green-50 px-2 py-1 rounded-md transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openMoveModal(medicine);
+                              openMoveModal(medicine.intent_batches[0]);
                             }}
                           >
                             Move
-                          </button>
-                          <button
-                            className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteIntentMedicine(medicine);
-                            }}
-                          >
-                            Remove
                           </button>
                         </div>
                       </td>
@@ -1458,7 +1498,7 @@ function IntentPageInner() {
                           ₹{medicine.mrp.toFixed(0)}
                         </div>
                         <div className="text-xs text-slate-500">
-                          Total: ₹{(medicine.quantity * medicine.mrp).toFixed(0)}
+                          Total: ₹{(medicine.total_quantity * medicine.mrp).toFixed(0)}
                         </div>
                       </td>
                     </tr>
@@ -2118,8 +2158,8 @@ function IntentPageInner() {
                       {/* Medicine Info Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm mb-4">
                         <div>
-                          <div className="text-slate-300 text-xs font-medium mb-1">Batch</div>
-                          <div className="text-white font-semibold">{selectedMedicineDetail.batch_number}</div>
+                          <div className="text-slate-300 text-xs font-medium mb-1">Batches</div>
+                          <div className="text-white font-semibold">{(selectedMedicineDetail as any).batch_count || 1} Total</div>
                         </div>
                         <div>
                           <div className="text-slate-300 text-xs font-medium mb-1">Dosage Type</div>
@@ -2135,7 +2175,7 @@ function IntentPageInner() {
                         </div>
                         <div>
                           <div className="text-slate-300 text-xs font-medium mb-1">Dept. Stock</div>
-                          <div className="text-white font-semibold">{selectedMedicineDetail.quantity}</div>
+                          <div className="text-white font-semibold">{(selectedMedicineDetail as any).total_quantity || selectedMedicineDetail.quantity}</div>
                         </div>
                         <div>
                           <div className="text-slate-300 text-xs font-medium mb-1">MRP</div>
@@ -2199,71 +2239,132 @@ function IntentPageInner() {
                       </h3>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {comprehensiveMedicineData.batches.map((batch: any) => {
+                        {intentBatchesDisplay.map((batch: any) => {
                           const isExpired = new Date(batch.expiry_date) < new Date()
                           const expSoon = isExpiringSoon(batch.expiry_date)
                           const batchStats = batchStatsMap[batch.batch_number]
                           const remaining = batch.current_quantity || batch.quantity || 0
 
                           return (
-                            <div key={batch.id} className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                            <div key={batch.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col">
                               {/* Batch Header */}
-                              <div className="p-4 border-b border-gray-100">
+                              <div className="p-4 bg-slate-50 border-b border-gray-100">
                                 <div className="flex justify-between items-start">
                                   <div>
-                                    <h4 className="text-lg font-semibold text-gray-900">{batch.batch_number}</h4>
-                                    <p className="text-sm text-gray-500">Supplier: {batch.supplier_name || batch.supplier || 'N/A'}</p>
+                                    <h4 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                      <Layers className="w-4 h-4 text-indigo-500" />
+                                      {batch.batch_number}
+                                    </h4>
+                                    <p className="text-xs text-slate-500 font-medium mt-1 uppercase tracking-wider">
+                                      Supplier: {batch.supplier_name || batch.supplier || 'Generic'}
+                                    </p>
                                   </div>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${isExpired ? 'bg-red-100 text-red-800' :
-                                    expSoon ? 'bg-orange-100 text-orange-800' :
-                                      remaining <= 10 ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-green-100 text-green-800'
-                                    }`}>
-                                    {isExpired ? 'Expired' : expSoon ? 'Expiring Soon' : remaining <= 10 ? 'Low Stock' : 'Active'}
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border ${
+                                    isExpired ? 'bg-red-50 text-red-600 border-red-100' :
+                                    expSoon ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                                    remaining <= 10 ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
+                                    'bg-green-50 text-green-600 border-green-100'
+                                  }`}>
+                                    {isExpired ? 'Expired' : expSoon ? 'Expiring' : remaining <= 10 ? 'Low Stock' : 'Active'}
                                   </span>
                                 </div>
                               </div>
 
                               {/* Batch Details */}
-                              <div className="p-4 space-y-4">
-                                {/* Quantity */}
-                                <div className="bg-gray-50 rounded-lg p-3">
-                                  <div className="text-xs text-gray-500 uppercase tracking-wide">Current Stock</div>
-                                  <div className="text-xl font-bold text-gray-900">{remaining}</div>
-                                  <div className="text-xs text-gray-500">
-                                    Received: {batch.received_quantity || batch.original_quantity || 'N/A'}
+                              <div className="p-5 space-y-4 flex-1">
+                                {/* Quantity Metric */}
+                                <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm relative overflow-hidden group">
+                                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Package className="w-12 h-12 text-slate-900" />
                                   </div>
-                                  {batchStats && (
-                                    <div className="text-xs text-gray-500 mt-1">
-                                      Sold this month: {batchStats.soldUnitsThisMonth || 0}
+                                  <div className="relative z-10">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Current Department Stock</div>
+                                    <div className="flex items-baseline gap-2">
+                                      <span className="text-3xl font-black text-slate-900">{remaining}</span>
+                                      <span className="text-sm font-medium text-slate-500">Units</span>
                                     </div>
-                                  )}
+                                    <div className="mt-2 flex items-center gap-4 text-xs font-semibold">
+                                      <div className="flex items-center gap-1.5 text-blue-600">
+                                        <HistoryIcon className="w-3.5 h-3.5" />
+                                        Received: {batch.original_quantity || 'N/A'}
+                                      </div>
+                                      {batchStats?.soldUnitsThisMonth > 0 && (
+                                        <div className="flex items-center gap-1.5 text-indigo-600 border-l border-slate-100 pl-4">
+                                          <Truck className="w-3.5 h-3.5" />
+                                          Used: {batchStats.soldUnitsThisMonth}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
 
-                                {/* Dates */}
-                                <div className="space-y-2">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-600">Manufacturing:</span>
-                                    <span className="text-sm font-medium">{new Date(batch.manufacturing_date).toLocaleDateString()}</span>
+                                {/* Dates Section */}
+                                <div className="grid grid-cols-1 gap-3 px-1">
+                                  <div className="flex items-center justify-between py-1.5 border-b border-slate-50">
+                                    <div className="flex items-center gap-2 text-slate-500">
+                                      <Calendar className="w-4 h-4" />
+                                      <span className="text-xs font-bold uppercase tracking-wider">Manufacturing</span>
+                                    </div>
+                                    <span className="text-sm font-bold text-slate-800">
+                                      {batch.manufacturing_date ? new Date(batch.manufacturing_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                                    </span>
                                   </div>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-600">Expiry:</span>
-                                    <span className={`text-sm font-medium ${isExpired ? 'text-red-600' : expSoon ? 'text-orange-600' : 'text-gray-900'}`}>
-                                      {new Date(batch.expiry_date).toLocaleDateString()}
+                                  <div className="flex items-center justify-between py-1.5 border-b border-slate-50">
+                                    <div className="flex items-center gap-2 text-slate-500">
+                                      <Clock className="w-4 h-4" />
+                                      <span className="text-xs font-bold uppercase tracking-wider">Expiry Date</span>
+                                    </div>
+                                    <span className={`text-sm font-black ${isExpired ? 'text-red-600' : expSoon ? 'text-orange-600' : 'text-slate-800'}`}>
+                                      {batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                                     </span>
                                   </div>
                                 </div>
 
-                                {/* Pricing */}
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                                    <div className="text-xs text-blue-600 uppercase tracking-wide font-medium">Purchase Price</div>
-                                    <div className="text-sm font-semibold text-blue-700">₹{Number(batch.purchase_price || 0).toFixed(2)}</div>
+                                {/* Pricing Cards */}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Unit MRP</div>
+                                    <div className="text-sm font-black text-slate-900 text-center">₹{Number(batch.mrp || 0).toFixed(2)}</div>
                                   </div>
-                                  <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                                    <div className="text-xs text-green-600 uppercase tracking-wide font-medium">Selling Price</div>
-                                    <div className="text-sm font-semibold text-green-700">₹{Number(batch.selling_price || 0).toFixed(2)}</div>
+                                  <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100 text-center">
+                                    <div className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1 text-center">Total Value</div>
+                                    <div className="text-sm font-black text-emerald-700 text-center">₹{(remaining * (batch.mrp || 0)).toFixed(0)}</div>
                                   </div>
+                                </div>
+
+                                {/* Batch-specific Actions - Mirroring Inventory Concept */}
+                                <div className="pt-4 grid grid-cols-2 gap-2 mt-auto">
+                                  <button 
+                                    className="flex items-center justify-center gap-2 px-3 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transform active:scale-95 transition-all"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addToUsageCart(batch, 1);
+                                    }}
+                                  >
+                                    <Plus className="w-3.5 h-3.5" /> Use Now
+                                  </button>
+                                  <button 
+                                    className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transform active:scale-95 transition-all"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openMoveModal(batch);
+                                    }}
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5" /> Move
+                                  </button>
+                                  <button 
+                                    className="col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-bold hover:bg-red-100 transform active:scale-95 transition-all mt-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteIntentMedicine(batch);
+                                      // If it was a grouped medicine, we might want to refresh the modal or close it
+                                      if ((selectedMedicineDetail as any).batch_count <= 1) {
+                                        setShowMedicineDetail(false);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Remove from Department
+                                  </button>
                                 </div>
                               </div>
                             </div>

@@ -215,13 +215,12 @@ export default function DrugPurchasePage() {
 
       const quantity = item.quantity
       const safeMedicineName = (item.medication_name || '').trim() || 'Unknown Medicine'
-      const shortMedicineName = safeMedicineName.length > 20
-        ? safeMedicineName.substring(0, 20) + '...'
+      const shortMedicineName = safeMedicineName.length > 25
+        ? safeMedicineName.substring(0, 25) + '...'
         : safeMedicineName
 
       const expiryDate = item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('en-GB') : (batchData?.expiry_date ? new Date(batchData.expiry_date).toLocaleDateString('en-GB') : 'N/A')
       const printDate = new Date().toLocaleDateString('en-GB')
-      const printTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
 
       const printWindow = window.open('', '_blank')
       if (!printWindow) return
@@ -232,51 +231,51 @@ export default function DrugPurchasePage() {
           <head>
             <title>Standard Medicine Label</title>
             <style>
-              @page { size: 50mm 25mm; margin: 1mm; }
+              @page { size: 35mm 20mm; margin: 0; }
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body { 
                 font-family: 'Arial', sans-serif;
-                width: 48mm; height: 23mm;
+                width: 35mm; height: 20mm;
                 display: flex; flex-direction: column; justify-content: space-between;
-                padding: 1mm; font-size: 8px; line-height: 1.1; background: white;
+                padding: 1mm 1.5mm; font-size: 7px; line-height: 1; background: white;
               }
-              .header { text-align: center; font-size: 10px; font-weight: bold; color: #000; margin-bottom: 1mm; }
-              .medicine-name { text-align: center; font-size: 10px; font-weight: bold; color: #000; margin-bottom: 1mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-              .batch-info { display: flex; justify-content: space-between; font-size: 6px; color: #000; margin-bottom: 0.8mm; }
-              .barcode-section { text-align: center; margin: 1mm 0; height: 10mm; display: flex; align-items: center; justify-content: center; border: 0.5px solid #ddd; background: #f9f9f9; }
-              #barcode { width: 30mm; height: 10mm; display: block; }
-              .footer { display: flex; justify-content: space-between; align-items: center; font-size: 6px; color: #000; }
+              .header { text-align: center; font-size: 8px; font-weight: bold; margin-bottom: 0.5mm; }
+              .medicine-name { text-align: center; font-size: 8px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5mm; }
+              .batch-info { display: flex; justify-content: space-between; font-size: 6px; font-weight: bold; margin-bottom: 0.5mm; }
+              .barcode-section { text-align: center; height: 8mm; display: flex; align-items: center; justify-content: center; }
+              #barcode { width: 30mm; height: 8mm; display: block; }
+              .footer { display: flex; justify-content: space-between; align-items: center; font-size: 5.5px; margin-top: 0.5mm; }
             </style>
           </head>
           <body>
             <div class="header">ANNAM HOSPITAL</div>
             <div class="medicine-name">${shortMedicineName}</div>
             <div class="batch-info">
-              <span>Batch: ${item.batch_number}</span>
-              <span>Qty: ${quantity}</span>
+              <span>B: ${item.batch_number}</span>
+              <span>Q: ${quantity}</span>
             </div>
             <div class="barcode-section"><svg id="barcode"></svg></div>
             <div class="footer">
-              <span>Exp: ${expiryDate}</span>
-              <span>Printed: ${printDate} ${printTime}</span>
+              <span>E: ${expiryDate}</span>
+              <span>P: ${printDate}</span>
             </div>
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
             <script>
               (function() {
-                function render() {
-                  try {
-                    var value = ${JSON.stringify(barcode)};
-                    var isNumeric = /^\\d+$/.test(value);
-                    var fmt = (isNumeric && value.length === 13) ? 'EAN13' : 'CODE128';
+                try {
+                  var value = ${JSON.stringify(barcode)};
                     JsBarcode('#barcode', value, {
-                      format: fmt, displayValue: true, fontSize: 8, margin: 2, lineColor: '#000', background: '#f9f9f9'
+                      format: "CODE128", 
+                      displayValue: true, 
+                      fontSize: 8, 
+                      margin: 0, 
+                      height: 25,
+                      width: 1.2
                     });
-                    setTimeout(function(){ window.print(); window.close(); }, 200);
-                  } catch (e) {
-                    setTimeout(function(){ window.print(); window.close(); }, 200);
-                  }
+                  setTimeout(function(){ window.print(); window.close(); }, 200);
+                } catch (e) {
+                  setTimeout(function(){ window.print(); window.close(); }, 200);
                 }
-                render();
               })();
             </script>
           </body>
@@ -332,38 +331,53 @@ export default function DrugPurchasePage() {
       const printWindow = window.open('', '_blank')
       if (!printWindow) return
 
-      let labelsHtml = ''
+      let labelsRowsHtml = ''
+      
+      // Group items into rows of 3
+      for (let i = 0; i < itemsToPrint.length; i += 3) {
+        const rowItems = itemsToPrint.slice(i, i + 3);
+        labelsRowsHtml += '<div class="label-row">';
+        
+        for (const item of rowItems) {
+          const { data: batchData } = await supabase
+            .from('medicine_batches')
+            .select('batch_barcode, expiry_date')
+            .eq('batch_number', item.batch_number)
+            .eq('medicine_id', item.medication_id)
+            .maybeSingle()
 
-      for (const item of itemsToPrint) {
-        const { data: batchData } = await supabase
-          .from('medicine_batches')
-          .select('batch_barcode, expiry_date')
-          .eq('batch_number', item.batch_number)
-          .eq('medicine_id', item.medication_id)
-          .maybeSingle()
+          const barcode = batchData?.batch_barcode || item.batch_number
+          const safeMedicineName = (item.medication_name || '').trim() || 'Unknown Medicine'
+          const shortMedicineName = safeMedicineName.length > 25 ? safeMedicineName.substring(0, 25) + '...' : safeMedicineName
+          const expiryDate = item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('en-GB') : (batchData?.expiry_date ? new Date(batchData.expiry_date).toLocaleDateString('en-GB') : 'N/A')
 
-        const barcode = batchData?.batch_barcode || item.batch_number
-        const safeMedicineName = (item.medication_name || '').trim() || 'Unknown Medicine'
-        const shortMedicineName = safeMedicineName.length > 20 ? safeMedicineName.substring(0, 20) + '...' : safeMedicineName
-        const expiryDate = item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('en-GB') : (batchData?.expiry_date ? new Date(batchData.expiry_date).toLocaleDateString('en-GB') : 'N/A')
-
-        labelsHtml += `
-          <div class="label-page">
-            <div class="header">ANNAM HOSPITAL</div>
-            <div class="medicine-name">${shortMedicineName}</div>
-            <div class="batch-info">
-              <span>Batch: ${item.batch_number}</span>
-              <span>Qty: ${item.quantity}</span>
+          labelsRowsHtml += `
+            <div class="label-item">
+              <div class="header">ANNAM HOSPITAL</div>
+              <div class="medicine-name">${shortMedicineName}</div>
+              <div class="batch-info">
+                <span>B: ${item.batch_number}</span>
+                <span>Q: ${item.quantity}</span>
+              </div>
+              <div class="barcode-section">
+                <svg class="barcode" data-value="${barcode}"></svg>
+              </div>
+              <div class="footer">
+                <span>E: ${expiryDate}</span>
+                <span>P: ${new Date().toLocaleDateString('en-GB')}</span>
+              </div>
             </div>
-            <div class="barcode-section">
-              <svg class="barcode" data-value="${barcode}"></svg>
-            </div>
-            <div class="footer">
-              <span>Exp: ${expiryDate}</span>
-              <span>Printed: ${new Date().toLocaleDateString('en-GB')}</span>
-            </div>
-          </div>
-        `
+          `
+        }
+        
+        // Fill empty spots for the last row if needed
+        if (rowItems.length < 3) {
+          for (let k = 0; k < (3 - rowItems.length); k++) {
+            labelsRowsHtml += '<div class="label-item empty"></div>';
+          }
+        }
+        
+        labelsRowsHtml += '</div>';
       }
 
       const content = `
@@ -371,34 +385,49 @@ export default function DrugPurchasePage() {
         <html>
           <head>
             <style>
-              @page { size: 50mm 25mm; margin: 0; }
-              body { margin: 0; padding: 0; }
-              .label-page {
-                width: 50mm; height: 25mm;
-                padding: 1mm; box-sizing: border-box;
-                display: flex; flex-direction: column; justify-content: space-between;
-                font-family: Arial, sans-serif; font-size: 8px; line-height: 1.1;
+              @page { size: 105mm 20mm; margin: 0; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { margin: 0; padding: 0; width: 105mm; height: 20mm; }
+              .label-row {
+                width: 105mm; height: 20mm;
+                display: flex;
                 page-break-after: always;
+                overflow: hidden;
               }
-              .header { text-align: center; font-size: 10px; font-weight: bold; }
-              .medicine-name { text-align: center; font-size: 10px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-              .batch-info { display: flex; justify-content: space-between; font-size: 6px; }
-              .barcode-section { text-align: center; height: 10mm; display: flex; align-items: center; justify-content: center; border: 0.5px solid #ddd; background: #f9f9f9; }
-              .barcode { width: 30mm; height: 10mm; }
-              .footer { display: flex; justify-content: space-between; font-size: 6px; }
+              .label-item {
+                width: 35mm; height: 20mm;
+                padding: 1mm 1.5mm;
+                display: flex; flex-direction: column; justify-content: space-between;
+                font-family: Arial, sans-serif; font-size: 7px; line-height: 1;
+                border-right: 0.1mm dashed #eee;
+              }
+              .label-item.empty { visibility: hidden; }
+              .header { text-align: center; font-size: 8px; font-weight: bold; margin-bottom: 0.5mm; }
+              .medicine-name { text-align: center; font-size: 8px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5mm; }
+              .batch-info { display: flex; justify-content: space-between; font-size: 6px; font-weight: bold; margin-bottom: 0.5mm; }
+              .barcode-section { text-align: center; height: 8mm; display: flex; align-items: center; justify-content: center; }
+              .barcode { width: 30mm; height: 8mm; }
+              .footer { display: flex; justify-content: space-between; font-size: 5.5px; margin-top: 0.5mm; }
             </style>
           </head>
           <body>
-            ${labelsHtml}
+            ${labelsRowsHtml}
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
             <script>
               window.onload = function() {
                 var barcodes = document.querySelectorAll('.barcode');
                 barcodes.forEach(function(el) {
                   var val = el.getAttribute('data-value');
-                  JsBarcode(el, val, {
-                    format: 'CODE128', displayValue: true, fontSize: 8, margin: 2, height: 30
-                  });
+                  try {
+                     JsBarcode(el, val, {
+                        format: "CODE128",
+                        displayValue: true,
+                        fontSize: 8,
+                        margin: 0,
+                        height: 25,
+                        width: 1.2
+                      });
+                  } catch(e) { console.error(e); }
                 });
                 setTimeout(function(){ window.print(); window.close(); }, 500);
               };
