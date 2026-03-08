@@ -236,29 +236,19 @@ export default function DrugPurchasePage() {
               body { 
                 font-family: 'Arial', sans-serif;
                 width: 35mm; height: 20mm;
-                display: flex; flex-direction: column; justify-content: space-between;
-                padding: 1mm 1.5mm; font-size: 7px; line-height: 1; background: white;
+                display: flex; flex-direction: column; justify-content: flex-start;
+                padding: 2.5mm 1.5mm 0.5mm; font-size: 7px; line-height: 1; background: white;
               }
               .header { text-align: center; font-size: 8px; font-weight: bold; margin-bottom: 0.5mm; }
-              .medicine-name { text-align: center; font-size: 8px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5mm; }
-              .batch-info { display: flex; justify-content: space-between; font-size: 6px; font-weight: bold; margin-bottom: 0.5mm; }
-              .barcode-section { text-align: center; height: 8mm; display: flex; align-items: center; justify-content: center; }
-              #barcode { width: 30mm; height: 8mm; display: block; }
-              .footer { display: flex; justify-content: space-between; align-items: center; font-size: 5.5px; margin-top: 0.5mm; }
+              .medicine-name { text-align: center; font-size: 7.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1.5mm; line-height: 1.2; }
+              .barcode-section { text-align: center; height: 11mm; display: flex; align-items: center; justify-content: center; }
+              #barcode { width: 32mm; height: 11mm; display: block; }
             </style>
           </head>
           <body>
             <div class="header">ANNAM HOSPITAL</div>
             <div class="medicine-name">${shortMedicineName}</div>
-            <div class="batch-info">
-              <span>B: ${item.batch_number}</span>
-              <span>Q: ${quantity}</span>
-            </div>
             <div class="barcode-section"><svg id="barcode"></svg></div>
-            <div class="footer">
-              <span>E: ${expiryDate}</span>
-              <span>P: ${printDate}</span>
-            </div>
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
             <script>
               (function() {
@@ -355,16 +345,8 @@ export default function DrugPurchasePage() {
             <div class="label-item">
               <div class="header">ANNAM HOSPITAL</div>
               <div class="medicine-name">${shortMedicineName}</div>
-              <div class="batch-info">
-                <span>B: ${item.batch_number}</span>
-                <span>Q: ${item.quantity}</span>
-              </div>
               <div class="barcode-section">
                 <svg class="barcode" data-value="${barcode}"></svg>
-              </div>
-              <div class="footer">
-                <span>E: ${expiryDate}</span>
-                <span>P: ${new Date().toLocaleDateString('en-GB')}</span>
               </div>
             </div>
           `
@@ -396,18 +378,16 @@ export default function DrugPurchasePage() {
               }
               .label-item {
                 width: 35mm; height: 20mm;
-                padding: 1mm 1.5mm;
-                display: flex; flex-direction: column; justify-content: space-between;
+                padding: 2.5mm 1.5mm 0.5mm;
+                display: flex; flex-direction: column; justify-content: flex-start;
                 font-family: Arial, sans-serif; font-size: 7px; line-height: 1;
                 border-right: 0.1mm dashed #eee;
               }
               .label-item.empty { visibility: hidden; }
               .header { text-align: center; font-size: 8px; font-weight: bold; margin-bottom: 0.5mm; }
-              .medicine-name { text-align: center; font-size: 8px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5mm; }
-              .batch-info { display: flex; justify-content: space-between; font-size: 6px; font-weight: bold; margin-bottom: 0.5mm; }
-              .barcode-section { text-align: center; height: 8mm; display: flex; align-items: center; justify-content: center; }
-              .barcode { width: 30mm; height: 8mm; }
-              .footer { display: flex; justify-content: space-between; font-size: 5.5px; margin-top: 0.5mm; }
+              .medicine-name { text-align: center; font-size: 7.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1.5mm; line-height: 1.2; }
+              .barcode-section { text-align: center; height: 11mm; display: flex; align-items: center; justify-content: center; }
+              .barcode { width: 32mm; height: 11mm; }
             </style>
           </head>
           <body>
