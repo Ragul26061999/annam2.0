@@ -71,6 +71,7 @@ export default function DrugPurchasePage() {
   const [labelModalPurchase, setLabelModalPurchase] = useState<DrugPurchase | null>(null)
   const [labelModalItems, setLabelModalItems] = useState<DrugPurchaseItem[]>([])
   const [selectedItemIndices, setSelectedItemIndices] = useState<number[]>([])
+  const [labelPrintCounts, setLabelPrintCounts] = useState<Record<number, number>>({})
   const [isPreparingLabels, setIsPreparingLabels] = useState(false)
 
   useEffect(() => {
@@ -303,8 +304,13 @@ export default function DrugPurchasePage() {
 
     setLabelModalPurchase(purchase)
     setLabelModalItems(items)
-    // Select all by default
+    // Select all by default and initialize counts to 1
     setSelectedItemIndices(items.map((_, idx) => idx))
+    const initialCounts: Record<number, number> = {}
+    items.forEach((_, idx) => {
+      initialCounts[idx] = 1
+    })
+    setLabelPrintCounts(initialCounts)
     setShowLabelModal(true)
     setIsPreparingLabels(false)
   }
@@ -315,7 +321,15 @@ export default function DrugPurchasePage() {
       return;
     }
 
-    const itemsToPrint = selectedItemIndices.map(idx => labelModalItems[idx]);
+    // Create a flat list of items to print, repeating based on counts
+    const itemsToPrint: DrugPurchaseItem[] = []
+    selectedItemIndices.forEach(idx => {
+      const count = labelPrintCounts[idx] || 1
+      const item = labelModalItems[idx]
+      for (let c = 0; c < count; c++) {
+        itemsToPrint.push(item)
+      }
+    })
 
     try {
       const printWindow = window.open('', '_blank')
@@ -1141,6 +1155,24 @@ export default function DrugPurchasePage() {
                           <span>Exp: {formatDate(item.expiry_date)}</span>
                         </div>
                       </div>
+
+                      {/* Print Count Input */}
+                      {isSelected && (
+                        <div className="flex items-center gap-2 border rounded-lg p-1 bg-white" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[10px] uppercase font-bold text-gray-400 px-1">Copies</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={labelPrintCounts[idx] || 1}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 1
+                              setLabelPrintCounts(prev => ({ ...prev, [idx]: val }))
+                            }}
+                            className="w-12 text-center font-bold text-blue-600 focus:outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
