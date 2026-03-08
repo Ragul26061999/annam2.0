@@ -1621,7 +1621,8 @@ function NewBillingPageInner() {
           customer_name: customer.name.trim(),
           customer_phone: customer.type === 'patient' ? (customer.phone ?? null) : (customer.phone ?? '').trim(),
           customer_type: customer.type,
-          staff_id: validatedStaffId
+          staff_id: validatedStaffId,
+          bill_type: 'pharmacy'
         } as any;
 
         // Attempt 1: insert with total_amount

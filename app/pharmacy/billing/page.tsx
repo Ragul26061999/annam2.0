@@ -233,8 +233,10 @@ export default function PharmacyBillingPage() {
           payment_method,
           payment_status,
           created_at,
-          staff_id
+          staff_id,
+          bill_type
         `)
+        .or('bill_type.eq.pharmacy,bill_type.is.null')
         .order('created_at', { ascending: false })
 
       if (billsError) throw billsError
@@ -740,7 +742,8 @@ export default function PharmacyBillingPage() {
           tax: Number.isFinite(tax) ? tax : 0,
           total: Number.isFinite(total) ? total : subtotal,
           balance_due: (Number.isFinite(total) ? total : subtotal) - (Number(selectedBillForEdit.amount_paid) || 0),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          bill_type: 'pharmacy'
         })
         .eq('id', selectedBillForEdit.id)
         .select('id')

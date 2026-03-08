@@ -1922,6 +1922,7 @@ function NewBillingPageInner() {
           customer_phone: customer.type === 'patient' ? (customer.phone ?? null) : (customer.phone ?? '').trim(),
           customer_type: customer.type,
           staff_id: validatedStaffId,
+          bill_type: 'pharmacy',
           payment_status: billTotals.totalAmount <= payments.reduce((sum, p) => sum + (p.amount || 0), 0) ? 'paid' : 'partial'
         } as any;
 

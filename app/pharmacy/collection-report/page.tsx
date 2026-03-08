@@ -224,7 +224,7 @@ export default function CollectionReportPage() {
       const { data, error } = await supabase
         .from('billing')
         .select('*')
-        .is('bill_type', null) // Pharmacy bills have bill_type as NULL
+        .or('bill_type.eq.pharmacy,bill_type.is.null') // Pharmacy bills can have bill_type as NULL or 'pharmacy'
         .gte('issued_at', dateRange.start)
         .lte('issued_at', dateRange.end + 'T23:59:59.999Z')
         .order('issued_at', { ascending: false })

@@ -22,7 +22,7 @@ import html2canvas from 'html2canvas'
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
-type ReportType = 'dashboard' | 'closing_drug' | 'expiring_soon' | 'billwise_sales' | 'drugwise_sales' | 'indent' | 'purchase_gst' | 'purchase' | 'purchase_value' | 'sale'
+type ReportType = 'dashboard' | 'closing_drug' | 'expiring_soon' | 'billwise_sales' | 'drugwise_sales' | 'indent' | 'purchase_gst' | 'purchase' | 'purchase_value' | 'sale' | 'sale_gst'
 
 export default function PharmacyBillingReportsPage() {
     const reportRef = useRef<HTMLDivElement>(null)
@@ -57,7 +57,8 @@ export default function PharmacyBillingReportsPage() {
         { value: 'purchase_gst', label: 'Purchase GST Report', icon: <DollarSign className="h-4 w-4" /> },
         { value: 'purchase', label: 'Purchase Report', icon: <ShoppingCart className="h-4 w-4" /> },
         { value: 'purchase_value', label: 'Purchase Value', icon: <TrendingUp className="h-4 w-4" /> },
-        { value: 'sale', label: 'Sale Reports', icon: <BarChart3 className="h-4 w-4" /> }
+        { value: 'sale', label: 'Sale Reports', icon: <BarChart3 className="h-4 w-4" /> },
+        { value: 'sale_gst', label: 'Sale GST Report', icon: <DollarSign className="h-4 w-4" /> }
     ]
 
     const [salesByDay, setSalesByDay] = useState<any[]>([])
@@ -102,7 +103,9 @@ export default function PharmacyBillingReportsPage() {
                 .select('*')
                 .gte('created_at', from)
 
-            if (selectedDept !== 'all') {
+            if (selectedDept === 'pharmacy') {
+                query = query.or('bill_type.eq.pharmacy,bill_type.is.null')
+            } else if (selectedDept !== 'all') {
                 query = query.eq('bill_type', selectedDept)
             }
 
@@ -166,28 +169,41 @@ export default function PharmacyBillingReportsPage() {
 
             switch (selectedReport) {
                 case 'closing_drug':
-                    const { data: batches } = await supabase
+                    let batchQuery = supabase
                         .from('medicine_batches')
-                        .select(`*, medication:medications(name, category, rack_location)`)
+                        .select(`*, medications:medications(name, category)`)
                         .gt('current_quantity', 0)
-                        .order('expiry_date', { ascending: true })
-                    data = batches || []
+                    
+                    if (selectedDept !== 'all' && selectedDept !== 'pharmacy') {
+                        data = []
+                    } else {
+                        const { data: batches, error } = await batchQuery.order('expiry_date', { ascending: true })
+                        if (error) throw error
+                        data = batches || []
+                    }
                     break
 
                 case 'expiring_soon':
                     const today = new Date()
                     const todayStr = today.toISOString().split('T')[0]
                     const soon = new Date()
-                    soon.setDate(today.getDate() + 30)
+                    soon.setDate(today.getDate() + 90)
                     const soonStr = soon.toISOString().split('T')[0]
 
-                    const { data: expBatches } = await supabase
+                    let expQuery = supabase
                         .from('medicine_batches')
-                        .select(`*, medication:medications(name, category, rack_location)`)
+                        .select(`*, medications:medications(name, category)`)
                         .lte('expiry_date', soonStr)
                         .gte('expiry_date', todayStr)
-                        .order('expiry_date', { ascending: true })
-                    data = expBatches || []
+                        .gt('current_quantity', 0)
+
+                    if (selectedDept !== 'all' && selectedDept !== 'pharmacy') {
+                        data = []
+                    } else {
+                        const { data: expBatches, error } = await expQuery.order('expiry_date', { ascending: true })
+                        if (error) throw error
+                        data = expBatches || []
+                    }
                     break
 
                 case 'billwise_sales':
@@ -198,26 +214,32 @@ export default function PharmacyBillingReportsPage() {
                         .gte('created_at', from)
                         .lte('created_at', to)
 
-                    if (selectedDept !== 'all') {
+                    if (selectedDept === 'pharmacy') {
+                        saleQuery = saleQuery.or('bill_type.eq.pharmacy,bill_type.is.null')
+                    } else if (selectedDept !== 'all') {
                         saleQuery = saleQuery.eq('bill_type', selectedDept)
                     }
 
-                    const { data: sales } = await saleQuery.order('created_at', { ascending: false })
+                    const { data: sales, error: sErr } = await saleQuery.order('created_at', { ascending: false })
+                    if (sErr) throw sErr
                     data = sales || []
                     break
 
                 case 'drugwise_sales':
                     let drugQuery = supabase
                         .from('billing_item')
-                        .select(`*, billing:billing!inner(created_at, bill_type)`)
+                        .select(`*, billing!inner(created_at, bill_type)`)
                         .gte('billing.created_at', from)
                         .lte('billing.created_at', to)
 
-                    if (selectedDept !== 'all') {
-                        drugQuery = drugQuery.eq('billing.bill_type', selectedDept)
+                    if (selectedDept === 'pharmacy') {
+                        drugQuery = drugQuery.or('bill_type.eq.pharmacy,bill_type.is.null', { foreignTable: 'billing' })
+                    } else if (selectedDept !== 'all') {
+                        drugQuery = drugQuery.filter('billing.bill_type', 'eq', selectedDept)
                     }
 
-                    const { data: drugSales } = await drugQuery
+                    const { data: drugSales, error: dErr } = await drugQuery
+                    if (dErr) throw dErr
 
                     const drugMap = new Map()
                     drugSales?.forEach((item: any) => {
@@ -231,29 +253,109 @@ export default function PharmacyBillingReportsPage() {
                     break
 
                 case 'purchase':
-                case 'purchase_gst':
                 case 'purchase_value':
-                    const { data: purchases } = await supabase
+                    const { data: purchases, error: pErr } = await supabase
                         .from('drug_purchases')
                         .select(`*, supplier:suppliers(name)`)
                         .gte('purchase_date', from.split('T')[0])
                         .lte('purchase_date', to.split('T')[0])
+                    if (pErr) throw pErr
                     data = purchases || []
                     break
 
+                case 'purchase_gst':
+                    const { data: purchaseItems, error: pgstErr } = await supabase
+                        .from('drug_purchase_items')
+                        .select(`*, purchase:drug_purchases!inner(purchase_number, purchase_date, supplier:suppliers(name))`)
+                        .gte('purchase.purchase_date', from.split('T')[0])
+                        .lte('purchase.purchase_date', to.split('T')[0])
+
+                    if (pgstErr) throw pgstErr
+
+                    data = (purchaseItems || []).map((item: any) => {
+                        const taxableAmount = Number(item.total_amount || 0) / (1 + (Number(item.gst_percent || 0) / 100))
+                        const gstAmount = Number(item.total_amount || 0) - taxableAmount
+
+                        return {
+                            medicine_name: item.medication_name,
+                            purchase_number: item.purchase?.purchase_number,
+                            supplier_name: item.purchase?.supplier?.name || 'Generic Supplier',
+                            qty: item.quantity,
+                            unit_price: item.unit_price,
+                            gst_percent: item.gst_percent,
+                            gst_amount: gstAmount,
+                            taxable_amount: taxableAmount,
+                            total_amount: item.total_amount,
+                            purchase_date: item.purchase?.purchase_date
+                        }
+                    })
+                    break
+
                 case 'indent':
-                    const { data: indents } = await supabase
-                        .from('pharmacy_indents')
-                        .select('*')
-                        .gte('created_at', from)
-                        .lte('created_at', to)
-                    data = indents || []
+                    // Using department_drug_issues as the canonical 'indent' table in this system
+                    const { data: indents, error: iErr } = await supabase
+                        .from('department_drug_issues')
+                        .select(`*`)
+                        .gte('issue_date', from.split('T')[0])
+                        .lte('issue_date', to.split('T')[0])
+                    
+                    if (iErr) throw iErr
+                    
+                    // Map to common format expected by the table/export
+                    data = (indents || []).map((indent: any) => ({
+                        ...indent,
+                        reference_number: indent.issue_number,
+                        entity_name: indent.department_name,
+                        amount: indent.total_value,
+                        status: indent.status,
+                        created_at: indent.issue_date
+                    }))
+                    break
+
+                case 'sale_gst':
+                    let saleGstQuery = supabase
+                        .from('billing_item')
+                        .select(`*, billing!inner(created_at, bill_type, customer_name, bill_number, tax_percent)`)
+                        .gte('billing.created_at', from)
+                        .lte('billing.created_at', to)
+
+                    if (selectedDept === 'pharmacy') {
+                        saleGstQuery = saleGstQuery.or('bill_type.eq.pharmacy,bill_type.is.null', { foreignTable: 'billing' })
+                    } else if (selectedDept !== 'all') {
+                        saleGstQuery = saleGstQuery.filter('billing.bill_type', 'eq', selectedDept)
+                    }
+
+                    const { data: saleGstItems, error: sgstErr } = await saleGstQuery
+                    if (sgstErr) throw sgstErr
+
+                    data = (saleGstItems || []).map((item: any) => {
+                        const taxPercent = Number(item.billing?.tax_percent || 0)
+                        const total = Number(item.total_amount || 0)
+                        const taxableAmount = total / (1 + (taxPercent / 100))
+                        const gstAmount = total - taxableAmount
+
+                        return {
+                            medicine_name: item.description,
+                            sale_price: Number(item.unit_amount || 0),
+                            gst_amount: gstAmount,
+                            tax_percent: taxPercent,
+                            buyer_name: item.billing?.customer_name || 'Walk-in Customer',
+                            bill_number: item.billing?.bill_number || 'N/A',
+                            total_amount: total,
+                            qty: Number(item.qty || 0),
+                            created_at: item.billing?.created_at
+                        }
+                    })
                     break
             }
 
             setReportData(data)
-        } catch (err) {
+        } catch (err: any) {
             console.error('Report load error:', err)
+            // If it's a Supabase error, it usually has message, details, hint
+            if (err.message) {
+                console.error('Error Details:', err.message, err.details, err.hint)
+            }
         } finally {
             setLoading(false)
         }
@@ -273,8 +375,8 @@ export default function PharmacyBillingReportsPage() {
 
         // Sort
         result.sort((a, b) => {
-            const valA = a.customer_name || a.medication?.name || a.name || a.purchase_number || a.bill_number || ''
-            const valB = b.customer_name || b.medication?.name || b.name || b.purchase_number || b.bill_number || ''
+            const valA = a.customer_name || a.medications?.name || a.name || a.purchase_number || a.bill_number || ''
+            const valB = b.customer_name || b.medications?.name || b.name || b.purchase_number || b.bill_number || ''
 
             if (sortOrder === 'asc') {
                 return valA.toString().localeCompare(valB.toString())
@@ -292,6 +394,23 @@ export default function PharmacyBillingReportsPage() {
             currency: 'INR',
             maximumFractionDigits: 0
         }).format(amount)
+    }
+
+    const calculateAccumulatedValuation = () => {
+        return filteredAndSortedData.reduce((sum, item) => {
+            // For billwise sales or purchases
+            if (item.total_amount || item.total || item.amount) {
+                return sum + (Number(item.total_amount || item.total || item.amount) || 0);
+            }
+            // For drug stock reports (batches)
+            if (item.current_quantity !== undefined) {
+                // Use selling_price for retail valuation or purchase_price for cost valuation
+                // The dashboard seems to show retail value by default or unit_price
+                const price = item.selling_price || item.unit_price || item.purchase_price || 0;
+                return sum + (item.current_quantity * price);
+            }
+            return sum;
+        }, 0);
     }
 
     const renderReportTitle = () => {
@@ -316,6 +435,7 @@ export default function PharmacyBillingReportsPage() {
             case 'purchase': return `${deptStr}Purchase Report`
             case 'purchase_value': return `${deptStr}Purchase Value Report`
             case 'sale': return `${deptStr}Sale Reports`
+            case 'sale_gst': return `${deptStr}Pharmacy Sale GST Report`
             default: return `${deptStr}Billing history & Analytics`
         }
     }
@@ -373,9 +493,9 @@ export default function PharmacyBillingReportsPage() {
         if (selectedReport === 'closing_drug' || selectedReport === 'expiring_soon') {
             headers = ['MEDICAL FORMULATION', 'BATCH', 'STORAGE RACK', 'QUANTITY', 'EXPIRY']
             data = filteredAndSortedData.map(item => [
-                item.medication?.name || 'Generic',
+                item.medications?.name || 'Generic',
                 item.batch_number || 'N/A',
-                item.medication?.rack_location || 'LOBBY',
+                item.rack_location || 'LOBBY',
                 item.current_quantity?.toString() || '0',
                 item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : 'N/A'
             ])
@@ -386,6 +506,28 @@ export default function PharmacyBillingReportsPage() {
                 item.hsn || 'N/A',
                 `${item.qty} UNITS`,
                 formatPDFCurrency(item.amount)
+            ])
+        } else if (selectedReport === 'sale_gst') {
+            headers = ['BILL #', 'MEDICINE', 'BUYER', 'QTY', 'PRICE', 'GST', 'TOTAL']
+            data = filteredAndSortedData.map(item => [
+                item.bill_number,
+                item.medicine_name?.toUpperCase() || 'N/A',
+                item.buyer_name || 'N/A',
+                item.qty.toString(),
+                formatPDFCurrency(item.sale_price),
+                formatPDFCurrency(item.gst_amount),
+                formatPDFCurrency(item.total_amount)
+            ])
+        } else if (selectedReport === 'purchase_gst') {
+            headers = ['DATE', 'PURCHASE #', 'SUPPLIER', 'QTY', 'PRICE', 'GST', 'TOTAL']
+            data = filteredAndSortedData.map(item => [
+                item.purchase_date ? new Date(item.purchase_date).toLocaleDateString('en-GB') : 'N/A',
+                item.purchase_number,
+                item.supplier_name || 'N/A',
+                item.qty.toString(),
+                formatPDFCurrency(Number(item.unit_price || 0)),
+                formatPDFCurrency(Number(item.gst_amount || 0)),
+                formatPDFCurrency(Number(item.total_amount || 0))
             ])
         } else {
             headers = ['REFERENCE #', 'LEGAL ENTITY / PARTY', 'BASE VALUE', 'OUTCOME STATUS', 'LOG DATE']
@@ -769,7 +911,7 @@ export default function PharmacyBillingReportsPage() {
                         {/* Summary View for Specific Report */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <SummaryCard icon={<Activity />} label="Record Count" value={filteredAndSortedData.length.toString()} color="indigo" growth="" />
-                            <SummaryCard icon={<DollarSign />} label="Accumulated Valuation" value={formatCurrency(filteredAndSortedData.reduce((s, i) => s + (Number(i.total_amount || i.amount || i.current_quantity * (i.unit_price || 0)) || 0), 0))} color="emerald" growth="" />
+                            <SummaryCard icon={<DollarSign />} label="Accumulated Valuation" value={formatCurrency(calculateAccumulatedValuation())} color="emerald" growth="" />
                             <SummaryCard icon={<Calendar />} label="Report Density" value="Active Data" color="amber" growth="" />
                         </div>
 
@@ -794,13 +936,38 @@ export default function PharmacyBillingReportsPage() {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
-                                                {filteredAndSortedData.map((item, idx) => (
-                                                    <tr key={idx} className="hover:bg-indigo-50/5 transition-all">
-                                                        <td className="px-10 py-6 font-black text-gray-900 group-hover:text-indigo-600 transition-colors">{item.medication?.name || 'GENERIC'}</td>
-                                                        <td className="px-10 py-6 text-gray-500 font-bold">{item.batch_number}</td>
-                                                        <td className="px-10 py-6 text-gray-500 font-bold">{item.medication?.rack_location || 'LOBBY'}</td>
-                                                        <td className="px-10 py-6 text-right font-black text-indigo-600 text-lg">{item.current_quantity}</td>
-                                                        <td className="px-10 py-6 text-right text-gray-400 font-bold">{new Date(item.expiry_date).toLocaleDateString()}</td>
+                                                 {filteredAndSortedData.map((item, idx) => (
+                                                    <tr key={idx} className="group hover:bg-indigo-50/10 transition-all">
+                                                        <td className="px-10 py-6">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-black text-gray-900 tracking-tight group-hover:text-indigo-600 uppercase">
+                                                                    {item.medications?.name || 'Generic Formulation'}
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                                                    {item.medications?.category || 'General Category'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-10 py-6">
+                                                            <span className="text-xs font-black text-gray-600 uppercase tracking-widest">
+                                                                {item.batch_number || 'N/A'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-10 py-6">
+                                                            <span className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-[10px] font-black tracking-widest group-hover:bg-white transition-all">
+                                                                {item.rack_location || 'LOBBY'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-10 py-6 text-right">
+                                                            <span className="text-sm font-black text-indigo-600 uppercase">
+                                                                {item.current_quantity} UNITS
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-10 py-6 text-right">
+                                                            <span className={`text-[10px] font-black tracking-widest px-4 py-2 rounded-xl border ${new Date(item.expiry_date) < new Date() ? 'bg-red-50 text-red-600 border-red-100' : 'bg-gray-50 text-gray-600 border-gray-100'}`}>
+                                                                {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                            </span>
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -822,6 +989,72 @@ export default function PharmacyBillingReportsPage() {
                                                         <td className="px-10 py-6 text-gray-400 font-bold">{item.hsn || 'N/A'}</td>
                                                         <td className="px-10 py-6 text-right font-black text-blue-600 text-lg">{item.qty} UNITS</td>
                                                         <td className="px-10 py-6 text-right font-black text-emerald-600 text-xl">{formatCurrency(item.amount)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    ) : selectedReport === 'sale_gst' ? (
+                                        <table className="w-full text-left">
+                                            <thead className="bg-gray-50/50">
+                                                <tr>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Medicine Name</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Bill #</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Buyer</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Qty</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Sale Price</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">GST Amount</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {filteredAndSortedData.map((item, idx) => (
+                                                    <tr key={idx} className="hover:bg-indigo-50/5 transition-all group">
+                                                        <td className="px-10 py-6 font-black text-gray-900 uppercase tracking-tight group-hover:text-indigo-600">{item.medicine_name}</td>
+                                                        <td className="px-10 py-6 text-xs font-black text-gray-500">{item.bill_number}</td>
+                                                        <td className="px-10 py-6 text-gray-500 font-bold">{item.buyer_name}</td>
+                                                        <td className="px-10 py-6 text-right font-black text-gray-900">{item.qty}</td>
+                                                        <td className="px-10 py-6 text-right font-black text-gray-900">{formatCurrency(item.sale_price)}</td>
+                                                        <td className="px-10 py-6 text-right font-black text-emerald-600">
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{formatCurrency(item.gst_amount)}</span>
+                                                                <span className="text-[10px] text-gray-400">({item.tax_percent}%)</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-10 py-6 text-right font-black text-indigo-600 text-lg">{formatCurrency(item.total_amount)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    ) : selectedReport === 'purchase_gst' ? (
+                                        <table className="w-full text-left">
+                                            <thead className="bg-gray-50/50">
+                                                <tr>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Purchase Date</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Purchase #</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Supplier</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Qty</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Unit Price</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">GST Amount</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {filteredAndSortedData.map((item, idx) => (
+                                                    <tr key={idx} className="hover:bg-indigo-50/5 transition-all group">
+                                                        <td className="px-10 py-6 font-black text-gray-900 group-hover:text-indigo-600">
+                                                            {item.purchase_date ? new Date(item.purchase_date).toLocaleDateString('en-GB') : 'N/A'}
+                                                        </td>
+                                                        <td className="px-10 py-6 text-xs font-black text-gray-500">{item.purchase_number}</td>
+                                                        <td className="px-10 py-6 text-gray-500 font-bold">{item.supplier_name}</td>
+                                                        <td className="px-10 py-6 text-right font-black text-gray-900">{item.qty}</td>
+                                                        <td className="px-10 py-6 text-right font-black text-gray-900">{formatCurrency(Number(item.unit_price || 0))}</td>
+                                                        <td className="px-10 py-6 text-right font-black text-emerald-600">
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{formatCurrency(Number(item.gst_amount || 0))}</span>
+                                                                <span className="text-[10px] text-gray-400">({item.gst_percent}%)</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-10 py-6 text-right font-black text-indigo-600 text-lg">{formatCurrency(Number(item.total_amount || 0))}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
