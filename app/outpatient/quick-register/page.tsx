@@ -224,30 +224,29 @@ export default function QuickRegisterPage() {
     setError(null); // Clear any previous error
   };
 
-  // Function to handle doctor selection
+  // Auto-calculate total amount when fees change
+  useEffect(() => {
+    const consultationFee = parseFloat(formData.consultationFee) || 0;
+    const opCardAmount = parseFloat(formData.opCardAmount) || 0;
+    const total = consultationFee + opCardAmount;
+    setFormData(prev => ({ 
+      ...prev, 
+      totalAmount: total.toString() 
+    }));
+  }, [formData.consultationFee, formData.opCardAmount]);
+
   const handleDoctorSelect = (doctorId: string) => {
     const selectedDoctor = doctors.find(doc => doc.id === doctorId);
     setFormData(prev => {
       const consultationFee = selectedDoctor?.consultation_fee ? selectedDoctor.consultation_fee.toString() : prev.consultationFee;
-      const opCardAmount = parseFloat(prev.opCardAmount) || 0;
-      const total = parseFloat(consultationFee) + opCardAmount;
       
       return {
         ...prev,
         consultingDoctorId: doctorId,
         consultingDoctorName: selectedDoctor?.users?.name || '',
-        consultationFee,
-        totalAmount: total.toString()
+        consultationFee
       };
     });
-  };
-
-  // Function to calculate total amount
-  const calculateTotalAmount = () => {
-    const consultationFee = parseFloat(formData.consultationFee) || 0;
-    const opCardAmount = parseFloat(formData.opCardAmount) || 0;
-    const total = consultationFee + opCardAmount;
-    setFormData(prev => ({ ...prev, totalAmount: total.toString() }));
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {

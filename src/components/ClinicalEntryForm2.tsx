@@ -1052,6 +1052,8 @@ export default function ClinicalEntryForm2({
           if (validLabRows.length > 1 || useLabGroup) {
             const groupedOrder = await createGroupedLabOrder({
               patient_id: patientId,
+              encounter_id: encounterId,
+              appointment_id: appointmentId,
               ordering_doctor_id: doctorId,
               clinical_indication: validLabRows.map(r => r.clinicalIndication).filter(Boolean).join('; ') || 'N/A',
               urgency: labUrgency,
@@ -1072,6 +1074,8 @@ export default function ClinicalEntryForm2({
             const orderPromises = validLabRows.map(test =>
               createLabTestOrder({
                 patient_id: patientId,
+                encounter_id: encounterId,
+                appointment_id: appointmentId,
                 ordering_doctor_id: doctorId,
                 test_catalog_id: test.testId,
                 clinical_indication: test.clinicalIndication || 'N/A',
@@ -1369,6 +1373,16 @@ export default function ClinicalEntryForm2({
               >
                 <Icon size={18} />
                 <span>{tab.label}</span>
+                {tab.id === 'lab' && selectedLabTests.filter(t => t.testId).length > 0 && (
+                  <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {selectedLabTests.filter(t => t.testId).length}
+                  </span>
+                )}
+                {tab.id === 'xray' && selectedXrayTests.filter(t => t.testId).length > 0 && (
+                  <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {selectedXrayTests.filter(t => t.testId).length}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1584,7 +1598,7 @@ export default function ClinicalEntryForm2({
 
           {/* Lab Tests Tab - Lab Test Selection Style */}
           {activeTab === 'lab' && (
-            <div className="max-w-5xl mx-auto space-y-6">
+            <div className="w-full space-y-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
@@ -1672,9 +1686,9 @@ export default function ClinicalEntryForm2({
 
                     return (
                       <div key={row.rowId || index} className="space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
+                        <div className="grid grid-cols-5 gap-3 items-end">
+                          <div className="col-span-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
                               Test Name
                             </label>
                             <SearchableSelect
@@ -1682,31 +1696,58 @@ export default function ClinicalEntryForm2({
                               options={options}
                               value={row.testId}
                               onChange={(val) => handleLabTestChange(index, val)}
-                              placeholder="Search & Select Test..."
+                              placeholder="Search Test..."
                             />
                           </div>
 
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
+                          <div className="col-span-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
                               Group Name
                             </label>
                             <input
                               type="text"
                               value={row.groupName || 'N/A'}
                               readOnly
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700"
+                              title={row.groupName || 'N/A'}
+                              className="w-full px-3 py-[11px] bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 truncate block h-[46px]"
                             />
                           </div>
 
-                          <div className="flex items-end gap-2">
+                          <div className="col-span-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
+                              Indication
+                            </label>
+                            <input
+                              type="text"
+                              value={row.clinicalIndication}
+                              onChange={(e) => handleLabRowFieldChange(index, 'clinicalIndication', e.target.value)}
+                              className="w-full px-3 py-[11px] bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 block h-[46px]"
+                              placeholder="Reason..."
+                            />
+                          </div>
+
+                          <div className="col-span-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
+                              Instructions
+                            </label>
+                            <input
+                              type="text"
+                              value={row.specialInstructions}
+                              onChange={(e) => handleLabRowFieldChange(index, 'specialInstructions', e.target.value)}
+                              className="w-full px-3 py-[11px] bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 block h-[46px]"
+                              placeholder="Instructions..."
+                            />
+                          </div>
+
+                          <div className="col-span-1 flex gap-2">
                             <div className="flex-1">
-                              <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
+                              <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
                                 Urgency
                               </label>
                               <select
                                 value={labUrgency}
                                 onChange={(e) => setLabUrgency(e.target.value as any)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-[11px] bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 block h-[46px]"
                               >
                                 <option value="routine">Routine</option>
                                 <option value="urgent">Urgent</option>
@@ -1714,40 +1755,17 @@ export default function ClinicalEntryForm2({
                                 <option value="emergency">Emergency</option>
                               </select>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => removeLabRow(index)}
-                              disabled={selectedLabTests.length === 1}
-                              className="h-[46px] w-[46px] flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Remove row"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Clinical Indication</label>
-                            <textarea
-                              value={row.clinicalIndication}
-                              onChange={(e) => handleLabRowFieldChange(index, 'clinicalIndication', e.target.value)}
-                              rows={3}
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                              placeholder="Reason for this test..."
-                              data-allow-enter="true"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Special Instructions</label>
-                            <textarea
-                              value={row.specialInstructions}
-                              onChange={(e) => handleLabRowFieldChange(index, 'specialInstructions', e.target.value)}
-                              rows={3}
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                              placeholder="Any special instructions"
-                              data-allow-enter="true"
-                            />
+                            <div className="flex items-end">
+                              <button
+                                type="button"
+                                onClick={() => removeLabRow(index)}
+                                disabled={selectedLabTests.length === 1}
+                                className="h-[46px] w-[46px] flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                title="Remove row"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -1801,7 +1819,7 @@ export default function ClinicalEntryForm2({
 
           {/* X-Ray Tab - Radiological Procedures Style */}
           {activeTab === 'xray' && (
-            <div className="max-w-5xl mx-auto space-y-6">
+            <div className="w-full space-y-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
@@ -1890,9 +1908,9 @@ export default function ClinicalEntryForm2({
 
                     return (
                       <div key={row.rowId || index} className="space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
+                        <div className="grid grid-cols-6 gap-3 items-end">
+                          <div className="col-span-1">
+                            <label className="block text-[10px] font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
                               Procedure Name
                             </label>
                             <SearchableSelect
@@ -1900,31 +1918,71 @@ export default function ClinicalEntryForm2({
                               options={options}
                               value={row.testId}
                               onChange={(val) => handleXrayTestChange(index, val)}
-                              placeholder="Search & Select Procedure..."
+                              placeholder="Search Procedure..."
                             />
                           </div>
 
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
+                          <div className="col-span-1">
+                            <label className="block text-[10px] font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
                               Modality
                             </label>
                             <input
                               type="text"
                               value={row.groupName || 'IMAGE'}
                               readOnly
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700"
+                              title={row.groupName || 'IMAGE'}
+                              className="w-full px-2 py-[11px] bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 truncate block h-[46px]"
                             />
                           </div>
 
-                          <div className="flex items-end gap-2">
+                          <div className="col-span-1">
+                            <label className="block text-[10px] font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
+                              Specific Region
+                            </label>
+                            <input
+                              type="text"
+                              value={row.bodyPart}
+                              onChange={(e) => handleXrayBodyPartChange(index, e.target.value)}
+                              className="w-full px-2 py-[11px] bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 block h-[46px]"
+                              placeholder="Region..."
+                            />
+                          </div>
+
+                          <div className="col-span-1">
+                            <label className="block text-[10px] font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
+                              Instruction
+                            </label>
+                            <input
+                              type="text"
+                              value={row.clinicalIndication}
+                              onChange={(e) => handleXrayRowFieldChange(index, 'clinicalIndication', e.target.value)}
+                              className="w-full px-2 py-[11px] bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 block h-[46px]"
+                              placeholder="Indication..."
+                            />
+                          </div>
+
+                          <div className="col-span-1">
+                            <label className="block text-[10px] font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
+                              Consents
+                            </label>
+                            <input
+                              type="text"
+                              value={row.specialInstructions}
+                              onChange={(e) => handleXrayRowFieldChange(index, 'specialInstructions', e.target.value)}
+                              className="w-full px-2 py-[11px] bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 block h-[46px]"
+                              placeholder="Safety/Consent..."
+                            />
+                          </div>
+
+                          <div className="col-span-1 flex gap-2">
                             <div className="flex-1">
-                              <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
-                                Priority / Scan
+                              <label className="block text-[10px] font-medium text-gray-700 mb-2 uppercase tracking-wide truncate">
+                                Priority
                               </label>
                               <select
                                 value={xrayUrgency}
                                 onChange={(e) => setXrayUrgency(e.target.value as any)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-2 py-[11px] bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 block h-[46px]"
                               >
                                 <option value="routine">Routine</option>
                                 <option value="urgent">Urgent</option>
@@ -1932,53 +1990,17 @@ export default function ClinicalEntryForm2({
                                 <option value="emergency">Emergency</option>
                               </select>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => removeXrayRow(index)}
-                              disabled={selectedXrayTests.length === 1}
-                              className="h-[46px] w-[46px] flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Remove row"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-2 uppercase tracking-wide">
-                            Specific Region / View Details
-                          </label>
-                          <textarea
-                            value={row.bodyPart}
-                            onChange={(e) => handleXrayBodyPartChange(index, e.target.value)}
-                            rows={2}
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                            placeholder="E.g. AP & LATERAL, OBLIQUE VIEW, CONTRAST REQUIRED"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Clinical Instruction</label>
-                            <textarea
-                              value={row.clinicalIndication}
-                              onChange={(e) => handleXrayRowFieldChange(index, 'clinicalIndication', e.target.value)}
-                              rows={3}
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                              placeholder="INDICATIONS FOR THIS SCAN..."
-                              data-allow-enter="true"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Radiation Safety / Consents</label>
-                            <textarea
-                              value={row.specialInstructions}
-                              onChange={(e) => handleXrayRowFieldChange(index, 'specialInstructions', e.target.value)}
-                              rows={3}
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                              placeholder="Any special instructions / consent notes"
-                              data-allow-enter="true"
-                            />
+                            <div className="flex items-end">
+                              <button
+                                type="button"
+                                onClick={() => removeXrayRow(index)}
+                                disabled={selectedXrayTests.length === 1}
+                                className="h-[46px] w-[46px] flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                title="Remove row"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
                           </div>
                         </div>
 

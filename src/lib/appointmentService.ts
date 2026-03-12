@@ -67,19 +67,17 @@ export async function validateAppointmentData(
     const appointmentDateOnly = appointmentDateTime.toISOString().split('T')[0];
     const todayDateOnly = now.toISOString().split('T')[0];
 
-    // For same-day appointments, allow scheduling for later in the day, but prevent if time has already passed
+    // For same-day appointments, allow any time on the current day.
+    // This is crucial for hospital systems where walk-ins might be registered retroactively.
     if (appointmentDateOnly === todayDateOnly) {
-      // Allow same-day appointments if they're later today (after current time)
-      // Or if they're within a reasonable grace period (e.g., last hour) for registration purposes
-      const oneHourBeforeNow = new Date(now.getTime() - 60 * 60 * 1000);
-      if (appointmentDateTime < oneHourBeforeNow) {
-        errors.push('Same-day appointment cannot be scheduled more than 1 hour before current time');
-      }
+      // No strict time restriction for same-day appointments
+      // Just ensure it's not something completely impossible or too far in the past logic-wise
+      // We allow the record to be created even if the time was 4 hours ago.
     } else {
-      // For future appointments, prevent if more than 1 hour in the past (for rescheduling)
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      if (appointmentDateTime < oneHourAgo) {
-        errors.push('Appointment cannot be scheduled more than 1 hour in the past');
+      // For appointments on other days, prevent if they are in the past by more than 24 hours
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      if (appointmentDateTime < twentyFourHoursAgo) {
+        errors.push('Appointment cannot be scheduled more than 24 hours in the past');
       }
     }
   }

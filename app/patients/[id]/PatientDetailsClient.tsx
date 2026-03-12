@@ -730,13 +730,7 @@ export default function PatientDetailsClient({ params }: PatientDetailsClientPro
                 <Edit className="h-4 w-4" />
                 Edit Patient
               </button>
-              <button
-                onClick={() => setShowPrescriptionForm(true)}
-                className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
-              >
-                <Pill className="h-4 w-4" />
-                Prescribe Medicine
-              </button>
+
               <button className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 New Appointment

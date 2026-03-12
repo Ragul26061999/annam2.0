@@ -183,7 +183,7 @@ export async function createPrescription(prescriptionData: PrescriptionData): Pr
         patient:patients(id, patient_id, name, phone, email),
         doctor:doctors(
           id,
-          doctor_id,
+          license_number,
           specialization,
           user:users(name, phone, email)
         ),
@@ -279,7 +279,7 @@ export async function getPrescriptions(options: {
         patient:patients(id, patient_id, name, phone, email),
         doctor:doctors(
           id,
-          doctor_id,
+          license_number,
           specialization,
           user:users(name, phone, email)
         ),
@@ -371,7 +371,7 @@ export async function getPrescriptionById(prescriptionId: string): Promise<{ pre
         patient:patients(id, patient_id, name, phone, email, date_of_birth, gender, allergies),
         doctor:doctors(
           id,
-          doctor_id,
+          license_number,
           specialization,
           qualification,
           user:users(name, phone, email)
@@ -427,7 +427,7 @@ export async function updatePrescriptionStatus(
         patient:patients(id, patient_id, name, phone, email),
         doctor:doctors(
           id,
-          doctor_id,
+          license_number,
           specialization,
           user:users(name, phone, email)
         )
@@ -457,7 +457,7 @@ export async function getPatientPrescriptions(patientId: string): Promise<{ pres
         *,
         doctor:doctors(
           id,
-          doctor_id,
+          license_number,
           specialization,
           user:users(name, phone, email)
         )
@@ -614,7 +614,7 @@ export async function updatePrescriptionMedicines(
         patient:patients(id, patient_id, name, phone, email),
         doctor:doctors(
           id,
-          doctor_id,
+          license_number,
           specialization,
           user:users(name, phone, email)
         ),

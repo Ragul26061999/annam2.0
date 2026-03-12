@@ -134,6 +134,10 @@ function OutpatientPageContent() {
   const [selectedBill, setSelectedBill] = useState<BillingRecord | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showThermalModal, setShowThermalModal] = useState(false);
+  const [selectedPrescriptionForTests, setSelectedPrescriptionForTests] = useState<any | null>(null);
+  const [showTestsModal, setShowTestsModal] = useState(false);
+  const [associatedTests, setAssociatedTests] = useState<{ lab: any[], radiology: any[], scan: any[], grouped: any[] }>({ lab: [], radiology: [], scan: [], grouped: [] });
+  const [testsLoading, setTestsLoading] = useState(false);
 
   // Additional state for patient listing
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -838,6 +842,8 @@ function OutpatientPageContent() {
         .select(`
           id,
           prescription_id,
+          appointment_id,
+          encounter_id,
           patient_id,
           issue_date,
           created_at,
@@ -879,6 +885,8 @@ function OutpatientPageContent() {
         return {
           id: prescription.id,
           patient_id: prescription.patient_id || patient?.id,
+          appointment_id: prescription.appointment_id,
+          encounter_id: prescription.encounter_id,
           prescription_id: prescription.prescription_id,
           patient: patient,
           doctor: doctor,
@@ -899,6 +907,101 @@ function OutpatientPageContent() {
   };
 
 
+
+
+  const loadAssociatedTests = async (prescription: any) => {
+    try {
+      setTestsLoading(true);
+      setAssociatedTests({ lab: [], radiology: [], scan: [], grouped: [] });
+
+      const appointmentId = prescription.appointment_id;
+      const encounterId = prescription.encounter_id;
+      const patientId = prescription.patient_id || prescription.patient?.id;
+
+      if (!appointmentId && !encounterId && !patientId) {
+        setTestsLoading(false);
+        return;
+      }
+
+      // Build primary queries using appointment_id or encounter_id
+      let labQuery = supabase.from('lab_test_orders').select('*, catalog:lab_test_catalog(test_name)');
+      let radioQuery = supabase.from('radiology_test_orders').select('*, catalog:radiology_test_catalog(test_name)');
+      let scanQuery = supabase.from('scan_test_orders').select('*');
+      let groupedQuery = supabase.from('diagnostic_group_orders').select('*, items:diagnostic_group_order_items(*)');
+
+      if (appointmentId) {
+        labQuery = labQuery.eq('appointment_id', appointmentId);
+        radioQuery = radioQuery.eq('appointment_id', appointmentId);
+        scanQuery = scanQuery.eq('appointment_id', appointmentId);
+        groupedQuery = groupedQuery.eq('appointment_id', appointmentId);
+      } else if (encounterId) {
+        labQuery = labQuery.eq('encounter_id', encounterId);
+        radioQuery = radioQuery.eq('encounter_id', encounterId);
+        scanQuery = scanQuery.eq('encounter_id', encounterId);
+        groupedQuery = groupedQuery.eq('encounter_id', encounterId);
+      } else if (patientId) {
+        // Fallback: query by patient_id if no appointment/encounter ID
+        labQuery = labQuery.eq('patient_id', patientId);
+        radioQuery = radioQuery.eq('patient_id', patientId);
+        scanQuery = scanQuery.eq('patient_id', patientId);
+        groupedQuery = groupedQuery.eq('patient_id', patientId);
+      }
+
+      const [labRes, radioRes, scanRes, groupedRes] = await Promise.all([
+        labQuery,
+        radioQuery,
+        scanQuery,
+        groupedQuery
+      ]);
+
+      let labData = labRes.data || [];
+      let groupedData = groupedRes.data || [];
+
+      // Fallback: if lab and grouped results are empty but we have patient_id,
+      // try querying by patient_id (for older records created without encounter/appointment IDs)
+      if (labData.length === 0 && groupedData.length === 0 && patientId && (appointmentId || encounterId)) {
+        const [labFallback, groupedFallback] = await Promise.all([
+          supabase.from('lab_test_orders')
+            .select('*, catalog:lab_test_catalog(test_name)')
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabase.from('diagnostic_group_orders')
+            .select('*, items:diagnostic_group_order_items(*)')
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        ]);
+
+        // Filter to only include orders created on the same day as the prescription
+        const prescriptionDate = prescription.issue_date || prescription.created_at?.split('T')[0];
+        if (prescriptionDate) {
+          labData = (labFallback.data || []).filter((order: any) => {
+            const orderDate = order.created_at?.split('T')[0];
+            return orderDate === prescriptionDate;
+          });
+          groupedData = (groupedFallback.data || []).filter((order: any) => {
+            const orderDate = order.created_at?.split('T')[0];
+            return orderDate === prescriptionDate;
+          });
+        } else {
+          labData = labFallback.data || [];
+          groupedData = groupedFallback.data || [];
+        }
+      }
+
+      setAssociatedTests({
+        lab: labData,
+        radiology: radioRes.data || [],
+        scan: scanRes.data || [],
+        grouped: groupedData
+      });
+    } catch (err) {
+      console.error('Error loading associated tests:', err);
+    } finally {
+      setTestsLoading(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -2804,7 +2907,18 @@ function OutpatientPageContent() {
                                   prescription.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedPrescriptionForTests(prescription);
+                              setShowTestsModal(true);
+                              loadAssociatedTests(prescription);
+                            }}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View Test Details"
+                          >
+                            <Eye size={18} />
+                          </button>
                           <button
                             onClick={() => window.open(`/patients/${prescription.patient_id}`, '_blank')}
                             className="text-blue-600 hover:text-blue-800 font-medium"
@@ -3274,7 +3388,232 @@ function OutpatientPageContent() {
         </div>
       )}
 
-      {/* Thermal Print Modal */}
+      {/* Test Orders Modal */}
+      {showTestsModal && selectedPrescriptionForTests && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Order Details</h3>
+                <p className="text-xs text-gray-500">
+                  Patient: {selectedPrescriptionForTests.patient?.name} | {selectedPrescriptionForTests.prescription_id}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowTestsModal(false)}
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <CloseIcon size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {testsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-10 w-10 animate-spin text-blue-500 mb-4" />
+                  <p className="text-gray-500">Fetching associated tests...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Lab Tests Section (Merging individual and grouped lab tests) */}
+                  {(() => {
+                    const groupLabItems = associatedTests.grouped.flatMap((g: any) =>
+                      (g.items || []).filter((i: any) => i.service_type === 'lab')
+                    );
+                    const hasLab = associatedTests.lab.length > 0 || groupLabItems.length > 0;
+
+                    if (!hasLab) return null;
+
+                    return (
+                      <div>
+                        <h4 className="flex items-center gap-2 text-sm font-bold text-purple-700 mb-3 uppercase tracking-wider">
+                          <Activity size={16} />
+                          Lab Tests
+                        </h4>
+                        <div className="grid grid-cols-1 gap-2">
+                          {associatedTests.lab.map((test: any) => (
+                            <div key={test.id} className="flex items-center justify-between p-3 bg-purple-50 border border-purple-100 rounded-lg">
+                              <span className="font-medium text-purple-900">{test.catalog?.test_name || 'Lab Test'}</span>
+                              <span className="text-xs px-2 py-1 bg-purple-200 text-purple-800 rounded-full font-bold uppercase">{test.urgency || 'routine'}</span>
+                            </div>
+                          ))}
+                          {associatedTests.grouped.map((group: any) => {
+                            const labsInGroup = (group.items || []).filter((i: any) => i.service_type === 'lab');
+                            if (labsInGroup.length === 0) return null;
+                            return (
+                              <div key={group.id} className="p-3 bg-purple-50 border border-purple-100 rounded-lg relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                                  <TrendingUp size={40} />
+                                </div>
+                                <div className="font-bold text-xs text-purple-400 mb-1 flex items-center gap-1">
+                                  <Users size={12} />
+                                  {group.group_name || group.group_name_snapshot || 'Lab Group'}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {labsInGroup.map((item: any) => (
+                                    <span key={item.id} className="text-xs px-2 py-1 bg-white border border-purple-200 text-purple-700 rounded-md font-medium">
+                                      {item.item_name || item.item_name_snapshot || 'Lab Test'}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Radiology / X-Ray Section (Merging individual and grouped) */}
+                  {(() => {
+                    const groupRadioItems = associatedTests.grouped.flatMap((g: any) =>
+                      (g.items || []).filter((i: any) => i.service_type === 'radiology' || i.service_type === 'xray')
+                    );
+                    const hasRadio = associatedTests.radiology.length > 0 || groupRadioItems.length > 0;
+
+                    if (!hasRadio) return null;
+
+                    return (
+                      <div>
+                        <h4 className="flex items-center gap-2 text-sm font-bold text-blue-700 mb-3 uppercase tracking-wider">
+                          <Activity size={16} />
+                          Radiology & X-Ray
+                        </h4>
+                        <div className="grid grid-cols-1 gap-2">
+                          {associatedTests.radiology.map((test: any) => (
+                            <div key={test.id} className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-blue-900">{test.catalog?.test_name || 'X-Ray/Scan'}</span>
+                                <span className="text-xs px-2 py-1 bg-blue-200 text-blue-800 rounded-full font-bold uppercase">{test.urgency || 'routine'}</span>
+                              </div>
+                              {test.body_part && (
+                                <div className="text-xs text-blue-600 font-medium italic">Body Part: {test.body_part}</div>
+                              )}
+                            </div>
+                          ))}
+                          {associatedTests.grouped.map((group: any) => {
+                            const radioInGroup = (group.items || []).filter((i: any) => i.service_type === 'radiology' || i.service_type === 'xray');
+                            if (radioInGroup.length === 0) return null;
+                            return (
+                              <div key={group.id} className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                <div className="font-bold text-xs text-blue-400 mb-1 flex items-center gap-1">
+                                  <Users size={12} />
+                                  {group.group_name || group.group_name_snapshot || 'Radiology Group'}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {radioInGroup.map((item: any) => (
+                                    <span key={item.id} className="text-xs px-2 py-1 bg-white border border-blue-200 text-blue-700 rounded-md font-medium">
+                                      {item.item_name || item.item_name_snapshot || 'Radiology Test'}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Scans Section (Merging individual and grouped) */}
+                  {(() => {
+                    const groupScanItems = associatedTests.grouped.flatMap((g: any) =>
+                      (g.items || []).filter((i: any) => i.service_type === 'scan')
+                    );
+                    const hasScan = associatedTests.scan.length > 0 || groupScanItems.length > 0;
+
+                    if (!hasScan) return null;
+
+                    return (
+                      <div>
+                        <h4 className="flex items-center gap-2 text-sm font-bold text-orange-700 mb-3 uppercase tracking-wider">
+                          <Activity size={16} />
+                          Scans & Others
+                        </h4>
+                        <div className="grid grid-cols-1 gap-2">
+                          {associatedTests.scan.map((test: any) => (
+                            <div key={test.id} className="p-3 bg-orange-50 border border-orange-100 rounded-lg">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-orange-900">{test.scan_name}</span>
+                                <span className="text-xs px-2 py-1 bg-orange-200 text-orange-800 rounded-full font-bold uppercase">{test.urgency || 'routine'}</span>
+                              </div>
+                              <div className="text-xs text-orange-600 font-medium capitalize">{test.scan_type} Scan</div>
+                            </div>
+                          ))}
+                          {associatedTests.grouped.map((group: any) => {
+                            const scansInGroup = (group.items || []).filter((i: any) => i.service_type === 'scan');
+                            if (scansInGroup.length === 0) return null;
+                            return (
+                              <div key={group.id} className="p-3 bg-orange-50 border border-orange-100 rounded-lg">
+                                <div className="font-bold text-xs text-orange-400 mb-1 flex items-center gap-1">
+                                  <Users size={12} />
+                                  {group.group_name || group.group_name_snapshot || 'Scans Group'}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {scansInGroup.map((item: any) => (
+                                    <span key={item.id} className="text-xs px-2 py-1 bg-white border border-orange-200 text-orange-700 rounded-md font-medium">
+                                      {item.item_name || item.item_name_snapshot || 'Scan/Test'}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* If no diagnostic tests found */}
+                  {associatedTests.lab.length === 0 && associatedTests.radiology.length === 0 && associatedTests.scan.length === 0 && associatedTests.grouped.length === 0 && (
+                    <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                      <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 font-bold">No diagnostic orders found.</p>
+                      <p className="text-xs text-gray-400 mt-1 max-w-[200px] mx-auto">No tests were linked to this prescription in the database.</p>
+                    </div>
+                  )}
+
+                  {/* Medicines Section */}
+                  {selectedPrescriptionForTests.items?.length > 0 && (
+                    <div className="pt-4 border-t border-gray-100">
+                      <h4 className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">
+                        <FileText size={16} />
+                        Prescribed Medicines
+                      </h4>
+                      <div className="grid grid-cols-1 gap-2">
+                        {selectedPrescriptionForTests.items.map((item: any, idx: number) => (
+                          <div key={idx} className="text-sm p-4 bg-gray-50 rounded-xl flex items-center justify-between border border-gray-100 hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-green-100 text-green-700 rounded-lg">
+                                <Syringe size={18} />
+                              </div>
+                              <div>
+                                <div className="font-bold text-gray-900">{item.medication?.name || item.medicine_name}</div>
+                                <div className="text-xs text-gray-500 font-medium">{item.dosage} • {item.frequency} • {item.duration}</div>
+                              </div>
+                            </div>
+                            <div className="text-xs font-bold bg-white border border-green-200 text-green-700 px-3 py-1.5 rounded-lg shadow-sm">Qty: {item.quantity}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <button
+                onClick={() => setShowTestsModal(false)}
+                className="px-6 py-2 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors shadow-lg"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showThermalModal && selectedBill && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
