@@ -20,6 +20,9 @@ import VitalsQueueCard from '../../src/components/VitalsQueueCard';
 import { getQueueEntries, getQueueStats, type QueueEntry } from '../../src/lib/outpatientQueueService';
 import { getBillingRecords, type BillingRecord } from '../../src/lib/financeService';
 import StaffSelect from '../../src/components/StaffSelect';
+import UniversalPaymentModal from '../../src/components/UniversalPaymentModal';
+import BillDetailsModal from '../../src/components/BillDetailsModal';
+import { type PaymentRecord } from '../../src/lib/universalPaymentService';
 
 interface OutpatientStats {
   totalPatients: number;
@@ -133,6 +136,7 @@ function OutpatientPageContent() {
   const [billingDateFilter, setBillingDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [selectedBill, setSelectedBill] = useState<BillingRecord | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showBillDetailsModal, setShowBillDetailsModal] = useState(false);
   const [showThermalModal, setShowThermalModal] = useState(false);
   const [selectedPrescriptionForTests, setSelectedPrescriptionForTests] = useState<any | null>(null);
   const [showTestsModal, setShowTestsModal] = useState(false);
@@ -3098,20 +3102,22 @@ function OutpatientPageContent() {
                             >
                               <Printer size={16} />
                             </button>
+                            {(record.payment_status === 'pending' || record.payment_status === 'partial') && (
+                              <button
+                                onClick={() => {
+                                  setSelectedBill(record);
+                                  setShowPaymentModal(true);
+                                }}
+                                className="text-orange-600 hover:text-orange-800 p-1 rounded hover:bg-orange-50"
+                                title="Mark as Paid / Refund"
+                              >
+                                <CheckCircle size={16} />
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setSelectedBill(record);
-                                setShowPaymentModal(true);
-                              }}
-                              className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50"
-                              title="Process Payment"
-                            >
-                              <CreditCard size={16} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedBill(record);
-                                // View details
+                                setShowBillDetailsModal(true);
                               }}
                               className="text-gray-600 hover:text-gray-800 p-1 rounded hover:bg-gray-50"
                               title="View Details"
@@ -3796,99 +3802,22 @@ function OutpatientPageContent() {
 
       {/* Payment Modal */}
       {showPaymentModal && selectedBill && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Process Payment</h3>
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <CloseIcon size={24} />
-              </button>
-            </div>
+        <UniversalPaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          bill={selectedBill as unknown as PaymentRecord}
+          onSuccess={() => {
+            loadBillingRecords();
+          }}
+        />
+      )}
 
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Bill Details</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span>Bill ID:</span>
-                    <span className="font-medium">{selectedBill.bill_id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Patient:</span>
-                    <span className="font-medium">{selectedBill.patient?.name || 'Unknown'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Amount:</span>
-                    <span className="font-medium">₹{selectedBill.total_amount.toFixed(0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Status:</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${selectedBill.payment_status === 'paid'
-                      ? 'bg-green-100 text-green-800'
-                      : selectedBill.payment_status === 'partial'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                      }`}>
-                      {selectedBill.payment_status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Method
-                </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="upi">UPI</option>
-                  <option value="credit">Credit</option>
-                  <option value="others">Others</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Amount Received
-                </label>
-                <div className="relative">
-                  <IndianRupee size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    className="pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-                    defaultValue={selectedBill.total_amount}
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    // Process payment logic here
-                    alert('Payment processed successfully!');
-                    setShowPaymentModal(false);
-                    loadBillingRecords(); // Refresh records
-                  }}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                >
-                  <CreditCard size={16} className="inline mr-2" />
-                  Process Payment
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {showBillDetailsModal && selectedBill && (
+        <BillDetailsModal
+          isOpen={showBillDetailsModal}
+          onClose={() => setShowBillDetailsModal(false)}
+          bill={selectedBill}
+        />
       )}
 
 

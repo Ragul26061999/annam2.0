@@ -20,20 +20,27 @@ interface Payment {
 
 export default function UniversalPaymentModal({ isOpen, onClose, bill, onSuccess }: PaymentModalProps) {
   const [payments, setPayments] = useState<Payment[]>([
-    { method: 'cash', amount: bill?.total_amount || 0 }
+    { method: 'cash', amount: 0 }
   ]);
 
   useEffect(() => {
     if (bill) {
-      setPayments([{ method: 'cash', amount: bill.total_amount }]);
+      const remainingBalance = bill.total_amount - (bill.amount_paid || 0);
+      setPayments([{ 
+        method: 'cash', 
+        amount: Math.abs(remainingBalance) 
+      }]);
     }
   }, [bill]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const remainingBalance = (bill?.total_amount || 0) - (bill?.amount_paid || 0);
+  const isRefund = remainingBalance < 0;
+  
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const remaining = (bill?.total_amount || 0) - totalPaid;
+  const remainingAfterPayment = Math.max(0, remainingBalance) - totalPaid;
 
   const addPaymentRow = () => {
     setPayments([...payments, { method: 'cash', amount: 0 }]);
@@ -54,8 +61,16 @@ export default function UniversalPaymentModal({ isOpen, onClose, bill, onSuccess
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!bill || Math.abs(totalPaid - bill.total_amount) > 0.01) {
-      setError('Payment amount must equal the total bill amount');
+    const remainingBalance = (bill?.total_amount || 0) - (bill?.amount_paid || 0);
+    const isRefund = remainingBalance < 0;
+    
+    if (!bill || totalPaid <= 0) {
+      setError('Please enter a valid payment amount');
+      return;
+    }
+
+    if (isRefund && totalPaid > Math.abs(remainingBalance)) {
+      setError(`Refund amount cannot exceed ₹${Math.abs(remainingBalance).toLocaleString()}`);
       return;
     }
 
@@ -64,15 +79,19 @@ export default function UniversalPaymentModal({ isOpen, onClose, bill, onSuccess
 
     try {
       // Convert Payment interface to PaymentSplit
+      // If it's a refund, the amount should be recorded as negative
+      const remainingBalance = (bill?.total_amount || 0) - (bill?.amount_paid || 0);
+      const isRefund = remainingBalance < 0;
+
       const paymentSplits: PaymentSplit[] = payments.map(p => ({
         method: p.method,
-        amount: p.amount,
+        amount: isRefund ? -Math.abs(p.amount) : p.amount,
         transaction_reference: p.transaction_reference,
         notes: p.notes
       }));
 
-      // Process split payments (writes to billing_payments + updates billing header)
-      await processSplitPayments(bill.id, paymentSplits);
+      // Process split payments (writes to billing_payments + updates appropriate table)
+      await processSplitPayments(bill.id, paymentSplits, (bill as any).source || 'billing');
 
       setSuccess(true);
       onSuccess?.();
@@ -122,26 +141,38 @@ export default function UniversalPaymentModal({ isOpen, onClose, bill, onSuccess
           </div>
           
           {/* Bill Summary */}
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <div className="grid grid-cols-2 gap-y-3">
               <span className="text-sm text-gray-600">Bill Number:</span>
-              <span className="font-semibold">{bill?.bill_id || 'N/A'}</span>
-            </div>
-            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-semibold text-right">{bill?.bill_id || 'N/A'}</span>
+              
               <span className="text-sm text-gray-600">Total Amount:</span>
-              <span className="text-xl font-bold text-gray-900">
+              <span className="text-sm font-bold text-right text-gray-900">
                 ₹{bill?.total_amount?.toLocaleString() || '0'}
               </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Payment Status:</span>
-              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                bill?.payment_status === 'paid' 
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-yellow-100 text-yellow-800'
-              }`}>
-                {bill?.payment_status?.toUpperCase() || 'PENDING'}
+              
+              <span className="text-sm text-gray-600">Already Paid:</span>
+              <span className="text-sm font-bold text-right text-green-600">
+                ₹{bill?.amount_paid?.toLocaleString() || '0'}
               </span>
+              
+              <div className="col-span-2 border-t border-gray-200 my-1"></div>
+              
+              {((bill?.total_amount || 0) - (bill?.amount_paid || 0)) < 0 ? (
+                <>
+                  <span className="text-sm font-semibold text-red-600">Refund Due:</span>
+                  <span className="text-xl font-bold text-right text-red-600">
+                    ₹{Math.abs((bill?.total_amount || 0) - (bill?.amount_paid || 0)).toLocaleString()}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-semibold text-blue-700">Remaining Balance:</span>
+                  <span className="text-xl font-bold text-right text-blue-700">
+                    ₹{((bill?.total_amount || 0) - (bill?.amount_paid || 0)).toLocaleString()}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -234,16 +265,18 @@ export default function UniversalPaymentModal({ isOpen, onClose, bill, onSuccess
               <div className="border-t border-gray-200 pt-4 mb-6">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total Paid:</span>
-                    <span className="font-semibold">₹{totalPaid.toLocaleString()}</span>
+                    <span className="text-gray-600">{isRefund ? 'Total To Refund:' : 'Total To Pay:'}</span>
+                    <span className={`font-bold ${isRefund ? 'text-red-600' : 'text-blue-600'}`}>₹{totalPaid.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Remaining:</span>
-                    <span className={`font-semibold ${remaining < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                      ₹{Math.abs(remaining).toLocaleString()}
-                      {remaining < 0 && ' (Overpaid)'}
-                    </span>
-                  </div>
+                  {!isRefund && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">New Balance:</span>
+                      <span className={`font-semibold ${remainingAfterPayment < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                        ₹{Math.abs(remainingAfterPayment).toLocaleString()}
+                        {remainingAfterPayment < 0 && ' (Overpaid)'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -266,10 +299,12 @@ export default function UniversalPaymentModal({ isOpen, onClose, bill, onSuccess
                 </button>
                 <button
                   type="submit"
-                  disabled={processing || !bill || Math.abs(totalPaid - bill.total_amount) > 0.01}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={processing || !bill || totalPaid <= 0}
+                  className={`flex-1 px-4 py-3 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isRefund ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
-                  {processing ? 'Processing...' : 'Complete Payment'}
+                  {processing ? 'Processing...' : (isRefund ? 'Record Refund' : 'Record Payment')}
                 </button>
               </div>
             </>

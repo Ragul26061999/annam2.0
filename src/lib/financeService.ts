@@ -6,6 +6,8 @@ export interface BillingRecord {
   patient_id: string;
   bill_date: string;
   total_amount: number;
+  amount_paid: number;
+  balance_due: number;
   subtotal: number;
   tax_amount: number;
   discount_amount: number;
@@ -422,6 +424,8 @@ export async function getBillingRecords(
         patient_id: b.patient_id,
         bill_date: b.bill_date || b.issued_at || b.created_at,
         total_amount: Number(b.total) || 0,
+        amount_paid: Number(b.amount_paid) || 0,
+        balance_due: Number(b.balance_due) || 0,
         subtotal: Number(b.subtotal) || 0,
         tax_amount: Number(b.tax) || 0,
         discount_amount: Number(b.discount) || 0,
@@ -445,6 +449,8 @@ export async function getBillingRecords(
       patient_id: b.patient_id,
       bill_date: b.bill_date || b.created_at,
       total_amount: Number(b.total_amount) || 0,
+      amount_paid: Number(b.amount_paid) || 0,
+      balance_due: (Number(b.total_amount) || 0) - (Number(b.amount_paid) || 0),
       subtotal: Number(b.subtotal) || 0,
       tax_amount: Number(b.tax_amount) || 0,
       discount_amount: Number(b.discount_amount) || 0,
@@ -535,10 +541,12 @@ export async function getBillingRecords(
         patient_id: p.patient_id || p.id,
         bill_date: p.created_at,
         total_amount: Number(p.total_amount) || 0,
+        amount_paid: Number(p.advance_amount) || 0,
+        balance_due: (Number(p.total_amount) || 0) - (Number(p.advance_amount) || 0),
         subtotal: Number(p.consultation_fee) || 0,
         tax_amount: 0,
         discount_amount: Number(p.op_card_amount) || 0,
-        payment_status: 'paid', // Outpatient records are typically paid
+        payment_status: p.payment_mode?.toLowerCase() === 'credit' ? 'pending' : 'paid',
         payment_method: p.payment_mode || 'cash',
         created_at: p.created_at,
         updated_at: p.updated_at || p.created_at,

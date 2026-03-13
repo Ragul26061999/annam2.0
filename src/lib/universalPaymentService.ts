@@ -56,9 +56,12 @@ export interface PaymentRecord {
   tax_amount: number;
   discount_amount: number;
   total_amount: number;
+  amount_paid: number;
+  balance_due: number;
   payment_status: 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled';
   payment_method?: string;
   payment_date?: string;
+  source?: string;
   created_at: string;
   updated_at: string;
 }
@@ -210,6 +213,8 @@ export async function createUniversalBill(data: PaymentData): Promise<PaymentRec
       tax_amount: Number(billing.tax ?? data.tax_amount) || 0,
       discount_amount: Number(billing.discount ?? data.discount_amount) || 0,
       total_amount: Number(billing.total ?? ((Number(billing.subtotal ?? data.subtotal) || 0) - (Number(billing.discount ?? data.discount_amount) || 0) + (Number(billing.tax ?? data.tax_amount) || 0))) || 0,
+      amount_paid: Number(billing.amount_paid) || 0,
+      balance_due: Number(billing.balance_due) || 0,
       payment_status: (billing.payment_status as any) || 'pending',
       payment_method: billing.payment_method ?? data.payment_method,
       payment_date: billing.issued_at ?? undefined,
@@ -274,6 +279,7 @@ async function resolveGroupedLabItemsToPaymentItems(groupedOrders: any[]): Promi
 export async function processSplitPayments(
   billId: string,
   payments: PaymentSplit[],
+  source: string = 'billing',
   notes?: string
 ): Promise<void> {
   try {
@@ -285,32 +291,42 @@ export async function processSplitPayments(
     }
     const authUserId = authData.user.id;
 
-    // Load bill
-    const { data: billing, error: billingFetchError } = await supabase
-      .from('billing')
-      .select('id, subtotal, discount, tax, total, amount_paid, balance_due, payment_status')
-      .eq('id', billId)
-      .single();
+    // Load bill header based on source
+    let billing: any = null;
+    let billingFetchError: any = null;
+
+    if (source === 'outpatient') {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('id, total_amount, advance_amount, payment_mode')
+        .eq('id', billId)
+        .single();
+      billing = data;
+      billingFetchError = error;
+      
+      // Map patient fields to standard names for logic below
+      if (billing) {
+        billing.total = Number(billing.total_amount) || 0;
+        billing.amount_paid = Number(billing.advance_amount) || 0;
+        billing.payment_status = billing.payment_mode?.toLowerCase() === 'credit' ? 'partial' : 'paid';
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('billing')
+        .select('id, subtotal, discount, tax, total, amount_paid, balance_due, payment_status')
+        .eq('id', billId)
+        .single();
+      billing = data;
+      billingFetchError = error;
+    }
 
     if (billingFetchError) {
-      throw new Error(`Failed to load bill: ${supabaseErrorToString(billingFetchError)}`);
+      throw new Error(`Failed to load bill header: ${supabaseErrorToString(billingFetchError)}`);
     }
-    if (!billing) throw new Error('Bill not found');
+    if (!billing) throw new Error(`${source === 'outpatient' ? 'Patient record' : 'Bill'} not found`);
 
     const billTotal = Number(billing.total) || 0;
-    if (Math.abs(totalPaid - billTotal) > 0.01) {
-      throw new Error('Payment amount must equal the total bill amount');
-    }
 
-    // Replace payments (simple + robust)
-    const { error: delError } = await supabase
-      .from('billing_payments')
-      .delete()
-      .eq('billing_id', billId);
-
-    if (delError) {
-      throw new Error(`Failed to clear old payments: ${supabaseErrorToString(delError)}`);
-    }
 
     const rows = payments
       .map(p => ({
@@ -321,7 +337,7 @@ export async function processSplitPayments(
         paid_at: new Date().toISOString(),
         received_by: authUserId,
       }))
-      .filter(r => r.amount > 0);
+      .filter(r => r.amount !== 0);
 
     if (rows.length) {
       const { error: insError } = await supabase
@@ -332,28 +348,50 @@ export async function processSplitPayments(
       }
     }
 
-    const paid = totalPaid;
-    const balance = Math.max(0, billTotal - paid);
-    const paymentStatus = paid <= 0 ? 'pending' : (balance <= 0 ? 'paid' : 'partial');
+    // Calculate actual money received (exclude 'credit' from currently paid amount)
+    const actualPaid = payments
+      .filter(p => p.method !== 'credit')
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    // Derive payment_method for billing header
+    const newAmountPaid = (Number(billing.amount_paid) || 0) + actualPaid;
+    const balance = Math.max(0, billTotal - newAmountPaid);
+    const paymentStatus = newAmountPaid <= 0 ? 'pending' : (balance <= 0 ? 'paid' : 'partial');
+
+    // Derive payment_method for billing header (prefer existing if many, or 'split' if new ones are complex)
     const nonZero = payments.filter(p => (Number(p.amount) || 0) > 0);
-    const derivedMethod = nonZero.length === 1 ? nonZero[0].method : (nonZero.length > 1 ? 'split' : null);
+    const derivedMethod = nonZero.length === 1 ? nonZero[0].method : (nonZero.length > 1 ? 'split' : billing.payment_method);
 
-    const { error: updError } = await supabase
-      .from('billing')
-      .update({
-        amount_paid: paid,
-        balance_due: balance,
-        payment_status: paymentStatus,
-        payment_method: derivedMethod,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', billId);
+    // Update the correct table based on source
+    if (source === 'outpatient') {
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({
+          advance_amount: newAmountPaid,
+          payment_mode: paymentStatus === 'paid' ? 'Paid' : 'Partial'
+        })
+        .eq('id', billId);
+        
+      if (updateError) {
+        throw new Error(`Failed to update patient record: ${supabaseErrorToString(updateError)}`);
+      }
+    } else {
+      const { error: updateError } = await supabase
+        .from('billing')
+        .update({
+          amount_paid: newAmountPaid,
+          balance_due: balance,
+          payment_status: paymentStatus,
+          payment_method: derivedMethod,
+          payment_date: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', billId);
 
-    if (updError) {
-      throw new Error(`Failed to update bill totals: ${supabaseErrorToString(updError)}`);
+      if (updateError) {
+        throw new Error(`Failed to update bill: ${supabaseErrorToString(updateError)}`);
+      }
     }
+
   } catch (error) {
     console.error('Error in processSplitPayments:', error);
     throw error;
@@ -597,4 +635,25 @@ export async function createOPConsultationBill(
     created_by: staffId,
     bill_type: 'outpatient',
   });
+}
+
+// Get payment history for a specific bill
+export async function getBillPaymentHistory(billId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('billing_payments')
+      .select('*')
+      .eq('billing_id', billId)
+      .order('paid_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching payment history:', error.message, error.details);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error: any) {
+    console.error('Error in getBillPaymentHistory:', error.message || error);
+    throw error;
+  }
 }
