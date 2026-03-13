@@ -288,6 +288,13 @@ export default function MedicationHistory({ patientId, refreshTrigger }: Medicat
                     ))}
                   </div>
                   
+                  {group.instructions && (
+                    <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg">
+                      <p className="text-xs font-bold text-blue-700 uppercase mb-1">Doctor's Notes / Special Instructions</p>
+                      <p className="text-sm text-blue-800 italic">{group.instructions}</p>
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="flex items-center text-sm text-gray-600">
                       <Calendar className="h-4 w-4 mr-2" />

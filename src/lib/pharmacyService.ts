@@ -112,6 +112,7 @@ export interface PrescriptionGroup {
   prescription_image_url?: string;
   total_amount?: number;
   payment_status?: string;
+  instructions?: string;
   medications: MedicationItem[];
 }
 
@@ -522,6 +523,7 @@ export async function getPatientPrescriptionGroups(patientId: string): Promise<P
         prescription_id,
         created_at,
         prescription_image_url,
+        instructions,
         doctor:doctor_id(user:user_id(name)),
         prescription_items(
           medication_id,
@@ -563,6 +565,7 @@ export async function getPatientPrescriptionGroups(patientId: string): Promise<P
           prescribed_by: doctorName,
           status: 'prescribed',
           prescription_image_url: prescription.prescription_image_url,
+          instructions: prescription.instructions,
           medications: medications
         });
       });

@@ -836,7 +836,7 @@ function OutpatientPageContent() {
     try {
       setLabTestLoading(true);
 
-      // Fetch recent prescriptions (removed has_lab_tests filter as column doesn't exist)
+      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('prescriptions')
         .select(`
@@ -865,8 +865,9 @@ function OutpatientPageContent() {
             medication:medications(id, name, generic_name, strength, dosage_form)
           )
         `)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .eq('issue_date', today)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching lab test prescriptions:', error);
@@ -927,7 +928,7 @@ function OutpatientPageContent() {
       let labQuery = supabase.from('lab_test_orders').select('*, catalog:lab_test_catalog(test_name)');
       let radioQuery = supabase.from('radiology_test_orders').select('*, catalog:radiology_test_catalog(test_name)');
       let scanQuery = supabase.from('scan_test_orders').select('*');
-      let groupedQuery = supabase.from('diagnostic_group_orders').select('*, items:diagnostic_group_order_items(*)');
+      let groupedQuery = supabase.from('diagnostic_group_orders').select('*, items:diagnostic_group_order_items(*), group:diagnostic_groups(category)');
 
       if (appointmentId) {
         labQuery = labQuery.eq('appointment_id', appointmentId);
@@ -957,17 +958,27 @@ function OutpatientPageContent() {
       let labData = labRes.data || [];
       let groupedData = groupedRes.data || [];
 
-      // Fallback: if lab and grouped results are empty but we have patient_id,
-      // try querying by patient_id (for older records created without encounter/appointment IDs)
-      if (labData.length === 0 && groupedData.length === 0 && patientId && (appointmentId || encounterId)) {
-        const [labFallback, groupedFallback] = await Promise.all([
+      // Fallback: if results are empty but we have patient_id,
+      // try querying by patient_id (for records created without encounter/appointment IDs)
+      if (labData.length === 0 && groupedData.length === 0 && (radioRes.data?.length === 0 || !radioRes.data) && patientId && (appointmentId || encounterId)) {
+        const [labFallback, radioFallback, scanFallback, groupedFallback] = await Promise.all([
           supabase.from('lab_test_orders')
             .select('*, catalog:lab_test_catalog(test_name)')
             .eq('patient_id', patientId)
             .order('created_at', { ascending: false })
             .limit(20),
+          supabase.from('radiology_test_orders')
+            .select('*, catalog:radiology_test_catalog(test_name)')
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabase.from('scan_test_orders')
+            .select('*')
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false })
+            .limit(20),
           supabase.from('diagnostic_group_orders')
-            .select('*, items:diagnostic_group_order_items(*)')
+            .select('*, items:diagnostic_group_order_items(*), group:diagnostic_groups(category)')
             .eq('patient_id', patientId)
             .order('created_at', { ascending: false })
             .limit(20)
@@ -980,22 +991,41 @@ function OutpatientPageContent() {
             const orderDate = order.created_at?.split('T')[0];
             return orderDate === prescriptionDate;
           });
+          const radioData = (radioFallback.data || []).filter((order: any) => {
+            const orderDate = order.created_at?.split('T')[0];
+            return orderDate === prescriptionDate;
+          });
+          const scanData = (scanFallback.data || []).filter((order: any) => {
+            const orderDate = order.created_at?.split('T')[0];
+            return orderDate === prescriptionDate;
+          });
           groupedData = (groupedFallback.data || []).filter((order: any) => {
             const orderDate = order.created_at?.split('T')[0];
             return orderDate === prescriptionDate;
           });
+          
+          setAssociatedTests({
+            lab: labData,
+            radiology: radioData,
+            scan: scanData,
+            grouped: groupedData
+          });
         } else {
-          labData = labFallback.data || [];
-          groupedData = groupedFallback.data || [];
+          setAssociatedTests({
+            lab: labFallback.data || [],
+            radiology: radioFallback.data || [],
+            scan: scanFallback.data || [],
+            grouped: groupedFallback.data || []
+          });
         }
+      } else {
+        setAssociatedTests({
+          lab: labData,
+          radiology: radioRes.data || [],
+          scan: scanRes.data || [],
+          grouped: groupedData
+        });
       }
-
-      setAssociatedTests({
-        lab: labData,
-        radiology: radioRes.data || [],
-        scan: scanRes.data || [],
-        grouped: groupedData
-      });
     } catch (err) {
       console.error('Error loading associated tests:', err);
     } finally {
@@ -3420,7 +3450,10 @@ function OutpatientPageContent() {
                     const groupLabItems = associatedTests.grouped.flatMap((g: any) =>
                       (g.items || []).filter((i: any) => i.service_type === 'lab')
                     );
-                    const hasLab = associatedTests.lab.length > 0 || groupLabItems.length > 0;
+                    const hasLabGroup = associatedTests.grouped.some((g: any) => 
+                      g.group?.category === 'Lab' || g.category === 'Lab'
+                    );
+                    const hasLab = associatedTests.lab.length > 0 || groupLabItems.length > 0 || hasLabGroup;
 
                     if (!hasLab) return null;
 
@@ -3439,7 +3472,11 @@ function OutpatientPageContent() {
                           ))}
                           {associatedTests.grouped.map((group: any) => {
                             const labsInGroup = (group.items || []).filter((i: any) => i.service_type === 'lab');
-                            if (labsInGroup.length === 0) return null;
+                            const isLabGroup = group.group?.category === 'Lab' || group.category === 'Lab';
+                            const hasNotes = group.clinical_indication && group.clinical_indication !== 'N/A';
+                            
+                            if (labsInGroup.length === 0 && (!isLabGroup || !hasNotes)) return null;
+                            
                             return (
                               <div key={group.id} className="p-3 bg-purple-50 border border-purple-100 rounded-lg relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -3449,13 +3486,21 @@ function OutpatientPageContent() {
                                   <Users size={12} />
                                   {group.group_name || group.group_name_snapshot || 'Lab Group'}
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {labsInGroup.map((item: any) => (
-                                    <span key={item.id} className="text-xs px-2 py-1 bg-white border border-purple-200 text-purple-700 rounded-md font-medium">
-                                      {item.item_name || item.item_name_snapshot || 'Lab Test'}
-                                    </span>
-                                  ))}
-                                </div>
+                                {labsInGroup.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {labsInGroup.map((item: any) => (
+                                      <span key={item.id} className="text-xs px-2 py-1 bg-white border border-purple-200 text-purple-700 rounded-md font-medium">
+                                        {item.item_name || item.item_name_snapshot || 'Lab Test'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {hasNotes && (
+                                  <div className="text-sm bg-white p-2 rounded border border-purple-100 mt-1">
+                                    <div className="text-[10px] text-purple-400 uppercase font-bold mb-1">Doctor's Notes:</div>
+                                    <div className="text-purple-900 font-medium">{group.clinical_indication}</div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -3469,7 +3514,11 @@ function OutpatientPageContent() {
                     const groupRadioItems = associatedTests.grouped.flatMap((g: any) =>
                       (g.items || []).filter((i: any) => i.service_type === 'radiology' || i.service_type === 'xray')
                     );
-                    const hasRadio = associatedTests.radiology.length > 0 || groupRadioItems.length > 0;
+                    const hasRadioGroup = associatedTests.grouped.some((g: any) => 
+                      g.group?.category === 'Radiology' || g.category === 'Radiology' || 
+                      g.group?.category === 'X-Ray' || g.category === 'X-Ray'
+                    );
+                    const hasRadio = associatedTests.radiology.length > 0 || groupRadioItems.length > 0 || hasRadioGroup;
 
                     if (!hasRadio) return null;
 
@@ -3493,20 +3542,32 @@ function OutpatientPageContent() {
                           ))}
                           {associatedTests.grouped.map((group: any) => {
                             const radioInGroup = (group.items || []).filter((i: any) => i.service_type === 'radiology' || i.service_type === 'xray');
-                            if (radioInGroup.length === 0) return null;
+                            const isRadioGroup = group.group?.category === 'Radiology' || group.category === 'Radiology' || group.group?.category === 'X-Ray' || group.category === 'X-Ray';
+                            const hasNotes = group.clinical_indication && group.clinical_indication !== 'N/A';
+
+                            if (radioInGroup.length === 0 && (!isRadioGroup || !hasNotes)) return null;
+                            
                             return (
                               <div key={group.id} className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
                                 <div className="font-bold text-xs text-blue-400 mb-1 flex items-center gap-1">
                                   <Users size={12} />
                                   {group.group_name || group.group_name_snapshot || 'Radiology Group'}
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {radioInGroup.map((item: any) => (
-                                    <span key={item.id} className="text-xs px-2 py-1 bg-white border border-blue-200 text-blue-700 rounded-md font-medium">
-                                      {item.item_name || item.item_name_snapshot || 'Radiology Test'}
-                                    </span>
-                                  ))}
-                                </div>
+                                {radioInGroup.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {radioInGroup.map((item: any) => (
+                                      <span key={item.id} className="text-xs px-2 py-1 bg-white border border-blue-200 text-blue-700 rounded-md font-medium">
+                                        {item.item_name || item.item_name_snapshot || 'Radiology Test'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {hasNotes && (
+                                  <div className="text-sm bg-white p-2 rounded border border-blue-100 mt-1">
+                                    <div className="text-[10px] text-blue-400 uppercase font-bold mb-1">Doctor's Notes:</div>
+                                    <div className="text-blue-900 font-medium">{group.clinical_indication}</div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -3520,7 +3581,10 @@ function OutpatientPageContent() {
                     const groupScanItems = associatedTests.grouped.flatMap((g: any) =>
                       (g.items || []).filter((i: any) => i.service_type === 'scan')
                     );
-                    const hasScan = associatedTests.scan.length > 0 || groupScanItems.length > 0;
+                    const hasScanGroup = associatedTests.grouped.some((g: any) => 
+                      g.group?.category === 'Scan' || g.category === 'Scan'
+                    );
+                    const hasScan = associatedTests.scan.length > 0 || groupScanItems.length > 0 || hasScanGroup;
 
                     if (!hasScan) return null;
 
@@ -3542,20 +3606,32 @@ function OutpatientPageContent() {
                           ))}
                           {associatedTests.grouped.map((group: any) => {
                             const scansInGroup = (group.items || []).filter((i: any) => i.service_type === 'scan');
-                            if (scansInGroup.length === 0) return null;
+                            const isScanGroup = group.group?.category === 'Scan' || group.category === 'Scan';
+                            const hasNotes = group.clinical_indication && group.clinical_indication !== 'N/A';
+                            
+                            if (scansInGroup.length === 0 && (!isScanGroup || !hasNotes)) return null;
+                            
                             return (
                               <div key={group.id} className="p-3 bg-orange-50 border border-orange-100 rounded-lg">
                                 <div className="font-bold text-xs text-orange-400 mb-1 flex items-center gap-1">
                                   <Users size={12} />
                                   {group.group_name || group.group_name_snapshot || 'Scans Group'}
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {scansInGroup.map((item: any) => (
-                                    <span key={item.id} className="text-xs px-2 py-1 bg-white border border-orange-200 text-orange-700 rounded-md font-medium">
-                                      {item.item_name || item.item_name_snapshot || 'Scan/Test'}
-                                    </span>
-                                  ))}
-                                </div>
+                                {scansInGroup.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {scansInGroup.map((item: any) => (
+                                      <span key={item.id} className="text-xs px-2 py-1 bg-white border border-orange-200 text-orange-700 rounded-md font-medium">
+                                        {item.item_name || item.item_name_snapshot || 'Scan/Test'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {hasNotes && (
+                                  <div className="text-sm bg-white p-2 rounded border border-orange-100 mt-1">
+                                    <div className="text-[10px] text-orange-400 uppercase font-bold mb-1">Doctor's Notes:</div>
+                                    <div className="text-orange-900 font-medium">{group.clinical_indication}</div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

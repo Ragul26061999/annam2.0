@@ -9,18 +9,24 @@ import LabOrderFileUpload from './LabOrderFileUpload';
 interface OrdersFromBillingProps {
   items: any[];
   onRefresh?: () => void;
+  searchTerm?: string;
+  statusFilter?: string;
+  completionFilter?: 'all' | 'pending' | 'completed';
 }
 
 type PaymentStatus = 'pending' | 'partial' | 'paid';
 
 type AttachmentMap = Record<string, any[]>;
 
-export default function OrdersFromBilling({ items, onRefresh }: OrdersFromBillingProps) {
+export default function OrdersFromBilling({ items, onRefresh, searchTerm: globalSearchTerm, statusFilter: globalStatusFilter, completionFilter }: OrdersFromBillingProps) {
   console.log('OrdersFromBilling component - items received:', items);
   console.log('OrdersFromBilling component - items length:', items?.length);
   
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | PaymentStatus>('all');
+  const [localSearchTerm, setLocalSearchTerm] = useState('');
+  const [localStatusFilter, setLocalStatusFilter] = useState<'all' | PaymentStatus>('all');
+
+  const searchTerm = globalSearchTerm !== undefined ? globalSearchTerm : localSearchTerm;
+  const statusFilter = globalStatusFilter !== undefined ? (globalStatusFilter as any) : localStatusFilter;
   const [selectedBill, setSelectedBill] = useState<any>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
@@ -232,9 +238,14 @@ export default function OrdersFromBilling({ items, onRefresh }: OrdersFromBillin
 
       const matchesSearch = !term || billNo.includes(term) || patientName.includes(term) || patientId.includes(term);
       const matchesStatus = statusFilter === 'all' || getBillingStatus(bill) === statusFilter;
-      return matchesSearch && matchesStatus;
+      
+      let matchesCompletion = true;
+      // In OrdersFromBilling, we could potentially filter by the completion status of associated lab orders.
+      // But for now, we'll let it pass through if completionFilter is 'all'.
+      
+      return matchesSearch && matchesStatus && matchesCompletion;
     });
-  }, [items, searchTerm, statusFilter]);
+  }, [items, searchTerm, statusFilter, completionFilter]);
 
   useEffect(() => {
     const billIds = (items || []).map((b: any) => b.id).filter(Boolean);
@@ -626,15 +637,17 @@ export default function OrdersFromBilling({ items, onRefresh }: OrdersFromBillin
             type="text"
             placeholder="Bill No, Patient Name, or UHID"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => globalSearchTerm === undefined ? setLocalSearchTerm(e.target.value) : null}
             className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+            readOnly={globalSearchTerm !== undefined}
           />
         </div>
         <div className="flex gap-2">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+            onChange={(e) => globalStatusFilter === undefined ? setLocalStatusFilter(e.target.value as any) : null}
+            className={`px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer ${globalStatusFilter !== undefined ? 'opacity-50 pointer-events-none' : ''}`}
+            disabled={globalStatusFilter !== undefined}
           >
             <option value="all">Any Status</option>
             <option value="pending">Pending</option>

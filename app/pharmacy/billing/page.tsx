@@ -473,8 +473,8 @@ export default function PharmacyBillingPage() {
     }
   }
 
-  const handleSettlePayment = async (billId: string) => {
-    if (!confirm('Mark this bill as paid? This action cannot be undone.')) {
+  const handleSettlePayment = async (bill: PharmacyBill) => {
+    if (!confirm(`Mark bill ${bill.bill_number} as paid? This action will set the amount paid to ₹${Math.round(bill.total_amount)}.`)) {
       return
     }
 
@@ -482,8 +482,12 @@ export default function PharmacyBillingPage() {
       setLoading(true)
       const { error } = await supabase
         .from('billing')
-        .update({ payment_status: 'paid' })
-        .eq('id', billId)
+        .update({ 
+          payment_status: 'paid',
+          amount_paid: bill.total_amount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bill.id)
 
       if (error) throw error
 
@@ -515,16 +519,25 @@ export default function PharmacyBillingPage() {
     const totalAmount = selectedBillForPayment.total_amount || 0
     const currentPaid = selectedBillForPayment.amount_paid || 0
     const remainingBalance = totalAmount - currentPaid
+    const isRefund = remainingBalance < 0
 
-    // Prevent overpayment
-    if (amount > remainingBalance) {
+    // Prevent overpayment if it's a regular payment
+    if (!isRefund && amount > remainingBalance) {
       alert(`Payment amount (₹${roundToWholeNumber(amount)}) exceeds remaining balance (₹${roundToWholeNumber(remainingBalance)}). Please enter a valid amount.`)
+      return
+    }
+
+    // Prevent over-refunding if it's a refund
+    if (isRefund && amount > Math.abs(remainingBalance)) {
+      alert(`Refund amount (₹${roundToWholeNumber(amount)}) exceeds the overpayment amount (₹${roundToWholeNumber(Math.abs(remainingBalance))}).`)
       return
     }
 
     try {
       setMarkingPaid(true)
-      const newTotalPaid = currentPaid + amount
+      // If it's a refund, we subtract the amount from total paid
+      const newTotalPaid = isRefund ? currentPaid - amount : currentPaid + amount
+      const transactionAmount = isRefund ? -amount : amount
 
       console.log('Recording payment:', {
         billId: selectedBillForPayment.id,
@@ -566,7 +579,7 @@ export default function PharmacyBillingPage() {
       const paymentData: any = {
         billing_id: selectedBillForPayment.id,
         method: paymentMethod,
-        amount: amount,
+        amount: transactionAmount,
         reference: paymentReference || null,
         received_at: new Date().toISOString(),
         paid_at: new Date().toISOString()
@@ -597,7 +610,7 @@ export default function PharmacyBillingPage() {
         const simplePaymentData = {
           billing_id: selectedBillForPayment.id,
           method: paymentMethod,
-          amount: amount,
+          amount: transactionAmount,
           reference: paymentReference || null,
           received_at: new Date().toISOString(),
           paid_at: new Date().toISOString()
@@ -620,7 +633,9 @@ export default function PharmacyBillingPage() {
       setSelectedBillForPayment(null)
 
       // Show appropriate success message
-      if (paymentStatus === 'paid') {
+      if (isRefund) {
+        alert(`Refund of ₹${roundToWholeNumber(amount)} recorded successfully. Updated total paid: ₹${roundToWholeNumber(newTotalPaid)}`)
+      } else if (paymentStatus === 'paid') {
         alert('Payment recorded successfully! Bill marked as fully paid.')
       } else {
         alert(`Partial payment of ₹${roundToWholeNumber(amount)} recorded successfully. Remaining balance: ₹${roundToWholeNumber(totalAmount - newTotalPaid)}`)
@@ -1773,11 +1788,11 @@ export default function PharmacyBillingPage() {
                           <CreditCard className="w-4 h-4" />
                         </button>
                       )}
-                      {bill.payment_status === 'pending' && (
+                      {(bill.payment_status === 'pending' || bill.payment_status === 'partial') && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleSettlePayment(bill.id) }}
+                          onClick={(e) => { e.stopPropagation(); openMarkPaidModal(bill) }}
                           className="text-orange-600 hover:text-orange-800"
-                          title="Settle Payment"
+                          title="Mark as Paid / Refund"
                         >
                           <CheckCircle className="w-4 h-4" />
                         </button>
@@ -2224,9 +2239,11 @@ export default function PharmacyBillingPage() {
                     </div>
                   )}
                   <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                    <span className="text-sm text-gray-600">Remaining Balance:</span>
-                    <span className="font-bold text-orange-600">
-                      ₹{Math.max(0, (selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}
+                    <span className="text-sm text-gray-600">
+                      {(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'Refund Due:' : 'Remaining Balance:'}
+                    </span>
+                    <span className={`font-bold ${(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'text-red-600' : 'text-orange-600'}`}>
+                      ₹{Math.abs((selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -2234,7 +2251,7 @@ export default function PharmacyBillingPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Amount *
+                  {(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'Refund Amount *' : 'Payment Amount *'}
                 </label>
                 <input
                   type="number"
@@ -2246,20 +2263,31 @@ export default function PharmacyBillingPage() {
                     const totalAmount = selectedBillForPayment.total_amount || 0
                     const currentPaid = selectedBillForPayment.amount_paid || 0
                     const remainingBalance = totalAmount - currentPaid
+                    const isRefund = remainingBalance < 0
 
-                    // Prevent entering amount greater than remaining balance
-                    if (amount > remainingBalance) {
-                      setPaymentAmount(remainingBalance.toString())
+                    if (isRefund) {
+                        // For refunds, cap at the overpayment amount
+                        if (amount > Math.abs(remainingBalance)) {
+                            setPaymentAmount(Math.abs(remainingBalance).toString())
+                        } else {
+                            setPaymentAmount(value)
+                        }
                     } else {
-                      setPaymentAmount(value)
+                        // For regular payments, cap at remaining balance
+                        if (amount > remainingBalance) {
+                            setPaymentAmount(remainingBalance.toString())
+                        } else {
+                            setPaymentAmount(value)
+                        }
                     }
                   }}
-                  placeholder="Enter payment amount"
-                  max={Math.max(0, (selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0))}
+                  placeholder={(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? "Enter refund amount" : "Enter payment amount"}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Maximum payment: ₹{Math.max(0, (selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}
+                  {(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) 
+                    ? `Maximum refund: ₹${Math.abs((selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}`
+                    : `Maximum payment: ₹${Math.max(0, (selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}`}
                 </p>
               </div>
 
@@ -2309,9 +2337,13 @@ export default function PharmacyBillingPage() {
                 <button
                   onClick={handleMarkAsPaid}
                   disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || markingPaid}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+                    (selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0)
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
                 >
-                  {markingPaid ? 'Processing...' : 'Record Payment'}
+                  {markingPaid ? 'Processing...' : (selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'Record Refund' : 'Record Payment'}
                 </button>
               </div>
             </div>

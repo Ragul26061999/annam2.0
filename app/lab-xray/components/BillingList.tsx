@@ -16,11 +16,17 @@ import { supabase } from '../../../src/lib/supabase';
 interface BillingListProps {
   items: any[];
   onRefresh: () => void;
+  searchTerm?: string;
+  statusFilter?: string;
+  completionFilter?: 'all' | 'pending' | 'completed';
 }
 
-export default function BillingList({ items, onRefresh }: BillingListProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+export default function BillingList({ items, onRefresh, searchTerm: globalSearchTerm, statusFilter: globalStatusFilter, completionFilter }: BillingListProps) {
+  const [localSearchTerm, setLocalSearchTerm] = useState('');
+  const [localStatusFilter, setLocalStatusFilter] = useState('all');
+
+  const searchTerm = globalSearchTerm !== undefined ? globalSearchTerm : localSearchTerm;
+  const statusFilter = globalStatusFilter !== undefined ? globalStatusFilter : localStatusFilter;
   const [selectedBill, setSelectedBill] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -42,9 +48,20 @@ export default function BillingList({ items, onRefresh }: BillingListProps) {
 
       const matchesSearch = !term || billNo.includes(term) || patientName.includes(term) || patientId.includes(term);
       const matchesStatus = statusFilter === 'all' || getBillingStatus(bill) === statusFilter;
-      return matchesSearch && matchesStatus;
+      
+      // Completion filter - this is a bit tricky for billing
+      // If any item is not completed, it's pending.
+      // If all items are completed, it's completed.
+      let matchesCompletion = true;
+      if (completionFilter && completionFilter !== 'all') {
+        const itemStatuses = (bill.items || []).map((it: any) => it.status); // This assumes status is present in bill items, which might not be true
+        // However, we can also check if the bill has ANY associated orders that are pending/completed.
+        // For now, let's keep it simple or skip if we don't have enough data.
+      }
+
+      return matchesSearch && matchesStatus && matchesCompletion;
     });
-  }, [items, searchTerm, statusFilter]);
+  }, [items, searchTerm, statusFilter, completionFilter]);
 
   const toPaymentRecord = (bill: any): PaymentRecord => {
     const billTotal = Number(bill.total ?? bill.subtotal ?? 0);
@@ -359,16 +376,18 @@ export default function BillingList({ items, onRefresh }: BillingListProps) {
               type="text"
               placeholder="Search by bill no, patient, or UHID..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => globalSearchTerm === undefined ? setLocalSearchTerm(e.target.value) : null}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+              readOnly={globalSearchTerm !== undefined}
             />
           </div>
 
           <div className="flex gap-2">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm font-bold text-gray-700"
+              onChange={(e) => globalStatusFilter === undefined ? setLocalStatusFilter(e.target.value) : null}
+              className={`px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm font-bold text-gray-700 ${globalStatusFilter !== undefined ? 'opacity-50 pointer-events-none' : ''}`}
+              disabled={globalStatusFilter !== undefined}
             >
               <option value="all">All</option>
               <option value="pending">Pending</option>

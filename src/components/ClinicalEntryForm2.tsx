@@ -202,12 +202,14 @@ export default function ClinicalEntryForm2({
   const [availableLabGroups, setAvailableLabGroups] = useState<any[]>([]);
   const [selectedLabGroupId, setSelectedLabGroupId] = useState('');
   const [labGroupLoading, setLabGroupLoading] = useState(false);
+  const [labNotes, setLabNotes] = useState('');
   const [showNewXrayTestModal, setShowNewXrayTestModal] = useState(false);
   const [creatingXrayTest, setCreatingXrayTest] = useState(false);
   const [newXrayTestData, setNewXrayTestData] = useState({
     testName: '',
     groupName: ''
   });
+  const [radiologyNotes, setRadiologyNotes] = useState('');
 
   // Prescriptions State
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
@@ -241,6 +243,7 @@ export default function ClinicalEntryForm2({
   const [showInjectionSearch, setShowInjectionSearch] = useState(false);
   const [injectionSearchTerm, setInjectionSearchTerm] = useState('');
   const [injectionSearchResults, setInjectionSearchResults] = useState<any[]>([]);
+  const [injectionNotes, setInjectionNotes] = useState('');
   const [isAddingNewInjection, setIsAddingNewInjection] = useState(false);
   const [newInjectionName, setNewInjectionName] = useState('');
   const [newInjectionDosage, setNewInjectionDosage] = useState('');
@@ -1045,17 +1048,20 @@ export default function ClinicalEntryForm2({
 
       // Save Lab Tests
       const validLabRows = selectedLabTests.filter(t => t.testId);
-      if (validLabRows.length > 0) {
+      if (validLabRows.length > 0 || labNotes.trim() !== '') {
         try {
           let orders;
-          // Use grouped orders if multiple tests selected or a group is used
-          if (validLabRows.length > 1 || useLabGroup) {
+          // Use grouped orders if multiple tests selected, a group is used, or there are lab notes
+          if (validLabRows.length > 1 || useLabGroup || labNotes.trim() !== '') {
             const groupedOrder = await createGroupedLabOrder({
               patient_id: patientId,
               encounter_id: encounterId,
               appointment_id: appointmentId,
               ordering_doctor_id: doctorId,
-              clinical_indication: validLabRows.map(r => r.clinicalIndication).filter(Boolean).join('; ') || 'N/A',
+              clinical_indication: [
+                ...validLabRows.map(r => r.clinicalIndication),
+                labNotes
+              ].filter(Boolean).join('; ') || 'N/A',
               urgency: labUrgency,
               service_items: validLabRows.map((test, index) => ({
                 service_type: 'lab',
@@ -1063,14 +1069,14 @@ export default function ClinicalEntryForm2({
                 item_name: test.testName,
                 sort_order: index
               })),
-              group_id: selectedLabGroupId || crypto.randomUUID(),
+              group_id: (useLabGroup && selectedLabGroupId) ? selectedLabGroupId : undefined,
               group_name: useLabGroup && selectedLabGroupId
                 ? availableLabGroups.find((g: any) => g.id === selectedLabGroupId)?.name || `Lab Group - ${new Date().toLocaleDateString()}`
-                : `Lab Order - ${new Date().toLocaleDateString()}`
+                : (labNotes.trim() !== '' && validLabRows.length === 0) ? `Lab Instructions - ${new Date().toLocaleDateString()}` : `Lab Order - ${new Date().toLocaleDateString()}`
             });
             orders = [groupedOrder];
-          } else {
-            // Create individual lab test orders for single test
+          } else if (validLabRows.length === 1) {
+            // Create individual lab test orders for single test without notes
             const orderPromises = validLabRows.map(test =>
               createLabTestOrder({
                 patient_id: patientId,
@@ -1094,124 +1100,82 @@ export default function ClinicalEntryForm2({
 
       // Save X-ray Orders
       const validXrayRows = selectedXrayTests.filter(t => t.testId);
-      if (validXrayRows.length > 0) {
+      if (validXrayRows.length > 0 || radiologyNotes.trim() !== '') {
         try {
-          const xrayRecords = validXrayRows.map((t, idx) => {
+          if (validXrayRows.length > 1 || radiologyNotes.trim() !== '') {
+            // Use grouped orders for multiple tests or when there are notes
+            await createGroupedLabOrder({
+              patient_id: patientId,
+              encounter_id: encounterId,
+              appointment_id: appointmentId,
+              ordering_doctor_id: doctorId,
+              clinical_indication: [
+                ...validXrayRows.map(r => r.clinicalIndication),
+                radiologyNotes
+              ].filter(Boolean).join('; ') || 'N/A',
+              urgency: xrayUrgency,
+              category: 'Radiology',
+              service_items: validXrayRows.map((test, index) => ({
+                service_type: 'radiology',
+                catalog_id: test.testId,
+                item_name: test.testName,
+                sort_order: index
+              })),
+              group_id: undefined,
+              group_name: (radiologyNotes.trim() !== '' && validXrayRows.length === 0) 
+                ? `Radiology Instructions - ${new Date().toLocaleDateString()}` 
+                : `Radiology Order - ${new Date().toLocaleDateString()}`
+            });
+          } else if (validXrayRows.length === 1) {
+            // Individual order for single test without notes
+            const t = validXrayRows[0];
             const now = new Date();
             const today = now.toISOString().slice(0, 10).replace(/-/g, '');
             const ms = String(now.getMilliseconds()).padStart(3, '0');
-            const orderNumber = `RAD-${today}-${String(idx + 1).padStart(4, '0')}-${ms}`;
-            return {
-              order_number: orderNumber,
-              encounter_id: encounterId,
-              appointment_id: appointmentId,
-              patient_id: patientId,
-              ordering_doctor_id: doctorId,
-              test_catalog_id: t.testId,
-              clinical_indication: t.clinicalIndication || 'N/A',
-              special_instructions: t.specialInstructions,
-              body_part: t.bodyPart,
-              urgency: xrayUrgency
-            };
-          });
+            const orderNumber = `RAD-${today}-0001-${ms}`;
+            
+            const { error: xrayError } = await supabase
+              .from('radiology_test_orders')
+              .insert([{
+                order_number: orderNumber,
+                encounter_id: encounterId,
+                appointment_id: appointmentId,
+                patient_id: patientId,
+                ordering_doctor_id: doctorId,
+                test_catalog_id: t.testId,
+                clinical_indication: t.clinicalIndication || 'N/A',
+                special_instructions: t.specialInstructions,
+                body_part: t.bodyPart,
+                urgency: xrayUrgency
+              }]);
 
-          const { error: xrayError } = await supabase
-            .from('radiology_test_orders')
-            .insert(xrayRecords);
-
-          if (xrayError) {
-            try {
-              console.error('Radiology test orders error:', {
-                message: xrayError?.message,
-                details: xrayError?.details,
-                hint: xrayError?.hint,
-                code: xrayError?.code,
-                raw: xrayError,
-                stringified: JSON.stringify(xrayError, (key, value) => {
-                  if (typeof value === 'function') return '[Function]';
-                  if (value instanceof Error) return value.toString();
-                  return value;
-                }, 2),
-                keys: Object.getOwnPropertyNames(xrayError || {}),
-                constructor: xrayError?.constructor?.name
-              });
-              console.dir(xrayError, { depth: 3 });
-            } catch (logErr) {
-              console.error('Failed to log xray error:', logErr);
-              console.error('Original xray error:', xrayError);
-            }
-            throw xrayError;
+            if (xrayError) throw xrayError;
           }
         } catch (xrayErr: any) {
           console.error('Failed to save x-ray orders:', xrayErr);
-          // Continue without failing the entire form
         }
       }
 
-      // Save Prescriptions
-      if (prescriptions.length > 0) {
+      // Save Prescriptions (including Injections and Notes)
+      if (prescriptions.length > 0 || injectionItems.length > 0 || labNotes.trim() !== '' || radiologyNotes.trim() !== '' || injectionNotes.trim() !== '') {
         try {
-          // If a prescription group is selected, save as a single grouped prescription
-          if (usePrescriptionGroup && selectedPrescriptionGroupId) {
-            const groupName = availablePrescriptionGroups.find((g: any) => g.id === selectedPrescriptionGroupId)?.name || `Prescription Group - ${new Date().toLocaleDateString()}`;
+          const combinedInstructions = [
+            injectionNotes.trim() ? `INJECTION NOTES: ${injectionNotes}` : '',
+            'Prescribed during clinical encounter'
+          ].filter(Boolean).join('\n\n');
 
-            const prescriptionData: PrescriptionData = {
-              patient_id: patientId,
-              doctor_id: doctorId,
-              appointment_id: appointmentId,
-              encounter_id: encounterId,
-              medicines: prescriptions.map(prescription => ({
-                medication_id: prescription.medication_id,
-                medicine_name: prescription.medication_name,
-                dosage: prescription.dosage || 'As prescribed',
-                frequency: formatFrequency(prescription.frequency_times),
-                duration: `${prescription.duration_days} days`,
-                quantity: prescription.auto_calculate_quantity
-                  ? calculateAutoQuantity(prescription.frequency_times, prescription.duration_days)
-                  : prescription.quantity,
-                instructions: prescription.instructions || ''
-              })),
-              instructions: `Grouped prescription: ${groupName}`
-            };
+          const prescriptionMedicines = prescriptions.map(prescription => ({
+            medication_id: prescription.medication_id,
+            medicine_name: prescription.medication_name,
+            dosage: prescription.dosage || 'As prescribed',
+            frequency: formatFrequency(prescription.frequency_times),
+            duration: `${prescription.duration_days} days`,
+            quantity: prescription.auto_calculate_quantity
+              ? calculateAutoQuantity(prescription.frequency_times, prescription.duration_days)
+              : prescription.quantity,
+            instructions: prescription.instructions || ''
+          }));
 
-            const { error: prescriptionsError } = await createPrescription(prescriptionData);
-            if (prescriptionsError) throw prescriptionsError;
-            console.log('Grouped prescription created:', groupName);
-          } else {
-            // Save individual prescriptions (existing behavior)
-            const medicines = prescriptions.map(prescription => ({
-              medication_id: prescription.medication_id,
-              medicine_name: prescription.medication_name,
-              dosage: prescription.dosage || 'As prescribed',
-              frequency: formatFrequency(prescription.frequency_times),
-              duration: `${prescription.duration_days} days`,
-              quantity: prescription.auto_calculate_quantity
-                ? calculateAutoQuantity(prescription.frequency_times, prescription.duration_days)
-                : prescription.quantity,
-              instructions: prescription.instructions || ''
-            }));
-
-            const prescriptionData: PrescriptionData = {
-              patient_id: patientId,
-              doctor_id: doctorId,
-              appointment_id: appointmentId,
-              encounter_id: encounterId,
-              medicines,
-              instructions: 'Prescribed during clinical encounter'
-            };
-
-            const { error: prescriptionsError } = await createPrescription(prescriptionData);
-            if (prescriptionsError) throw prescriptionsError;
-          }
-        } catch (prescriptionErr: any) {
-          console.error('Failed to save prescriptions:', prescriptionErr);
-          // Continue without failing the entire form
-        }
-      }
-
-      // Save Injections (as prescriptions with injection type)
-      if (injectionItems.length > 0) {
-        try {
           const injectionMedicines = injectionItems.map(inj => ({
             medication_id: inj.medication_id,
             medicine_name: inj.medication_name,
@@ -1222,21 +1186,38 @@ export default function ClinicalEntryForm2({
             instructions: inj.instructions || 'Injection'
           }));
 
-          const injectionPrescriptionData: PrescriptionData = {
-            patient_id: patientId,
-            doctor_id: doctorId,
-            appointment_id: appointmentId,
-            encounter_id: encounterId,
-            medicines: injectionMedicines,
-            instructions: 'Injection prescribed during clinical encounter'
-          };
+          const allMedicines = [...prescriptionMedicines, ...injectionMedicines];
 
-          const { error: injectionError } = await createPrescription(injectionPrescriptionData);
-          if (injectionError) {
-            console.error('Failed to save injections:', injectionError);
+          // If a prescription group is selected, save as a single grouped prescription
+          if (usePrescriptionGroup && selectedPrescriptionGroupId) {
+            const groupName = availablePrescriptionGroups.find((g: any) => g.id === selectedPrescriptionGroupId)?.name || `Prescription Group - ${new Date().toLocaleDateString()}`;
+
+            const prescriptionData: PrescriptionData = {
+              patient_id: patientId,
+              doctor_id: doctorId,
+              appointment_id: appointmentId,
+              encounter_id: encounterId,
+              medicines: allMedicines,
+              instructions: `Grouped prescription: ${groupName}${injectionNotes.trim() ? '\n\n' + combinedInstructions : ''}`
+            };
+
+            const { error: prescriptionsError } = await createPrescription(prescriptionData);
+            if (prescriptionsError) throw prescriptionsError;
+          } else {
+            const prescriptionData: PrescriptionData = {
+              patient_id: patientId,
+              doctor_id: doctorId,
+              appointment_id: appointmentId,
+              encounter_id: encounterId,
+              medicines: allMedicines,
+              instructions: combinedInstructions
+            };
+
+            const { error: prescriptionsError } = await createPrescription(prescriptionData);
+            if (prescriptionsError) throw prescriptionsError;
           }
-        } catch (injErr) {
-          console.error('Error saving injections:', injErr);
+        } catch (prescriptionErr: any) {
+          console.error('Failed to save prescriptions:', prescriptionErr);
         }
       }
 
@@ -1814,6 +1795,19 @@ export default function ClinicalEntryForm2({
                   ))}
                 </div>
               )}
+
+              {/* Lab Notes / Special Instructions */}
+              <div className="mt-6">
+                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">
+                  Lab Notes / Special Instructions
+                </label>
+                <textarea
+                  value={labNotes}
+                  onChange={(e) => setLabNotes(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 min-h-[100px] shadow-sm transition-all"
+                  placeholder="Enter any additional lab tests or special instructions for the lab staff..."
+                />
+              </div>
             </div>
           )}
 
@@ -2048,6 +2042,19 @@ export default function ClinicalEntryForm2({
                   ))}
                 </div>
               )}
+
+              {/* Radiology Notes / Special Instructions */}
+              <div className="mt-6">
+                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">
+                  Radiology Notes / Special Instructions
+                </label>
+                <textarea
+                  value={radiologyNotes}
+                  onChange={(e) => setRadiologyNotes(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] shadow-sm transition-all"
+                  placeholder="Enter any additional x-ray/scan tests or special instructions for the radiology staff..."
+                />
+              </div>
             </div>
           )}
 
@@ -2597,12 +2604,29 @@ export default function ClinicalEntryForm2({
                   </div>
                 )}
 
-                {injectionItems.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <Syringe className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>No injections added yet. Click &quot;Add Injection&quot; to start.</p>
+                  {injectionItems.length === 0 && !injectionNotes.trim() && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Syringe className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No injections added yet. Click &quot;Add Injection&quot; to start or fill notes below for medicines not in pharmacy.</p>
+                    </div>
+                  )}
+
+                  <div className="mt-8 pt-6 border-t border-gray-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <h4 className="text-sm font-semibold text-gray-900">Additional Injections / Pharmacy Not-in-Stock Medicines</h4>
+                    </div>
+                    <textarea
+                      value={injectionNotes}
+                      onChange={(e) => setInjectionNotes(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[120px]"
+                      placeholder="List injections or medicines not found in pharmacy search. These will be reflected in pharmacy and patient records."
+                      data-allow-enter="true"
+                    />
+                    <p className="mt-2 text-xs text-gray-500 italic">
+                      Note: These will be saved as general instructions for the injection prescription.
+                    </p>
                   </div>
-                )}
               </div>
             </div>
           )}

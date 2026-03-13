@@ -353,6 +353,15 @@ export default function PrescribedListPage() {
   }
 
   const filteredPrescriptions = prescriptions.filter(prescription => {
+    // Only show prescriptions that have actual medicines/injections OR specifically contain Injection Notes.
+    // This hides empty prescriptions created solely for Lab/X-Ray purposes.
+    const hasItems = prescription.items && prescription.items.length > 0;
+    const hasInjectionNotes = prescription.instructions && prescription.instructions.includes('INJECTION');
+    
+    if (!hasItems && !hasInjectionNotes) {
+      return false;
+    }
+
     const matchesSearch = prescription.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          prescription.doctor_name.toLowerCase().includes(searchTerm.toLowerCase())
     
@@ -734,6 +743,22 @@ export default function PrescribedListPage() {
                   ))}
                 </div>
               </div>
+
+              {(() => {
+                let cleanInst = prescription.instructions || '';
+                cleanInst = cleanInst.replace(/LAB NOTES:[\s\S]*?(?=\n\n|$)/g, '');
+                cleanInst = cleanInst.replace(/RADIOLOGY NOTES:[\s\S]*?(?=\n\n|$)/g, '');
+                cleanInst = cleanInst.trim();
+                
+                if (!cleanInst) return null;
+
+                return (
+                  <div className="mt-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg">
+                    <p className="text-xs font-bold text-blue-700 uppercase mb-1">Doctor's Clinical Notes / Injection Instructions</p>
+                    <p className="text-sm text-blue-800 italic whitespace-pre-wrap">{cleanInst}</p>
+                  </div>
+                );
+              })()}
             </div>
           ))
         )}

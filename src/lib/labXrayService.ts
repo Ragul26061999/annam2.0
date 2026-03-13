@@ -96,6 +96,7 @@ export interface CreateGroupedLabOrderParams {
   bed_allocation_id?: string;
   group_id?: string;
   group_name?: string;
+  category?: string;
 }
 
 // ============================================
@@ -2354,7 +2355,7 @@ export async function createGroupedLabOrder(params: CreateGroupedLabOrderParams)
       .from('diagnostic_groups')
       .insert({
         name: params.group_name || `Lab Order - ${new Date().toLocaleDateString()}`,
-        category: 'Lab',
+        category: params.category || 'Lab',
         is_active: true
       })
       .select('id')
@@ -2389,9 +2390,10 @@ export async function createGroupedLabOrder(params: CreateGroupedLabOrderParams)
           await sleep(75 * attempt);
           continue;
         }
-        // If we still get an order_number collision, fall back to a client-side grouped-order creation.
-        if (isUniqueViolation(error)) {
-          safeLog('Falling back to client-side grouped lab order creation due to order_number collision:', error, {
+        // If we get an order_number collision or a missing column error (e.g. radiology order_number not handled in RPC), 
+        // fall back to a client-side grouped-order creation.
+        if (isUniqueViolation(error) || error.code === '23502') {
+          safeLog('Falling back to client-side grouped lab order creation due to database error:', error, {
             attempt,
             maxAttempts
           });
@@ -2431,7 +2433,7 @@ async function createGroupedLabOrderClientSide(
       .toUpperCase();
   };
   const datePart = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const makeOrderNumber = () => `LAB-${datePart()}-${randomSuffix()}`;
+  const makeOrderNumber = (type: string = 'LAB') => `${type.toUpperCase()}-${datePart()}-${randomSuffix()}`;
 
   const isUniqueViolation = (err: any) => {
     const code = err?.code;
@@ -2448,7 +2450,7 @@ async function createGroupedLabOrderClientSide(
       .from('diagnostic_groups')
       .insert({
         name: params.group_name || `Lab Order - ${new Date().toLocaleDateString()}`,
-        category: 'Lab',
+        category: params.category || 'Lab',
         is_active: true
       })
       .select('id')
@@ -2487,30 +2489,49 @@ async function createGroupedLabOrderClientSide(
 
   const groupOrderId = groupOrder.id as string;
 
-  // 3) Create legacy lab_test_orders + diagnostic_group_order_items
-  const serviceItems = (params.service_items || []).filter((it: any) => String(it?.service_type) === 'lab');
+  // 3) Create legacy orders + diagnostic_group_order_items
+  const serviceItems = params.service_items || [];
   for (let i = 0; i < serviceItems.length; i++) {
     const item = serviceItems[i];
+    const serviceType = String(item?.service_type || 'lab').toLowerCase();
+    
+    // Select correct table and prefix based on service type
+    let tableName = 'lab_test_orders';
+    let prefix = 'LAB';
+    let legacyCol = 'legacy_lab_test_order_id';
+
+    if (serviceType === 'radiology' || serviceType === 'xray') {
+      tableName = 'radiology_test_orders';
+      prefix = 'RAD';
+      legacyCol = 'legacy_radiology_test_order_id';
+    } else if (serviceType === 'scan') {
+      tableName = 'scan_test_orders';
+      prefix = 'SCN';
+      legacyCol = 'legacy_scan_order_id';
+    }
 
     let legacyOrderId: string | null = null;
     let lastLegacyErr: any = null;
     for (let attempt = 1; attempt <= 5; attempt++) {
-      const order_number = makeOrderNumber();
+      const order_number = makeOrderNumber(prefix);
+      
+      const insertData: any = {
+        order_number,
+        patient_id: params.patient_id,
+        encounter_id: params.encounter_id || null,
+        appointment_id: params.appointment_id || null,
+        ordering_doctor_id: params.ordering_doctor_id || null,
+        test_catalog_id: item.catalog_id,
+        clinical_indication: params.clinical_indication || 'N/A',
+        special_instructions: null,
+        urgency: params.urgency || 'routine',
+        status: 'ordered',
+        diagnostic_group_order_id: groupOrderId
+      };
+
       const { data: legacyOrder, error: legacyErr } = await supabase
-        .from('lab_test_orders')
-        .insert({
-          order_number,
-          patient_id: params.patient_id,
-          encounter_id: params.encounter_id || null,
-          appointment_id: params.appointment_id || null,
-          ordering_doctor_id: params.ordering_doctor_id || null,
-          test_catalog_id: item.catalog_id,
-          clinical_indication: params.clinical_indication || 'N/A',
-          special_instructions: null,
-          urgency: params.urgency || 'routine',
-          status: 'ordered',
-          diagnostic_group_order_id: groupOrderId
-        })
+        .from(tableName)
+        .insert(insertData)
         .select('id')
         .single();
 
@@ -2520,7 +2541,7 @@ async function createGroupedLabOrderClientSide(
       }
 
       lastLegacyErr = legacyErr;
-      safeLog('Failed to create legacy lab_test_order (fallback attempt):', legacyErr || new Error('No legacy order id returned'), {
+      safeLog(`Failed to create legacy ${tableName} (fallback attempt):`, legacyErr || new Error('No legacy order id returned'), {
         attempt,
         maxAttempts: 5,
         groupOrderId
@@ -2532,17 +2553,17 @@ async function createGroupedLabOrderClientSide(
     }
 
     if (!legacyOrderId) {
-      throw lastLegacyErr || new Error('Failed to create legacy lab_test_order');
+      throw lastLegacyErr || new Error(`Failed to create legacy ${tableName}`);
     }
 
     const { error: itemErr } = await supabase.from('diagnostic_group_order_items').insert({
       group_order_id: groupOrderId,
-      service_type: 'lab',
+      service_type: serviceType,
       catalog_id: item.catalog_id,
-      item_name_snapshot: item.item_name || 'Lab Test',
+      item_name_snapshot: item.item_name || 'Service Item',
       selected: true,
       status: 'ordered',
-      legacy_lab_test_order_id: legacyOrderId,
+      [legacyCol]: legacyOrderId,
       sort_order: Number.isFinite(item.sort_order) ? item.sort_order : i
     });
 
