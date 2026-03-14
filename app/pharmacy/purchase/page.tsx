@@ -62,6 +62,10 @@ export default function DrugPurchasePage() {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterSupplier, setFilterSupplier] = useState('')
+  const [filterFromDate, setFilterFromDate] = useState('')
+  const [filterToDate, setFilterToDate] = useState('')
+  const [suppliers, setSuppliers] = useState<any[]>([])
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [purchaseToDelete, setPurchaseToDelete] = useState<DrugPurchase | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -76,12 +80,25 @@ export default function DrugPurchasePage() {
 
   useEffect(() => {
     loadData()
-  }, [filterStatus])
+  }, [filterStatus, filterSupplier, filterFromDate, filterToDate])
+
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      const { data } = await supabase.from('suppliers').select('id, name').order('name');
+      if (data) setSuppliers(data);
+    };
+    fetchSuppliers();
+  }, [])
 
   const loadData = async () => {
     setLoading(true)
     try {
-      const purchasesData = await getDrugPurchases({ status: filterStatus || undefined })
+      const purchasesData = await getDrugPurchases({ 
+        status: filterStatus || undefined,
+        supplier_id: filterSupplier || undefined,
+        from_date: filterFromDate || undefined,
+        to_date: filterToDate || undefined
+      })
       setPurchases(purchasesData)
     } catch (error) {
       console.error('Error loading data:', error)
@@ -445,6 +462,14 @@ export default function DrugPurchasePage() {
     }
   }
 
+  const filteredPurchases = purchases.filter(p =>
+    !searchTerm ||
+    p.purchase_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPurchaseAmount = filteredPurchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -479,9 +504,9 @@ export default function DrugPurchasePage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex gap-4 items-center">
-          <div className="flex-1">
+      <div className="bg-white rounded-lg shadow p-4 space-y-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex-1 min-w-[300px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
@@ -493,21 +518,86 @@ export default function DrugPurchasePage() {
               />
             </div>
           </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Status</option>
-            <option value="draft">Draft</option>
-            <option value="received">Received</option>
-            <option value="verified">Verified</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+          
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1">Supplier</label>
+              <select
+                value={filterSupplier}
+                onChange={(e) => setFilterSupplier(e.target.value)}
+                className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+              >
+                <option value="">All Suppliers</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1">Status</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 min-w-[140px]"
+              >
+                <option value="">All Status</option>
+                <option value="draft">Draft</option>
+                <option value="received">Received</option>
+                <option value="verified">Verified</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1">From Date</label>
+              <input
+                type="date"
+                value={filterFromDate}
+                onChange={(e) => setFilterFromDate(e.target.value)}
+                className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1">To Date</label>
+              <input
+                type="date"
+                value={filterToDate}
+                onChange={(e) => setFilterToDate(e.target.value)}
+                className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+
+            <div className="flex items-end h-full">
+              <button
+                onClick={() => {
+                  setFilterSupplier('');
+                  setFilterStatus('');
+                  setFilterFromDate('');
+                  setFilterToDate('');
+                  setSearchTerm('');
+                }}
+                className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium border border-transparent hover:border-red-100"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Purchase List */}
+      {/* Summary and Purchase List */}
+      <div className="flex justify-between items-end mb-2 mt-4 px-1">
+        <h2 className="text-lg font-bold text-gray-800">Purchase Records <span className="text-sm font-normal text-gray-500">({filteredPurchases.length} found)</span></h2>
+        {filteredPurchases.length > 0 && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2 rounded-lg shadow-sm flex items-center gap-3">
+            <span className="text-sm font-semibold uppercase tracking-wider text-emerald-600">Total Amount:</span>
+            <span className="text-xl font-bold">{formatCurrency(totalPurchaseAmount)}</span>
+          </div>
+        )}
+      </div>
+
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -523,11 +613,7 @@ export default function DrugPurchasePage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {purchases.filter(p =>
-              !searchTerm ||
-              p.purchase_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              p.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase())
-            ).map((purchase) => (
+            {filteredPurchases.map((purchase) => (
               <tr key={purchase.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                   {purchase.purchase_number}
