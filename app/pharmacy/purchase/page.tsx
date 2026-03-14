@@ -463,9 +463,10 @@ export default function DrugPurchasePage() {
   }
 
   const filteredPurchases = purchases.filter(p =>
-    !searchTerm ||
+    p.status !== 'cancelled' &&
+    (!searchTerm ||
     p.purchase_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase())
+    p.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const totalPurchaseAmount = filteredPurchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
@@ -545,7 +546,6 @@ export default function DrugPurchasePage() {
                 <option value="draft">Draft</option>
                 <option value="received">Received</option>
                 <option value="verified">Verified</option>
-                <option value="cancelled">Cancelled</option>
               </select>
             </div>
 
