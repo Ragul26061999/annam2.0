@@ -405,6 +405,7 @@ export async function getDrugPurchases(filters?: {
   from_date?: string;
   to_date?: string;
   search?: string;
+  batch_number?: string;
 }): Promise<DrugPurchase[]> {
   try {
     let query = supabase
@@ -432,6 +433,22 @@ export async function getDrugPurchases(filters?: {
 
     if (filters?.search) {
       query = query.or(`purchase_number.ilike.%${filters.search}%,invoice_number.ilike.%${filters.search}%`);
+    }
+
+    if (filters?.batch_number) {
+      // Find purchase IDs that have items with the given batch number
+      const { data: itemPurchases } = await supabase
+        .from('drug_purchase_items')
+        .select('purchase_id')
+        .ilike('batch_number', `%${filters.batch_number}%`);
+      
+      const purchaseIds = itemPurchases?.map((item: { purchase_id: string }) => item.purchase_id).filter(Boolean) || [];
+      if (purchaseIds.length > 0) {
+        query = query.in('id', purchaseIds);
+      } else {
+        // If no items match, ensure the main query returns nothing
+        query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+      }
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });

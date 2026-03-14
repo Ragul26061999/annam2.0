@@ -1814,9 +1814,11 @@ export default function InventoryPage() {
                           <label className="block text-sm font-medium text-slate-600 mb-2">Received Quantity</label>
                           <input
                             type="number"
+                            min="0"
                             value={Number.isFinite(editBatchForm.received_quantity) ? editBatchForm.received_quantity : 0}
-                            readOnly
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-slate-700"
+                            onChange={e => setEditBatchForm(f => ({ ...f, received_quantity: Number(e.target.value) }))}
+                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-slate-50 hover:bg-white"
+                            placeholder="0"
                           />
                         </div>
                         <div>
@@ -1943,8 +1945,37 @@ export default function InventoryPage() {
                             expiry_date: (editBatchForm.expiry_date && editBatchForm.expiry_date.trim()) ? editBatchForm.expiry_date : (() => { const d = new Date(); d.setMonth(d.getMonth() + 12); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })(),
                             received_date: (editBatchForm.received_date && editBatchForm.received_date.trim()) ? editBatchForm.received_date : null,
                             current_quantity: Number.isFinite(editBatchForm.current_quantity) ? editBatchForm.current_quantity : null,
+                            received_quantity: Number.isFinite(editBatchForm.received_quantity) ? editBatchForm.received_quantity : null,
                             notes: editBatchForm.notes?.trim() || null,
                           };
+
+                          // Handle Medication Stock Updates
+                          if (editingBatch.medicine_id) {
+                            const newQty = Number(editBatchForm.current_quantity);
+                            const oldQty = Number(editingBatch.quantity); // old mapped quantity
+                            const diff = newQty - oldQty;
+
+                            if (diff !== 0) {
+                              // Fetch current medication stock to ensure accuracy
+                              const { data: med, error: fetchError } = await supabase
+                                .from('medications')
+                                .select('total_stock, available_stock')
+                                .eq('id', editingBatch.medicine_id)
+                                .single();
+
+                              if (!fetchError && med) {
+                                await supabase
+                                  .from('medications')
+                                  .update({
+                                    total_stock: (med.total_stock || 0) + diff,
+                                    available_stock: (med.available_stock || 0) + diff,
+                                    updated_at: new Date().toISOString()
+                                  })
+                                  .eq('id', editingBatch.medicine_id);
+                              }
+                            }
+                          }
+
                           const { error } = await supabase
                             .from('medicine_batches')
                             .update(payload)

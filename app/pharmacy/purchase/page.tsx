@@ -63,6 +63,7 @@ export default function DrugPurchasePage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSupplier, setFilterSupplier] = useState('')
+  const [filterBatch, setFilterBatch] = useState('')
   const [filterFromDate, setFilterFromDate] = useState('')
   const [filterToDate, setFilterToDate] = useState('')
   const [suppliers, setSuppliers] = useState<any[]>([])
@@ -80,7 +81,7 @@ export default function DrugPurchasePage() {
 
   useEffect(() => {
     loadData()
-  }, [filterStatus, filterSupplier, filterFromDate, filterToDate])
+  }, [filterStatus, filterSupplier, filterBatch, filterFromDate, filterToDate])
 
   useEffect(() => {
     const fetchSuppliers = async () => {
@@ -96,6 +97,7 @@ export default function DrugPurchasePage() {
       const purchasesData = await getDrugPurchases({ 
         status: filterStatus || undefined,
         supplier_id: filterSupplier || undefined,
+        batch_number: filterBatch || undefined,
         from_date: filterFromDate || undefined,
         to_date: filterToDate || undefined
       })
@@ -550,6 +552,17 @@ export default function DrugPurchasePage() {
             </div>
 
             <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1">Batch #</label>
+              <input
+                type="text"
+                placeholder="Search Batch..."
+                value={filterBatch}
+                onChange={(e) => setFilterBatch(e.target.value)}
+                className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 min-w-[140px]"
+              />
+            </div>
+
+            <div className="flex flex-col">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1">From Date</label>
               <input
                 type="date"
@@ -574,6 +587,7 @@ export default function DrugPurchasePage() {
                 onClick={() => {
                   setFilterSupplier('');
                   setFilterStatus('');
+                  setFilterBatch('');
                   setFilterFromDate('');
                   setFilterToDate('');
                   setSearchTerm('');
