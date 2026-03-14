@@ -113,28 +113,54 @@ export default function PharmacyBillingReportsPage() {
 
             if (error) throw error
 
-            const totalCollection = bills.reduce((sum: number, b: any) => sum + (Number(b.amount_paid) || 0), 0)
-            const totalAmount = bills.reduce((sum: number, b: any) => sum + (Number(b.total) || 0), 0)
+            // Resolve patient names if customer_name is missing or 'Anonymous Guest' but patient_id exists
+            const patientIds = Array.from(new Set(bills
+                .filter((b: any) => (!b.customer_name || b.customer_name.trim() === '' || b.customer_name === 'Anonymous Guest') && b.patient_id)
+                .map((b: any) => b.patient_id)))
+
+            let patientsMap: Record<string, string> = {}
+            if (patientIds.length > 0) {
+                const { data: patientsData } = await supabase
+                    .from('patients')
+                    .select('id, name')
+                    .in('id', patientIds)
+                if (patientsData) {
+                    patientsMap = patientsData.reduce((acc: any, p: any) => {
+                        acc[p.id] = p.name
+                        return acc
+                    }, {})
+                }
+            }
+
+            const processedBills = bills.map((b: any) => ({
+                ...b,
+                customer_name: (b.customer_name && b.customer_name.trim() !== '' && b.customer_name !== 'Anonymous Guest') 
+                    ? b.customer_name 
+                    : (patientsMap[b.patient_id] || b.customer_name || 'Anonymous Guest')
+            }))
+
+            const totalCollection = processedBills.reduce((sum: number, b: any) => sum + (Number(b.amount_paid) || 0), 0)
+            const totalAmount = processedBills.reduce((sum: number, b: any) => sum + (Number(b.total) || 0), 0)
             const pendingAmount = totalAmount - totalCollection
-            const paidBills = bills.filter((b: any) => b.payment_status === 'paid').length
+            const paidBills = processedBills.filter((b: any) => b.payment_status === 'paid').length
 
             setStats({
                 totalCollection,
-                totalBills: bills.length,
+                totalBills: processedBills.length,
                 paidBills,
                 pendingAmount,
-                avgBillValue: bills.length > 0 ? totalAmount / bills.length : 0
+                avgBillValue: processedBills.length > 0 ? totalAmount / processedBills.length : 0
             })
 
             const dailyMap = new Map()
-            bills.forEach((b: any) => {
+            processedBills.forEach((b: any) => {
                 const day = new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
                 dailyMap.set(day, (dailyMap.get(day) || 0) + (Number(b.total) || 0))
             })
             setSalesByDay(Array.from(dailyMap.entries()).map(([name, value]) => ({ name, value })).reverse().slice(-15))
 
             const methodMap = new Map()
-            bills.forEach((b: any) => {
+            processedBills.forEach((b: any) => {
                 const method = b.payment_method || 'other'
                 methodMap.set(method, (methodMap.get(method) || 0) + 1)
             })
@@ -144,7 +170,7 @@ export default function PharmacyBillingReportsPage() {
             })))
 
             const statusMap = new Map()
-            bills.forEach((b: any) => {
+            processedBills.forEach((b: any) => {
                 const status = b.payment_status || 'pending'
                 statusMap.set(status, (statusMap.get(status) || 0) + 1)
             })
@@ -153,7 +179,7 @@ export default function PharmacyBillingReportsPage() {
                 value
             })))
 
-            setRecentTransactions(bills.slice(0, 10))
+            setRecentTransactions(processedBills.slice(0, 10))
         } catch (err) {
             console.error('Dashboard error:', err)
         } finally {
@@ -222,7 +248,32 @@ export default function PharmacyBillingReportsPage() {
 
                     const { data: sales, error: sErr } = await saleQuery.order('created_at', { ascending: false })
                     if (sErr) throw sErr
-                    data = sales || []
+                    
+                    // Resolve patient names if missing or 'Anonymous Guest'
+                    const salePatientIds = Array.from(new Set((sales || [])
+                        .filter((b: any) => (!b.customer_name || b.customer_name.trim() === '' || b.customer_name === 'Anonymous Guest') && b.patient_id)
+                        .map((b: any) => b.patient_id)))
+                    
+                    let salePatientsMap: Record<string, string> = {}
+                    if (salePatientIds.length > 0) {
+                        const { data: pData } = await supabase
+                            .from('patients')
+                            .select('id, name')
+                            .in('id', salePatientIds)
+                        if (pData) {
+                            salePatientsMap = pData.reduce((acc: any, p: any) => {
+                                acc[p.id] = p.name
+                                return acc
+                            }, {})
+                        }
+                    }
+
+                    data = (sales || []).map((b: any) => ({
+                        ...b,
+                        customer_name: (b.customer_name && b.customer_name.trim() !== '' && b.customer_name !== 'Anonymous Guest')
+                            ? b.customer_name
+                            : (salePatientsMap[b.patient_id] || b.customer_name || 'Anonymous Guest')
+                    }))
                     break
 
                 case 'drugwise_sales':
@@ -328,6 +379,25 @@ export default function PharmacyBillingReportsPage() {
                     const { data: saleGstItems, error: sgstErr } = await saleGstQuery
                     if (sgstErr) throw sgstErr
 
+                    // Resolve patient names for sale_gst if missing or 'Anonymous Guest'
+                    const gstPatientIds = Array.from(new Set((saleGstItems || [])
+                        .filter((item: any) => (!item.billing?.customer_name || item.billing?.customer_name.trim() === '' || item.billing?.customer_name === 'Anonymous Guest') && item.billing?.patient_id)
+                        .map((item: any) => item.billing.patient_id)))
+                    
+                    let gstPatientsMap: Record<string, string> = {}
+                    if (gstPatientIds.length > 0) {
+                        const { data: pData } = await supabase
+                            .from('patients')
+                            .select('id, name')
+                            .in('id', gstPatientIds)
+                        if (pData) {
+                            gstPatientsMap = pData.reduce((acc: any, p: any) => {
+                                acc[p.id] = p.name
+                                return acc
+                            }, {})
+                        }
+                    }
+
                     data = (saleGstItems || []).map((item: any) => {
                         const taxPercent = Number(item.billing?.tax_percent || 0)
                         const total = Number(item.total_amount || 0)
@@ -339,7 +409,9 @@ export default function PharmacyBillingReportsPage() {
                             sale_price: Number(item.unit_amount || 0),
                             gst_amount: gstAmount,
                             tax_percent: taxPercent,
-                            buyer_name: item.billing?.customer_name || 'Walk-in Customer',
+                            buyer_name: (item.billing?.customer_name && item.billing?.customer_name.trim() !== '' && item.billing?.customer_name !== 'Anonymous Guest')
+                                ? item.billing.customer_name
+                                : (gstPatientsMap[item.billing?.patient_id] || item.billing?.customer_name || 'Walk-in Customer'),
                             bill_number: item.billing?.bill_number || 'N/A',
                             total_amount: total,
                             qty: Number(item.qty || 0),
@@ -882,7 +954,7 @@ export default function PharmacyBillingReportsPage() {
                                         {recentTransactions.map((tx) => (
                                             <tr key={tx.id} className="group hover:bg-indigo-50/10 transition-all cursor-pointer">
                                                 <td className="px-10 py-6 font-black text-gray-900 tracking-tight group-hover:text-indigo-600 uppercase">{tx.bill_number}</td>
-                                                <td className="px-10 py-6 text-gray-500 font-bold group-hover:text-gray-900">{tx.customer_name || 'Anonymous Guest'}</td>
+                                                <td className="px-10 py-6 text-gray-500 font-bold group-hover:text-gray-900">{tx.customer_name}</td>
                                                 <td className="px-10 py-6 text-right font-black text-gray-900 text-lg">{formatCurrency(tx.total)}</td>
                                                 <td className="px-10 py-6 text-center">
                                                     <span className={`inline-flex items-center gap-2 px-5 py-2 rounded-[1.25rem] text-[10px] font-black tracking-widest border-2 ${tx.payment_status === 'paid'
