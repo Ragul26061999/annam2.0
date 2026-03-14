@@ -2738,7 +2738,7 @@ function NewBillingPageInner() {
               <div className="space-y-4">
                 <div className="grid grid-cols-12 gap-4">
                   <div className="col-span-2">
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Type</label>
                     <select
                       value={customer.type}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -2760,7 +2760,7 @@ function NewBillingPageInner() {
                   {customer.type === 'patient' ? (
                     <>
                       <div className="col-span-4">
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Search Patient</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Search Patient</label>
                         <div className="relative">
                           <input
                             type="text"
@@ -2807,7 +2807,7 @@ function NewBillingPageInner() {
                         </div>
                       </div>
                       <div className="col-span-3">
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Customer Name *</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Customer Name *</label>
                         <input
                           type="text"
                           value={customer.name}
@@ -2819,7 +2819,7 @@ function NewBillingPageInner() {
                         />
                       </div>
                       <div className="col-span-3">
-                        <label className="block text-xs font-medium text-slate-600 mb-1 flex justify-between items-center">
+                        <label className="block text-sm font-bold text-slate-700 mb-1 flex justify-between items-center">
                           <span>Phone</span>
                           {phoneError && <span className="text-[10px] text-red-500">{phoneError}</span>}
                         </label>
@@ -2839,7 +2839,7 @@ function NewBillingPageInner() {
                   ) : customer.type === 'walk_in' ? (
                     <>
                       <div className="col-span-3">
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Customer Name *</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Customer Name *</label>
                         <input
                           type="text"
                           value={customer.name}
@@ -2851,7 +2851,7 @@ function NewBillingPageInner() {
                         />
                       </div>
                       <div className="col-span-3">
-                        <label className="block text-xs font-medium text-slate-600 mb-1 flex justify-between items-center">
+                        <label className="block text-sm font-bold text-slate-700 mb-1 flex justify-between items-center">
                           <span>Phone</span>
                           {phoneError && <span className="text-[10px] text-red-500">{phoneError}</span>}
                         </label>
@@ -2870,7 +2870,7 @@ function NewBillingPageInner() {
                     </>
                   ) : customer.type === 'intent' ? (
                     <div className="col-span-7">
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Intent Type *</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Intent Type *</label>
                       <select
                         value={intentType}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -2891,7 +2891,7 @@ function NewBillingPageInner() {
                     </div>
                   ) : (
                     <div className="col-span-7">
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
                       <input
                         type="text"
                         value={customer.phone || ''}
@@ -2984,7 +2984,7 @@ function NewBillingPageInner() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Search Prescribed Medications</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Search Prescribed Medications</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
@@ -3087,7 +3087,7 @@ function NewBillingPageInner() {
 
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-8">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Medicine Search</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Medicine Search</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
@@ -3264,7 +3264,7 @@ function NewBillingPageInner() {
                   </div>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Quantity</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Quantity</label>
                   <input
                     type="number"
                     min="1"
@@ -3293,7 +3293,7 @@ function NewBillingPageInner() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">&nbsp;</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">&nbsp;</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -3376,8 +3376,15 @@ function NewBillingPageInner() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <ShoppingCart className="h-5 w-5 text-purple-600" />
-                      <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">Bill Items</h2>
+                      <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">
+                        Bill Items
+                      </h2>
                     </div>
+                    {billItems.length > 0 && (
+                      <span className="bg-purple-100 text-purple-700 py-1 px-3 rounded-full text-xs font-semibold">
+                        {billItems.length} Items
+                      </span>
+                    )}
                   </div>
 
                   {billItems.length === 0 ? (
@@ -3396,7 +3403,7 @@ function NewBillingPageInner() {
                         <span className="text-right">Total</span>
                         <span className="text-center">Action</span>
                       </div>
-                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-[11px]">
+                      <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100 text-[11px]">
                         {billItems.map((item, index) => (
                           <div
                             key={`${item.medicine.id}-${item.batch.id}`}
@@ -3626,7 +3633,7 @@ function NewBillingPageInner() {
                         <span className="text-right">Total</span>
                         <span className="text-center">Action</span>
                       </div>
-                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-[11px]">
+                      <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100 text-[11px]">
                         {billItems.map((item, index) => (
                           <div
                             key={`${item.medicine.id}-${item.batch.id}`}
@@ -4246,7 +4253,7 @@ function NewBillingPageInner() {
               </div>
 
               <div className="mb-5">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price (₹)</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Unit Price (₹)</label>
                 <input
                   type="number"
                   min={0}

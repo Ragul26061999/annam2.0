@@ -77,6 +77,9 @@ export default function BillingList({ items, onRefresh, searchTerm: globalSearch
       reference_id: it.ref_id || null,
     }));
 
+    const amount_paid = Number(bill.amount_paid || bill.paid_amount || 0);
+    const balance_due = Number(bill.balance_due ?? (billTotal - amount_paid));
+
     return {
       id: bill.id,
       bill_id: bill.bill_no ?? bill.bill_number ?? bill.id,
@@ -87,6 +90,8 @@ export default function BillingList({ items, onRefresh, searchTerm: globalSearch
       tax_amount: tax,
       discount_amount: discount,
       total_amount: billTotal,
+      amount_paid: amount_paid,
+      balance_due: balance_due,
       payment_status: bill.payment_status || 'pending',
       payment_method: bill.payment_method || undefined,
       payment_date: bill.issued_at || undefined,
