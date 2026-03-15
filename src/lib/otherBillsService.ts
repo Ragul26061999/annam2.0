@@ -111,6 +111,30 @@ export async function getOtherBillChargeCategories(): Promise<OtherBillChargeCat
   }
 }
 
+export async function createOtherBillChargeCategory(label: string): Promise<OtherBillChargeCategory> {
+  const value = label.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const newCategory = {
+    value,
+    label,
+    description: `User defined ${label}`,
+    is_active: true,
+    sort_order: 100, // Default to a higher sort order
+  };
+
+  const { data, error } = await supabase
+    .from('other_bill_charge_categories')
+    .insert([newCategory])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating other bill charge category:', error);
+    throw new Error(`Failed to create category: ${error.message}`);
+  }
+
+  return data as OtherBillChargeCategory;
+}
+
 export async function getActiveBedAllocationForPatient(patientId: string): Promise<{ id: string } | null> {
   try {
     const { data, error } = await supabase
