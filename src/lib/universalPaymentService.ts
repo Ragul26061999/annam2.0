@@ -382,7 +382,7 @@ export async function processSplitPayments(
           balance_due: balance,
           payment_status: paymentStatus,
           payment_method: derivedMethod,
-          payment_date: new Date().toISOString(),
+          issued_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', billId);
