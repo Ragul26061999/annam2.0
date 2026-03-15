@@ -79,6 +79,7 @@ export default function LabOrderPage() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showSearchDropdown, setShowSearchDropdown] = useState(false);
     const [searchingPatient, setSearchingPatient] = useState(false);
+    const [activePatientIndex, setActivePatientIndex] = useState(-1);
 
     // New Test State
     const [showNewTestModal, setShowNewTestModal] = useState(false);
@@ -166,6 +167,7 @@ export default function LabOrderPage() {
         if (!searchTerm.trim()) {
             setSearchResults([]);
             setShowSearchDropdown(false);
+            setActivePatientIndex(-1);
             return;
         }
 
@@ -179,8 +181,11 @@ export default function LabOrderPage() {
                 .order('name');
 
             if (error) throw error;
-            setSearchResults(data || []);
-            setShowSearchDropdown(true);
+            const results = data || [];
+            setSearchResults(results);
+            setShowSearchDropdown(results.length > 0);
+            if (results.length > 0) setActivePatientIndex(0);
+            else setActivePatientIndex(-1);
         } catch (err) {
             console.error('Search error:', err);
             setSearchResults([]);
@@ -218,7 +223,7 @@ export default function LabOrderPage() {
                 getLabTestCatalog(),
                 getAllDoctorsSimple()
             ]);
-            setLabCatalog(catalog || []);
+            setLabCatalog((catalog || []).sort((a: any, b: any) => String(b.id).localeCompare(String(a.id))));
             setDoctors(doctorsList || []);
         } catch (err) {
             console.error('Error loading initial data:', err);
@@ -255,6 +260,7 @@ export default function LabOrderPage() {
         setUhidSearch(patient.name); // Show selected patient name
         setShowSearchDropdown(false);
         setSearchResults([]);
+        setActivePatientIndex(-1);
         setError(null);
     };
 
@@ -304,7 +310,7 @@ export default function LabOrderPage() {
             });
 
             // Update master data
-            setLabCatalog(prev => [...prev, newEntry]);
+            setLabCatalog(prev => [newEntry, ...prev]);
 
             // Add newly created test to the top of the selected list (last selected first)
             setSelectedTests(prev => [
@@ -585,7 +591,7 @@ export default function LabOrderPage() {
 
     return (
         <div className="min-h-screen bg-[#f8fafc] p-6">
-            <div className="max-w-6xl mx-auto space-y-6">
+        <div className="max-w-[1550px] mx-auto space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <Link href="/lab-xray" className="group flex items-center gap-2 text-slate-500 hover:text-teal-600 transition-colors">
@@ -602,348 +608,383 @@ export default function LabOrderPage() {
                     </div>
                 </div>
 
-                {/* Main Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left: Patient and Details (1/3) */}
-                    <div className="lg:col-span-1 space-y-6">
+                {/* Main Content - Stacked Layout */}
+                <div className="flex flex-col gap-6">
+                    {/* Patient Information - Rectangular Section */}
+                    <div className="w-full">
                         <motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-white rounded-[32px] border border-slate-200 shadow-sm"
                         >
-                            <div className="p-6 bg-gradient-to-br from-teal-600 to-teal-700 text-white">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
-                                        <User size={24} />
+                            <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-teal-600 text-white rounded-2xl shadow-lg shadow-teal-600/20">
+                                            <User size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-black text-slate-900">Patient Information</h2>
+                                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Demographics & Identity</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold">Patient Information</h2>
-                                        <p className="text-teal-100 text-xs">Register diagnostic clinical order</p>
+
+                                    {/* UHID Search - Moved to top for better access */}
+                                    <div className="w-full md:w-96 search-container">
+                                        <div className="relative group">
+                                            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchingPatient ? 'text-teal-500' : 'text-slate-400 group-focus-within:text-teal-500'}`} size={18} />
+                                            <input
+                                                type="text"
+                                                placeholder="Search UHID or Name..."
+                                                value={uhidSearch}
+                                                onChange={(e) => setUhidSearch(e.target.value)}
+                                                onFocus={() => setShowSearchDropdown(searchResults.length > 0)}
+                                                onKeyDown={(e) => {
+                                                    if (showSearchDropdown && searchResults.length > 0) {
+                                                        if (e.key === 'ArrowDown') {
+                                                            e.preventDefault();
+                                                            setActivePatientIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev));
+                                                        } else if (e.key === 'ArrowUp') {
+                                                            e.preventDefault();
+                                                            setActivePatientIndex(prev => (prev > 0 ? prev - 1 : 0));
+                                                        } else if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            if (activePatientIndex >= 0 && activePatientIndex < searchResults.length) {
+                                                                handlePatientSelect(searchResults[activePatientIndex]);
+                                                            }
+                                                        } else if (e.key === 'Escape') {
+                                                            setShowSearchDropdown(false);
+                                                        }
+                                                    }
+                                                }}
+                                                className="w-full pl-12 pr-12 py-3 bg-white border-2 border-slate-100 focus:border-teal-500 rounded-2xl transition-all outline-none text-sm font-semibold text-slate-700 shadow-sm"
+                                            />
+                                            {uhidSearch && (
+                                                <button
+                                                    onClick={() => {
+                                                        setUhidSearch('');
+                                                        setSearchResults([]);
+                                                        setShowSearchDropdown(false);
+                                                    }}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
+                                                >
+                                                    <X size={18} />
+                                                </button>
+                                            )}
+
+                                            {/* Search Results Dropdown */}
+                                            {showSearchDropdown && searchResults.length > 0 && (
+                                                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-80 overflow-y-auto z-50">
+                                                    {searchResults.map((patient, index) => (
+                                                        <button
+                                                            key={patient.id}
+                                                            onClick={() => handlePatientSelect(patient)}
+                                                            onMouseEnter={() => setActivePatientIndex(index)}
+                                                            className={`w-full px-4 py-3 flex items-center gap-3 transition-colors text-left border-b border-slate-100 last:border-b-0 ${
+                                                                activePatientIndex === index ? 'bg-teal-50' : 'hover:bg-slate-50'
+                                                            }`}
+                                                        >
+                                                            <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
+                                                                <User size={16} className="text-teal-600" />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="font-semibold text-slate-900 truncate">
+                                                                    {patient.name}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 flex items-center gap-2">
+                                                                    <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono">
+                                                                        {patient.patient_id}
+                                                                    </span>
+                                                                    <span>{patient.gender}</span>
+                                                                    {patient.phone && <span>• {patient.phone}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="p-6 space-y-5">
-                                {/* UHID Search */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">UHID / Patient Name</label>
-                                    <div className="relative group search-container">
-                                        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchingPatient ? 'text-teal-500' : 'text-slate-400 group-focus-within:text-teal-500'}`} size={18} />
-                                        <input
-                                            type="text"
-                                            placeholder="Enter UHID or Patient Name..."
-                                            value={uhidSearch}
-                                            onChange={(e) => setUhidSearch(e.target.value)}
-                                            onFocus={() => setShowSearchDropdown(searchResults.length > 0)}
-                                            className="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-2 border-transparent focus:border-teal-500 focus:bg-white rounded-2xl transition-all outline-none text-sm font-semibold text-slate-700"
-                                        />
-                                        {uhidSearch && (
-                                            <button
-                                                onClick={() => {
-                                                    setUhidSearch('');
-                                                    setSearchResults([]);
-                                                    setShowSearchDropdown(false);
-                                                }}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
-                                            >
-                                                <X size={18} />
-                                            </button>
-                                        )}
-
-                                        {/* Search Results Dropdown */}
-                                        {showSearchDropdown && searchResults.length > 0 && (
-                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-lg max-h-80 overflow-y-auto z-50">
-                                                {searchResults.map((patient) => (
-                                                    <button
-                                                        key={patient.id}
-                                                        onClick={() => handlePatientSelect(patient)}
-                                                        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100 last:border-b-0"
-                                                    >
-                                                        <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                                                            <User size={16} className="text-teal-600" />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="font-semibold text-slate-900 truncate">
-                                                                {patient.name}
-                                                            </div>
-                                                            <div className="text-xs text-slate-500 flex items-center gap-2">
-                                                                <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono">
-                                                                    {patient.patient_id}
-                                                                </span>
-                                                                <span>{patient.gender}</span>
-                                                                {patient.phone && <span>• {patient.phone}</span>}
-                                                            </div>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Auto-filled Fields */}
-                                <div className="grid grid-cols-1 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">UHID</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-teal-700">
+                            <div className="p-8">
+                                {/* Horizontal Field Grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Hash size={12} /> UHID
+                                        </label>
+                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-teal-700 shadow-sm">
                                             {patientDetails.uhid || '--'}
                                         </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
+                                    <div className="lg:col-span-1 space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <User size={12} /> Full Name
+                                        </label>
+                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 shadow-sm truncate">
                                             {patientDetails.name || '--'}
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gender</label>
-                                            <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 capitalize">
-                                                {patientDetails.gender || '--'}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</label>
-                                            <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                                {patientDetails.age ? `${patientDetails.age} Years` : '--'}
-                                            </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Calendar size={12} /> Age
+                                        </label>
+                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 shadow-sm">
+                                            {patientDetails.age ? `${patientDetails.age} Years` : '--'}
                                         </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Number</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Stethoscope size={12} /> Gender
+                                        </label>
+                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 shadow-sm capitalize">
+                                            {patientDetails.gender || '--'}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Phone size={12} /> Contact
+                                        </label>
+                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 shadow-sm">
                                             {patientDetails.contactNo || '--'}
                                         </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email ID</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 truncate">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Mail size={12} /> Email
+                                        </label>
+                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 shadow-sm truncate">
                                             {patientDetails.emailId || '--'}
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Billing Note Integrated */}
+                                <div className="mt-8 bg-amber-50/50 border border-amber-100 p-4 rounded-2xl flex gap-3 items-center">
+                                    <AlertCircle size={18} className="text-amber-500 shrink-0" />
+                                    <p className="text-[11px] text-amber-800 font-bold uppercase tracking-[0.1em]">
+                                        Note: This bill creates a pending transaction. Verify patient details before generating.
+                                    </p>
+                                </div>
                             </div>
                         </motion.div>
-
-                        <div className="bg-amber-50 border border-amber-100 p-5 rounded-3xl flex gap-3">
-                            <AlertCircle size={20} className="text-amber-500 shrink-0" />
-                            <div>
-                                <h4 className="text-xs font-bold text-amber-900 mb-1">Billing Note</h4>
-                                <p className="text-[10px] text-amber-700 leading-relaxed font-medium">Once generated, this bill will create a pending transaction in the patient's account. This cannot be undone easily.</p>
-                            </div>
-                        </div>
                     </div>
 
-                    {/* Right: Test Selection & Billing (2/3) */}
-                    <div className="lg:col-span-2 flex flex-col gap-6">
+                    {/* Lab Test Selection - Rectangular Section */}
+                    <div className="w-full">
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col"
+                            className="bg-white rounded-[32px] border border-slate-200 shadow-sm flex flex-col overflow-hidden"
                         >
-                            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-teal-50 rounded-xl text-teal-600">
-                                        <Beaker size={20} />
+                            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-teal-600 text-white rounded-2xl shadow-lg shadow-teal-600/20">
+                                        <Beaker size={24} />
                                     </div>
                                     <div>
-                                        <h2 className="text-lg font-bold text-slate-900">Lab Test Selection</h2>
-                                        <p className="text-slate-400 text-xs font-medium">Add required diagnostics for clinical analysis</p>
+                                        <h2 className="text-xl font-black text-slate-900">Lab Test Selection</h2>
+                                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Diagnostic Order Details</p>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => setShowNewTestModal(true)}
-                                        className="flex items-center gap-2 px-4 py-2 border-2 border-teal-600 text-teal-600 rounded-xl text-sm font-bold hover:bg-teal-50 transition-all"
+                                        className="flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-sm font-black hover:border-teal-500 hover:text-teal-600 transition-all shadow-sm"
                                     >
-                                        <Beaker size={18} />
+                                        <Plus size={18} />
                                         New Catalog Entry
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="p-6">
-                                {/* Group selector (optional) */}
-                                <div className="mb-5 p-4 bg-white border border-slate-200 rounded-2xl">
-                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                        <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                                            <input
-                                                type="checkbox"
-                                                checked={useGroup}
-                                                onChange={(e) => {
-                                                    const next = e.target.checked;
-                                                    setUseGroup(next);
-                                                    if (!next) {
-                                                        setSelectedGroupId('');
-                                                    }
-                                                }}
-                                            />
-                                            Use Group
-                                        </label>
-
-                                        {useGroup && (
-                                            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                                                <select
-                                                    value={selectedGroupId}
-                                                    onChange={async (e) => {
-                                                        const id = e.target.value;
-                                                        setSelectedGroupId(id);
-                                                        await applyGroupToSelection(id);
-                                                    }}
-                                                    className="w-full md:w-80 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none"
-                                                >
-                                                    <option value="">Select Group...</option>
-                                                    {availableGroups.map((g: any) => (
-                                                        <option key={g.id} value={g.id}>{g.name}</option>
-                                                    ))}
-                                                </select>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowNewGroupModal(true)}
-                                                    className="px-4 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-bold hover:bg-teal-700 transition-all flex items-center gap-2"
-                                                >
-                                                    <Plus size={16} />
-                                                    Add Group
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={clearGroupSelection}
-                                                    className="px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-black text-slate-700 hover:bg-slate-200 transition-all"
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {useGroup && (
-                                        <div className="mt-2 text-[11px] text-slate-500 font-semibold">
-                                            {groupLoading ? 'Loading groups/items…' : 'Selecting a group will auto-fill tests. You can remove any test row to opt-out per test.'}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
-                                    {/* Pinned selection bar */}
-                                    <div className="sticky top-0 z-10 -mx-4 px-4 pb-4 bg-slate-50">
-                                        <div className="hidden md:grid grid-cols-12 gap-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            <div className="md:col-span-5 pl-1">Test Name</div>
-                                            <div className="md:col-span-4 pl-1">Group Name</div>
-                                            <div className="md:col-span-2 pl-1">Amount (₹)</div>
-                                            <div className="md:col-span-1" />
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                                            <div className="md:col-span-5">
-                                                <SearchableSelect
-                                                    value={pendingTestId}
-                                                    onChange={(value: string) => {
-                                                        setPendingTestId(value);
-                                                        // Auto-add test when selected
-                                                        if (value) {
-                                                            const test = labCatalog.find(t => t.id === value);
-                                                            if (test) {
-                                                                setSelectedTests(prev => [
-                                                                    ...prev.filter(t => t.testId !== test.id),
-                                                                    {
-                                                                        testId: test.id,
-                                                                        testName: test.test_name,
-                                                                        groupName: test.category || 'N/A',
-                                                                        amount: test.test_cost || 0
-                                                                    }
-                                                                ]);
-                                                                // Reset pending selection
-                                                                setPendingTestId('');
-                                                                setPendingAmount(0);
-                                                            }
-                                                        }
-                                                    }}
-                                                    options={labCatalog.map(item => ({
-                                                        value: item.id,
-                                                        label: item.test_name,
-                                                        group: item.category,
-                                                        subLabel: `₹${item.test_cost}`
-                                                    }))}
-                                                    placeholder="Search & Select Test..."
-                                                    keepOpenAfterSelect={true}
-                                                />
-                                            </div>
-                                            <div className="md:col-span-4">
-                                                <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
-                                                    {labCatalog.find(i => i.id === pendingTestId)?.category || 'N/A'}
-                                                </div>
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <div className="relative">
-                                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                            <div className="p-8">
+                                {/* Split Screen Selection Layout */}
+                                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+                                    
+                                    {/* Left Column: Selection Controls (5/12) */}
+                                    <div className="xl:col-span-4 space-y-6 sticky top-6 h-fit">
+                                        <div className="bg-slate-50 rounded-3xl border border-slate-100 p-6 space-y-6">
+                                            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+                                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Select New Test</h3>
+                                                {/* Group selector toggle */}
+                                                <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
                                                     <input
-                                                        type="number"
-                                                        value={pendingAmount}
-                                                        onChange={(e) => setPendingAmount(parseFloat(e.target.value) || 0)}
-                                                        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-teal-700 focus:ring-2 focus:ring-teal-500 outline-none"
+                                                        type="checkbox"
+                                                        checked={useGroup}
+                                                        onChange={(e) => {
+                                                            const next = e.target.checked;
+                                                            setUseGroup(next);
+                                                            if (!next) setSelectedGroupId('');
+                                                        }}
+                                                        className="rounded text-teal-600 focus:ring-teal-500"
+                                                    />
+                                                    Use Group
+                                                </label>
+                                            </div>
+
+                                            {useGroup && (
+                                                <div className="space-y-3">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Diagnostic Group</label>
+                                                    <div className="flex gap-2">
+                                                        <select
+                                                            value={selectedGroupId}
+                                                            onChange={async (e) => {
+                                                                const id = e.target.value;
+                                                                setSelectedGroupId(id);
+                                                                await applyGroupToSelection(id);
+                                                            }}
+                                                            className="flex-1 px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-teal-500 outline-none"
+                                                        >
+                                                            <option value="">Select Group...</option>
+                                                            {availableGroups.map((g: any) => (
+                                                                <option key={g.id} value={g.id}>{g.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowNewGroupModal(true)}
+                                                            className="p-3 bg-teal-50 text-teal-600 rounded-xl hover:bg-teal-100 transition-colors"
+                                                            title="Add Group"
+                                                        >
+                                                            <Plus size={20} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-5">
+                                                {/* Test Name Search */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Test Name</label>
+                                                    <SearchableSelect
+                                                        value={pendingTestId}
+                                                        onChange={(value: string) => {
+                                                            setPendingTestId(value);
+                                                            if (value) {
+                                                                const test = labCatalog.find(t => t.id === value);
+                                                                if (test) {
+                                                                    setSelectedTests(prev => [
+                                                                        ...prev.filter(t => t.testId !== test.id),
+                                                                        {
+                                                                            testId: test.id,
+                                                                            testName: test.test_name,
+                                                                            groupName: test.category || 'N/A',
+                                                                            amount: test.test_cost || 0
+                                                                        }
+                                                                    ]);
+                                                                    setPendingTestId('');
+                                                                    setPendingAmount(0);
+                                                                }
+                                                            }
+                                                        }}
+                                                        options={labCatalog.map(item => ({
+                                                            value: item.id,
+                                                            label: item.test_name,
+                                                            group: item.category,
+                                                            subLabel: `₹${item.test_cost}`
+                                                        }))}
+                                                        placeholder="Search & Select Test..."
                                                     />
                                                 </div>
-                                            </div>
-                                            <div className="md:col-span-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAddPendingTest}
-                                                    disabled={!pendingTestId}
-                                                    className="w-full md:w-auto flex items-center justify-center gap-1 px-2 py-1.5 bg-teal-600 text-white rounded-xl text-sm font-bold hover:bg-teal-700 transition-all disabled:opacity-50"
-                                                >
-                                                    <Plus size={12} />
-                                                    <span className="hidden md:inline">Add Test</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    {/* Selected tests list (last selected first) */}
-                                    <div className="space-y-2">
-                                        <AnimatePresence>
-                                            {selectedTests.map((test) => (
-                                                <motion.div
-                                                    key={`test-${test.testId}`}
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, scale: 0.95 }}
-                                                    className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative group"
-                                                >
-                                                    <button
-                                                        onClick={() => handleRemoveSelectedTest(test.testId)}
-                                                        className="absolute -top-2 -right-2 p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-500 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all"
-                                                        title="Remove"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-
-                                                    <div className="md:col-span-5 space-y-2">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 md:hidden">Test Name</label>
-                                                        <div className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700">
-                                                            {test.testName}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Category</label>
+                                                        <div className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-500 truncate min-h-[46px] flex items-center">
+                                                            {labCatalog.find(i => i.id === pendingTestId)?.category || 'N/A'}
                                                         </div>
                                                     </div>
-
-                                                    <div className="md:col-span-4 space-y-2">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 md:hidden">Group Name</label>
-                                                        <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
-                                                            {test.groupName || 'N/A'}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="md:col-span-2 space-y-2">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 md:hidden">Amount (₹)</label>
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Amount (₹)</label>
                                                         <div className="relative">
                                                             <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                                                             <input
                                                                 type="number"
-                                                                value={test.amount}
-                                                                onChange={(e) => handleAmountChange(test.testId, parseFloat(e.target.value) || 0)}
-                                                                className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-teal-700 focus:ring-2 focus:ring-teal-500 outline-none"
+                                                                value={pendingAmount}
+                                                                onChange={(e) => setPendingAmount(parseFloat(e.target.value) || 0)}
+                                                                className="w-full pl-9 pr-4 py-3 bg-white border-2 border-slate-100 focus:border-teal-500 rounded-xl text-sm font-bold text-teal-700 outline-none"
                                                             />
                                                         </div>
                                                     </div>
-                                                </motion.div>
-                                            ))}
-                                        </AnimatePresence>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddPendingTest}
+                                                    disabled={!pendingTestId}
+                                                    className="w-full py-4 bg-teal-600 text-white rounded-2xl font-black text-sm hover:bg-teal-700 transition-all shadow-lg shadow-teal-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                                                >
+                                                    <Plus size={18} />
+                                                    Add to Selected
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Right Column: Selected Tests List (7/12) */}
+                                    <div className="xl:col-span-8 space-y-4">
+                                        <div className="flex items-center justify-between px-2 mb-2">
+                                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Selected Tests</h3>
+                                            <span className="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full">{selectedTests.length} Items</span>
+                                        </div>
+
+                                        <div className="space-y-3 min-h-[400px] border-2 border-dashed border-slate-100 rounded-[32px] p-6 bg-slate-50/30">
+                                            <AnimatePresence mode="popLayout">
+                                                {selectedTests.length === 0 ? (
+                                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-20">
+                                                        <div className="p-4 bg-white rounded-3xl mb-4 shadow-sm">
+                                                            <Beaker size={32} strokeWidth={1.5} />
+                                                        </div>
+                                                        <p className="text-sm font-bold">No tests selected yet</p>
+                                                        <p className="text-xs font-medium opacity-60 mt-1">Search and add tests from the left panel</p>
+                                                    </div>
+                                                ) : (
+                                                    selectedTests.map((test) => (
+                                                        <motion.div
+                                                            key={`test-${test.testId}`}
+                                                            layout
+                                                            initial={{ opacity: 0, x: 20 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                            exit={{ opacity: 0, scale: 0.95 }}
+                                                            className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-6 group hover:border-teal-200 hover:shadow-md transition-all relative"
+                                                        >
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Test Name</div>
+                                                                <div className="font-bold text-slate-800 text-lg truncate">{test.testName}</div>
+                                                            </div>
+                                                            
+                                                            <div className="w-48 hidden md:block border-l border-slate-100 pl-6">
+                                                                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Category</div>
+                                                                <div className="font-bold text-slate-600 truncate">{test.groupName || 'N/A'}</div>
+                                                            </div>
+
+                                                            <div className="w-40 border-l border-slate-100 pl-6">
+                                                                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Amount</div>
+                                                                <div className="relative">
+                                                                    <Hash className="absolute left-0 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+                                                                    <input
+                                                                        type="number"
+                                                                        value={test.amount}
+                                                                        onChange={(e) => handleAmountChange(test.testId, parseFloat(e.target.value) || 0)}
+                                                                        className="w-full pl-5 pr-2 py-1 bg-transparent font-black text-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-100 rounded"
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <button
+                                                                onClick={() => handleRemoveSelectedTest(test.testId)}
+                                                                className="p-2.5 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </motion.div>
+                                                    ))
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1053,7 +1094,7 @@ export default function LabOrderPage() {
                             </div>
                         </motion.div>
                     </div>
-                </div >
+                </div>
 
                 {/* Status Messages */}
                 <AnimatePresence>

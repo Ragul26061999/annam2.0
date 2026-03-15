@@ -81,6 +81,7 @@ export default function XrayOrderPage() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showSearchDropdown, setShowSearchDropdown] = useState(false);
     const [searchingPatient, setSearchingPatient] = useState(false);
+    const [activePatientIndex, setActivePatientIndex] = useState(-1);
 
     // New Test State
     const [showNewTestModal, setShowNewTestModal] = useState(false);
@@ -150,6 +151,7 @@ export default function XrayOrderPage() {
         if (!searchTerm.trim()) {
             setSearchResults([]);
             setShowSearchDropdown(false);
+            setActivePatientIndex(-1);
             return;
         }
 
@@ -163,8 +165,11 @@ export default function XrayOrderPage() {
                 .order('name');
 
             if (error) throw error;
-            setSearchResults(data || []);
-            setShowSearchDropdown(true);
+            const results = data || [];
+            setSearchResults(results);
+            setShowSearchDropdown(results.length > 0);
+            if (results.length > 0) setActivePatientIndex(0);
+            else setActivePatientIndex(-1);
         } catch (err) {
             console.error('Search error:', err);
             setSearchResults([]);
@@ -202,7 +207,7 @@ export default function XrayOrderPage() {
                 getRadiologyTestCatalog(),
                 getAllDoctorsSimple()
             ]);
-            setRadCatalog(catalog || []);
+            setRadCatalog((catalog || []).sort((a: any, b: any) => String(b.id).localeCompare(String(a.id))));
             setDoctors(doctorsList || []);
         } catch (err) {
             console.error('Error loading data:', err);
@@ -239,6 +244,7 @@ export default function XrayOrderPage() {
         setUhidSearch(patient.name); // Show selected patient name
         setShowSearchDropdown(false);
         setSearchResults([]);
+        setActivePatientIndex(-1);
         setError(null);
     };
 
@@ -288,7 +294,7 @@ export default function XrayOrderPage() {
             });
 
             // Update master data
-            setRadCatalog(prev => [...prev, newEntry]);
+            setRadCatalog(prev => [newEntry, ...prev]);
 
             // Success!
             setNewTestData({ testName: '', groupName: '', amount: 0 });
@@ -455,58 +461,75 @@ export default function XrayOrderPage() {
 
     return (
         <div className="min-h-screen bg-[#f8fafc] p-6">
-            <div className="max-w-6xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <Link href="/lab-xray" className="group flex items-center gap-2 text-slate-500 hover:text-cyan-600 transition-colors">
-                        <div className="p-2 rounded-lg bg-white border border-slate-200 group-hover:border-cyan-200 transition-all">
-                            <ChevronLeft size={20} />
-                        </div>
-                        <span className="font-bold tracking-tight text-sm uppercase">Diagnostics Central</span>
-                    </Link>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 px-4 py-2 bg-cyan-50 text-cyan-700 rounded-xl border border-cyan-100 shadow-sm">
-                            <Clock size={16} />
-                            <span className="text-xs font-black uppercase tracking-wider">{new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <div className="max-w-[1550px] mx-auto space-y-8">
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                        <Link 
+                            href="/lab-xray" 
+                            className="p-4 bg-white border border-slate-200 rounded-[24px] text-slate-400 hover:text-cyan-600 hover:border-cyan-200 hover:shadow-xl hover:shadow-cyan-900/5 transition-all active:scale-90"
+                        >
+                            <ChevronLeft size={24} />
+                        </Link>
+                        <div>
+                            <div className="flex items-center gap-3 mb-1">
+                                <span className="px-3 py-1 bg-cyan-100 text-cyan-700 text-[10px] font-black uppercase tracking-[0.2em] rounded-lg">Imaging Suite</span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Radiology Dept</span>
+                            </div>
+                            <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter">Radiology & X-Ray Order</h1>
                         </div>
                     </div>
                 </div>
 
                 {/* Main Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left: Patient and Details (1/3) */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
-                        >
-                            <div className="p-6 bg-gradient-to-br from-teal-600 to-teal-700 text-white">
+                <div className="flex flex-col gap-8">
+                    {/* 1. Patient Information Workspace - Rectangular Section */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden"
+                    >
+                        <div className="p-8 border-b border-slate-100 bg-slate-50/50">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                 <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
+                                    <div className="p-4 bg-cyan-600 rounded-[22px] text-white shadow-lg shadow-cyan-200">
                                         <User size={24} />
                                     </div>
                                     <div>
-                                        <h2 className="text-lg font-bold">Patient Information</h2>
-                                        <p className="text-teal-100 text-xs">Register diagnostic clinical order</p>
+                                        <h2 className="text-xl font-black text-slate-900">Patient Information</h2>
+                                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Demographics & Identity</p>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="p-6 space-y-5">
-                                {/* UHID Search */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">UHID / Patient Name</label>
-                                    <div className="relative group search-container">
-                                        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchingPatient ? 'text-teal-500' : 'text-slate-400 group-focus-within:text-teal-500'}`} size={18} />
+                                <div className="w-full md:w-96 search-container">
+                                    <div className="relative group">
+                                        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchingPatient ? 'text-cyan-500' : 'text-slate-400 group-focus-within:text-cyan-500'}`} size={18} />
                                         <input
                                             type="text"
-                                            placeholder="Enter UHID or Patient Name..."
+                                            placeholder="Search UHID or Name..."
                                             value={uhidSearch}
                                             onChange={(e) => setUhidSearch(e.target.value)}
                                             onFocus={() => setShowSearchDropdown(searchResults.length > 0)}
-                                            className="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-2 border-transparent focus:border-teal-500 focus:bg-white rounded-2xl transition-all outline-none text-sm font-semibold text-slate-700"
-                                            autoFocus
+                                            onKeyDown={(e) => {
+                                                if (showSearchDropdown && searchResults.length > 0) {
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setActivePatientIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev));
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setActivePatientIndex(prev => (prev > 0 ? prev - 1 : 0));
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        if (activePatientIndex >= 0 && activePatientIndex < searchResults.length) {
+                                                            handlePatientSelect(searchResults[activePatientIndex]);
+                                                        }
+                                                    } else if (e.key === 'Escape') {
+                                                        setShowSearchDropdown(false);
+                                                    }
+                                                }
+                                            }}
+                                            className="w-full pl-12 pr-12 py-3 bg-white border-2 border-slate-100 focus:border-cyan-500 focus:bg-white rounded-2xl transition-all outline-none text-sm font-semibold text-slate-700 shadow-sm"
                                         />
                                         {uhidSearch && (
                                             <button
@@ -522,391 +545,435 @@ export default function XrayOrderPage() {
                                         )}
 
                                         {/* Search Results Dropdown */}
-                                        {showSearchDropdown && searchResults.length > 0 && (
-                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-lg max-h-80 overflow-y-auto z-50">
-                                                {searchResults.map((patient) => (
-                                                    <button
-                                                        key={patient.id}
-                                                        onClick={() => handlePatientSelect(patient)}
-                                                        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100 last:border-b-0"
-                                                    >
-                                                        <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                                                            <User size={16} className="text-teal-600" />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="font-semibold text-slate-900 truncate">
-                                                                {patient.name}
+                                        <AnimatePresence>
+                                            {showSearchDropdown && searchResults.length > 0 && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: 10 }}
+                                                    className="absolute top-full left-0 right-0 mt-3 bg-white border border-slate-200 rounded-[24px] shadow-2xl max-h-[400px] overflow-y-auto z-[100] p-2"
+                                                >
+                                                    {searchResults.map((patient, index) => (
+                                                        <button
+                                                            key={patient.id}
+                                                            onClick={() => handlePatientSelect(patient)}
+                                                            onMouseEnter={() => setActivePatientIndex(index)}
+                                                            className={`w-full px-5 py-4 flex items-center gap-4 rounded-2xl transition-all text-left group/item ${
+                                                                activePatientIndex === index ? 'bg-cyan-50' : 'hover:bg-slate-50'
+                                                            }`}
+                                                        >
+                                                            <div className="w-12 h-12 bg-cyan-100 rounded-full flex items-center justify-center group-hover/item:scale-110 transition-transform">
+                                                                <User size={18} className="text-cyan-600" />
                                                             </div>
-                                                            <div className="text-xs text-slate-500 flex items-center gap-2">
-                                                                <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono">
-                                                                    {patient.patient_id}
-                                                                </span>
-                                                                <span>{patient.gender}</span>
-                                                                {patient.phone && <span>• {patient.phone}</span>}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="font-black text-slate-900 text-lg uppercase tracking-tight">
+                                                                    {patient.name}
+                                                                </div>
+                                                                <div className="text-sm text-slate-500 flex items-center gap-3 font-bold uppercase tracking-widest">
+                                                                    <span className="bg-slate-100 px-2 py-0.5 rounded-lg text-cyan-700">
+                                                                        {patient.patient_id}
+                                                                    </span>
+                                                                    <span>{patient.gender}</span>
+                                                                    {patient.phone && <span>• {patient.phone}</span>}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
+                                                        </button>
+                                                    ))}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
                                 </div>
-
-                                {/* Auto-filled Fields */}
-                                <div className="grid grid-cols-1 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">UHID</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-teal-700">
-                                            {patientDetails.uhid || '--'}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                            {patientDetails.name || '--'}
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gender</label>
-                                            <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 capitalize">
-                                                {patientDetails.gender || '--'}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</label>
-                                            <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                                {patientDetails.age ? `${patientDetails.age} Years` : '--'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Number</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                            {patientDetails.contactNo || '--'}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email ID</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 truncate">
-                                            {patientDetails.emailId || '--'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-
-                        <div className="bg-amber-50 border border-amber-100 p-5 rounded-3xl flex gap-3">
-                            <AlertCircle size={20} className="text-amber-500 shrink-0" />
-                            <div>
-                                <h4 className="text-xs font-bold text-amber-900 mb-1">Billing Note</h4>
-                                <p className="text-[10px] text-amber-700 leading-relaxed font-medium">Once generated, this bill will create a pending transaction in the patient's account. This cannot be undone easily.</p>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Right: Test Selection & Billing (2/3) */}
-                    <div className="lg:col-span-2 flex flex-col gap-6">
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden"
-                        >
-                            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-teal-50 rounded-xl text-teal-600">
-                                        <Beaker size={20} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold text-slate-900">X-Ray Test Selection</h2>
-                                        <p className="text-slate-400 text-xs font-medium">Add required diagnostics for clinical analysis</p>
+                        <div className="p-8 space-y-8">
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                                <div className="space-y-1.5 focus-within:scale-105 transition-transform">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">UHID</label>
+                                    <div className="px-4 py-3 bg-cyan-50/50 border border-cyan-100 rounded-xl text-sm font-bold text-cyan-700 truncate shadow-sm">
+                                        {patientDetails.uhid || '--'}
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Full Name</label>
+                                    <div className="px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl text-sm font-bold text-slate-800 truncate">
+                                        {patientDetails.name || '--'}
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5 focus-within:scale-105 transition-transform">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Age</label>
+                                    <div className="px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl text-sm font-bold text-slate-800">
+                                        {patientDetails.age ? `${patientDetails.age} Yrs` : '--'}
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Gender</label>
+                                    <div className="px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl text-sm font-bold text-slate-800 capitalize">
+                                        {patientDetails.gender || '--'}
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5 focus-within:scale-105 transition-transform">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Contact</label>
+                                    <div className="px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl text-sm font-bold text-slate-800">
+                                        {patientDetails.contactNo || '--'}
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Email</label>
+                                    <div className="px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl text-sm font-bold text-slate-800 truncate">
+                                        {patientDetails.emailId || '--'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-center gap-3 shadow-sm">
+                                <AlertCircle size={18} className="text-amber-500 shrink-0" />
+                                <p className="text-[11px] text-amber-800 font-bold uppercase tracking-wider">
+                                    NOTE: Verify patient identity before proceeding with imaging diagnostics to ensure clinical accuracy.
+                                </p>
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    {/* 2. Diagnostic Selection Workspace - Split Section */}
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 h-full min-h-[600px]">
+                        {/* LEFT: Selection Console (4/12) */}
+                        <motion.div
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="xl:col-span-4 bg-white rounded-[40px] border border-slate-200 shadow-sm p-8 flex flex-col gap-8 h-fit sticky top-6"
+                        >
+                            <div>
+                                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                                    <div className="p-2 bg-cyan-50 rounded-xl text-cyan-600">
+                                        <Plus size={20} />
+                                    </div>
+                                    Select New Test
+                                </h3>
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Configure diagnostic procedures</p>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Group Selector Toggle */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Procurement Mode</label>
+                                        <button 
+                                            onClick={() => {
+                                                setUseGroup(!useGroup);
+                                                if (useGroup) setSelectedGroupId('');
+                                            }}
+                                            className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all ${
+                                                useGroup ? 'bg-cyan-600 text-white' : 'bg-slate-100 text-slate-400'
+                                            }`}
+                                        >
+                                            {useGroup ? 'Using Groups' : 'Individual Test'}
+                                        </button>
+                                    </div>
+                                    
+                                    {useGroup && (
+                                        <motion.div 
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            className="space-y-3"
+                                        >
+                                            <select
+                                                value={selectedGroupId}
+                                                onChange={async (e) => {
+                                                    const id = e.target.value;
+                                                    setSelectedGroupId(id);
+                                                    await applyGroupToSelection(id);
+                                                }}
+                                                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-cyan-500 transition-all outline-none"
+                                            >
+                                                <option value="">Select Predefined Group...</option>
+                                                {availableGroups.map((g: any) => (
+                                                    <option key={g.id} value={g.id}>{g.name}</option>
+                                                ))}
+                                            </select>
+                                        </motion.div>
+                                    )}
+                                </div>
+
+                                {/* Main Selection Dropdown */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Diagnostic Search</label>
+                                    <SearchableSelect
+                                        value={pendingTestId}
+                                        onChange={(value: string) => {
+                                            setPendingTestId(value);
+                                            // Auto-add test when selected
+                                            if (value) {
+                                                const test = radCatalog.find(t => t.id === value);
+                                                if (test) {
+                                                    setSelectedTests(prev => [
+                                                        ...prev.filter(t => t.testId !== test.id),
+                                                        {
+                                                            testId: test.id,
+                                                            testName: test.test_name,
+                                                            groupName: test.modality || 'X-Ray',
+                                                            bodyPart: test.body_part || '',
+                                                            amount: test.test_cost || 0
+                                                        }
+                                                    ]);
+                                                    setPendingTestId('');
+                                                    setPendingAmount(0);
+                                                }
+                                            }
+                                        }}
+                                        options={radCatalog.map(item => ({
+                                            value: item.id,
+                                            label: item.test_name,
+                                            group: item.modality,
+                                            subLabel: `₹${item.test_cost}`
+                                        }))}
+                                        placeholder="SEARCH FOR X-RAY / RADIOLOGY..."
+                                        keepOpenAfterSelect={true}
+                                    />
+                                </div>
+
+                                {/* Context Fields */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Category</label>
+                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-black text-slate-500 truncate uppercase mt-1">
+                                            {radCatalog.find(i => i.id === pendingTestId)?.modality || '---'}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Base Price</label>
+                                        <div className="px-4 py-3 bg-cyan-50 border border-cyan-100 rounded-xl text-xs font-black text-cyan-600 mt-1">
+                                            ₹{radCatalog.find(i => i.id === pendingTestId)?.test_cost || '0'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
                                     <button
                                         onClick={() => setShowNewTestModal(true)}
-                                        className="flex items-center gap-2 px-4 py-2 border-2 border-teal-600 text-teal-600 rounded-xl text-sm font-bold hover:bg-teal-50 transition-all"
+                                        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-slate-900 text-white rounded-[24px] font-black text-sm uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"
                                     >
-                                        <Plus size={18} />
+                                        <Beaker size={18} className="text-cyan-400" />
                                         New Catalog Entry
                                     </button>
                                 </div>
                             </div>
+                        </motion.div>
 
-                            <div className="p-6">
-                                {/* Group selector (optional) */}
-                                <div className="mb-5 p-4 bg-white border border-slate-200 rounded-2xl">
-                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                        <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                                            <input
-                                                type="checkbox"
-                                                checked={useGroup}
-                                                onChange={(e) => {
-                                                    const next = e.target.checked;
-                                                    setUseGroup(next);
-                                                    if (!next) {
-                                                        setSelectedGroupId('');
-                                                    }
-                                                }}
-                                            />
-                                            Use Group
-                                        </label>
-
-                                        {useGroup && (
-                                            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                                                <select
-                                                    value={selectedGroupId}
-                                                    onChange={async (e) => {
-                                                        const id = e.target.value;
-                                                        setSelectedGroupId(id);
-                                                        await applyGroupToSelection(id);
-                                                    }}
-                                                    className="w-full md:w-80 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none"
-                                                >
-                                                    <option value="">Select Group...</option>
-                                                    {availableGroups.map((g: any) => (
-                                                        <option key={g.id} value={g.id}>{g.name}</option>
-                                                    ))}
-                                                </select>
-                                                <button
-                                                    type="button"
-                                                    onClick={clearGroupSelection}
-                                                    className="px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-black text-slate-700 hover:bg-slate-200 transition-all"
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                        )}
+                        {/* RIGHT: Selected Tests Sheet (8/12) */}
+                        <motion.div
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="xl:col-span-8 bg-slate-50/50 rounded-[40px] border border-slate-200 border-dashed p-8 scroll-mt-6"
+                        >
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-cyan-600 rounded-2xl text-white">
+                                        <Monitor size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Order Sheet</h3>
+                                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Active diagnostics being ordered</p>
                                     </div>
                                 </div>
+                                <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm text-sm font-black text-slate-500 uppercase tracking-widest">
+                                    {selectedTests.length} Items Selected
+                                </div>
+                            </div>
 
-                                <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
-                                    {/* Pinned selection bar */}
-                                    <div className="sticky top-0 z-10 -mx-4 px-4 pb-4 bg-slate-50">
-                                        <div className="hidden md:grid grid-cols-12 gap-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            <div className="md:col-span-5 pl-1">Procedure Name</div>
-                                            <div className="md:col-span-4 pl-1">Modality</div>
-                                            <div className="md:col-span-2 pl-1">Amount (₹)</div>
-                                            <div className="md:col-span-1" />
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                                            <div className="md:col-span-5">
-                                                <SearchableSelect
-                                                    value={pendingTestId}
-                                                    onChange={(value: string) => {
-                                                        setPendingTestId(value);
-                                                        if (value) {
-                                                            const test = radCatalog.find(t => t.id === value);
-                                                            if (test) {
-                                                                setSelectedTests(prev => [
-                                                                    ...prev.filter(t => t.testId !== test.id),
-                                                                    {
-                                                                        testId: test.id,
-                                                                        testName: test.test_name,
-                                                                        groupName: test.modality || 'X-Ray',
-                                                                        bodyPart: test.body_part || '',
-                                                                        amount: test.test_cost || 0
-                                                                    }
-                                                                ]);
-                                                                setPendingTestId('');
-                                                                setPendingAmount(0);
-                                                            }
-                                                        }
-                                                    }}
-                                                    options={radCatalog.map(item => ({
-                                                        value: item.id,
-                                                        label: item.test_name,
-                                                        group: item.modality,
-                                                        subLabel: `₹${item.test_cost}`
-                                                    }))}
-                                                    placeholder="CHOOSE X-RAY SCAN..."
-                                                    keepOpenAfterSelect={true}
-                                                />
-                                            </div>
-                                            <div className="md:col-span-4">
-                                                <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
-                                                    {radCatalog.find(i => i.id === pendingTestId)?.modality || 'N/A'}
-                                                </div>
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <div className="relative">
-                                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                                                    <input
-                                                        type="number"
-                                                        value={pendingAmount}
-                                                        onChange={(e) => setPendingAmount(parseFloat(e.target.value) || 0)}
-                                                        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-teal-700 focus:ring-2 focus:ring-teal-500 outline-none"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="md:col-span-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAddPendingTest}
-                                                    disabled={!pendingTestId}
-                                                    className="w-full flex items-center justify-center p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-all disabled:opacity-50"
-                                                >
-                                                    <Plus size={20} />
-                                                </button>
-                                            </div>
-                                        </div>
+                            {selectedTests.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 px-10 text-center bg-white rounded-[32px] border border-slate-100 shadow-sm h-[400px]">
+                                    <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                                        <Beaker size={48} className="text-slate-200" />
                                     </div>
-
-                                    {/* Selected tests list */}
-                                    <div className="space-y-4 pt-2">
-                                        <AnimatePresence>
-                                            {selectedTests.map((test) => (
-                                                <motion.div
-                                                    key={`test-${test.testId}`}
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, scale: 0.95 }}
-                                                    className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start relative group p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-teal-200 transition-all"
-                                                >
-                                                    <button
-                                                        onClick={() => handleRemoveSelectedTest(test.testId)}
-                                                        className="absolute -top-2 -right-2 p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-500 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20 hover:scale-110 active:scale-90"
-                                                        title="Remove"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-
-                                                    <div className="md:col-span-12 lg:col-span-5 space-y-2">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Procedure Name</label>
-                                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
+                                    <h4 className="text-lg font-black text-slate-400 uppercase tracking-tight">No Tests Selected</h4>
+                                    <p className="text-slate-300 text-sm font-bold uppercase tracking-widest mt-2 max-w-[280px]">Search and add diagnostics from the left console to build your order</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
+                                    <AnimatePresence mode="popLayout">
+                                        {selectedTests.map((test) => (
+                                            <motion.div
+                                                key={test.testId}
+                                                layout
+                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.95 }}
+                                                className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:border-cyan-200 transition-all flex items-center gap-6 group relative"
+                                            >
+                                                <div className="p-4 bg-cyan-50 rounded-2xl text-cyan-600 group-hover:scale-110 transition-transform">
+                                                    <Zap size={20} />
+                                                </div>
+                                                
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex flex-col gap-1">
+                                                        <h4 className="text-lg font-black text-slate-900 truncate uppercase tracking-tight">
                                                             {test.testName}
+                                                        </h4>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[10px] font-black uppercase tracking-widest border border-slate-200">
+                                                                {test.groupName}
+                                                            </span>
                                                         </div>
                                                     </div>
+                                                </div>
 
-                                                    <div className="md:col-span-6 lg:col-span-4 space-y-2">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Modality</label>
-                                                        <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
-                                                            {test.groupName || 'IMAGE'}
-                                                        </div>
+                                                <div className="flex items-center gap-6 pr-4">
+                                                    <div className="flex flex-col gap-2 min-w-[140px]">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Body Part</label>
+                                                        <input
+                                                            type="text"
+                                                            value={test.bodyPart}
+                                                            onChange={(e) => handleBodyPartChange(test.testId, e.target.value)}
+                                                            placeholder="Specify..."
+                                                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none"
+                                                        />
                                                     </div>
 
-                                                    <div className="md:col-span-6 lg:col-span-3 space-y-2">
+                                                    <div className="flex flex-col gap-2 min-w-[120px]">
                                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Amount (₹)</label>
                                                         <div className="relative">
-                                                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
                                                             <input
                                                                 type="number"
                                                                 value={test.amount}
                                                                 onChange={(e) => handleAmountChange(test.testId, parseFloat(e.target.value) || 0)}
-                                                                className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-teal-700 focus:ring-2 focus:ring-teal-500 outline-none"
+                                                                className="w-full pl-7 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-slate-900 focus:ring-2 focus:ring-cyan-500 outline-none"
                                                             />
                                                         </div>
                                                     </div>
 
-                                                    <div className="md:col-span-12 space-y-2 mt-2">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Specific Region / View Details</label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="E.g. AP & LATERAL, OBLIQUE VIEW, CONTRAST REQUIRED"
-                                                            value={test.bodyPart}
-                                                            onChange={(e) => handleBodyPartChange(test.testId, e.target.value)}
-                                                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 placeholder:text-slate-300 outline-none focus:border-teal-300 transition-all"
-                                                        />
-                                                    </div>
-                                                </motion.div>
+                                                    <button
+                                                        onClick={() => handleRemoveSelectedTest(test.testId)}
+                                                        className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all group/trash shadow-sm"
+                                                    >
+                                                        <Trash2 size={20} className="group-hover/trash:scale-110 transition-transform" />
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
+                            )}
+
+                            {/* Order Details & Meta */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="bg-white rounded-[32px] border border-slate-200 shadow-sm p-8 space-y-6"
+                                >
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Ordering Physician</label>
+                                        <select
+                                            value={orderingDoctorId}
+                                            onChange={(e) => setOrderingDoctorId(e.target.value)}
+                                            className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-cyan-500 transition-all outline-none"
+                                        >
+                                            <option value="">Select Practitioner...</option>
+                                            {doctors.map(d => (
+                                                <option key={d.id} value={d.id}>Dr. {d.user?.name || d.name}</option>
                                             ))}
-                                        </AnimatePresence>
+                                        </select>
                                     </div>
-                                </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Clinical Indication</label>
+                                        <textarea
+                                            rows={4}
+                                            value={clinicalIndication}
+                                            onChange={(e) => setClinicalIndication(e.target.value)}
+                                            placeholder="Enter reason for requested study..."
+                                            className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-cyan-500 transition-all outline-none resize-none"
+                                        />
+                                    </div>
+                                </motion.div>
 
-                                {/* Secondary Form Details */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8">
-                                    <div className="space-y-6">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Referring Physician (Optional)</label>
-                                            <select
-                                                value={orderingDoctorId}
-                                                onChange={(e) => setOrderingDoctorId(e.target.value)}
-                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                                            >
-                                                <option value="">SELECT INTERNAL DOCTOR...</option>
-                                                {doctors.map(d => (
-                                                    <option key={d.id} value={d.id}>Dr. {d.user?.name || d.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <StaffSelect
-                                                value={staffId}
-                                                onChange={setStaffId}
-                                                label="Ordered By (Staff) (Optional)"
-                                                required={false}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Clinical Instruction</label>
-                                            <textarea
-                                                rows={4}
-                                                value={clinicalIndication}
-                                                onChange={(e) => setClinicalIndication(e.target.value)}
-                                                placeholder="Provide detailed indications for scan..."
-                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none resize-none transition-all"
-                                            />
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="bg-white rounded-[32px] border border-slate-200 shadow-sm p-8 space-y-6"
+                                >
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Processing Urgency</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {(['routine', 'urgent', 'stat', 'emergency'] as const).map((u) => (
+                                                <button
+                                                    key={u}
+                                                    type="button"
+                                                    onClick={() => setUrgency(u)}
+                                                    className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${
+                                                        urgency === u 
+                                                        ? 'bg-cyan-600 border-cyan-600 text-white shadow-lg shadow-cyan-900/20' 
+                                                        : 'bg-white border-slate-100 text-slate-400 hover:border-cyan-200'
+                                                    }`}
+                                                >
+                                                    {u}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
-                                        <div className="space-y-4">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">X-Ray Study Attachments</label>
-                                            <LabXrayAttachments
-                                                patientId={patientDetails.id}
-                                                testType="radiology"
-                                                testName={selectedTests.filter(t => t.testId).length > 0 ? selectedTests.filter(t => t.testId).map(t => t.testName).join(', ') : 'Study'}
-                                                uploadedBy={undefined}
-                                                onAttachmentChange={() => {
-                                                    // Refresh attachments if needed
-                                                }}
-                                                showFileBrowser={false}
-                                            />
-                                        </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Study Attachments</label>
+                                        <LabXrayAttachments
+                                            patientId={patientDetails.id}
+                                            testType="radiology"
+                                            testName={selectedTests.map(t => t.testName).join(', ')}
+                                            uploadedBy={undefined}
+                                            onAttachmentChange={() => {}}
+                                            showFileBrowser={false}
+                                        />
                                     </div>
-                                </div>
+                                </motion.div>
                             </div>
 
-                            {/* Total Billing Footer */}
-                            <div className="p-8 bg-slate-900 border-t border-slate-800">
+                            {/* Billing Footer Logic */}
+                            <div className="mt-8 p-8 bg-slate-900 rounded-[40px] shadow-2xl shadow-cyan-900/40">
                                 <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                                     <div className="flex items-center gap-10">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Total Estimated Bill</span>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">Total Billable</span>
                                             <div className="flex items-baseline gap-2">
-                                                <span className="text-teal-500 text-xl font-black">₹</span>
+                                                <span className="text-slate-400 text-lg font-black italic">₹</span>
                                                 <span className="text-5xl font-black text-white tracking-tighter">{totalAmount.toLocaleString()}</span>
-                                                <span className="text-teal-400 text-[10px] font-black ml-2 opacity-50">GST incl.</span>
+                                                <span className="text-cyan-400 text-[10px] font-black uppercase tracking-tighter ml-3">Gst Incl.</span>
                                             </div>
                                         </div>
-                                        <div className="flex flex-col border-l border-slate-800 pl-10">
-                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Tests Selected</span>
-                                            <span className="text-2xl font-black text-white">{selectedTests.filter(t => t.testId).length} <span className="text-xs text-slate-500 uppercase ml-1">Items</span></span>
+                                        <div className="h-16 w-[1px] bg-slate-700 hidden md:block"></div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">Units Ordered</span>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-4xl font-black text-white">{selectedTests.length}</span>
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Diagnostics</span>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className="flex gap-4 w-full md:w-auto">
                                         <button
                                             onClick={() => router.push('/lab-xray')}
-                                            className="flex-1 md:flex-none px-6 py-4 bg-slate-800 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:text-white transition-all border border-slate-700 active:scale-95"
+                                            className="flex-1 md:flex-none px-6 py-4 bg-slate-800 text-white rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-slate-700 transition-all border border-slate-700 active:scale-95"
                                         >
-                                            Cancel
+                                            Draft Order
                                         </button>
                                         <button
                                             onClick={handleSubmit}
                                             disabled={submitting || success}
-                                            className="flex-1 md:flex-none flex items-center justify-center gap-3 px-10 py-4 bg-teal-500 text-white rounded-2xl font-black text-lg hover:bg-teal-400 transition-all shadow-xl shadow-teal-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 min-w-[240px]"
+                                            className="flex-1 md:flex-none flex items-center justify-center gap-4 px-8 py-4 bg-cyan-600 text-white rounded-3xl font-black text-lg uppercase tracking-tight hover:bg-cyan-500 transition-all shadow-xl shadow-cyan-900/20 disabled:opacity-50 min-w-[220px] active:scale-95"
                                         >
                                             {submitting ? (
+                                                <Loader2 className="animate-spin h-6 w-6" />
+                                            ) : success ? (
                                                 <>
-                                                    <Loader2 className="animate-spin h-5 w-5" />
-                                                    <span className="uppercase tracking-widest text-xs">Processing...</span>
+                                                    <CheckCircle2 size={24} />
+                                                    Confirmed
                                                 </>
                                             ) : (
                                                 <>
                                                     <CreditCard size={24} />
-                                                    <span className="uppercase tracking-widest text-sm">Generate Bill</span>
+                                                    Finalize & Bill
                                                 </>
                                             )}
                                         </button>
@@ -916,7 +983,6 @@ export default function XrayOrderPage() {
                         </motion.div>
                     </div>
                 </div>
-
                 {/* Status Messages */}
                 <AnimatePresence>
                     {error && (

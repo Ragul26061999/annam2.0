@@ -72,6 +72,7 @@ export default function ScanOrderPage() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showSearchDropdown, setShowSearchDropdown] = useState(false);
     const [searchingPatient, setSearchingPatient] = useState(false);
+    const [activePatientIndex, setActivePatientIndex] = useState(-1);
 
     // New Test State
     const [showNewTestModal, setShowNewTestModal] = useState(false);
@@ -154,8 +155,11 @@ export default function ScanOrderPage() {
                 .order('name');
 
             if (error) throw error;
-            setSearchResults(data || []);
-            setShowSearchDropdown(true);
+            const results = data || [];
+            setSearchResults(results);
+            setShowSearchDropdown(results.length > 0);
+            if (results.length > 0) setActivePatientIndex(0);
+            else setActivePatientIndex(-1);
         } catch (err) {
             console.error('Search error:', err);
             setSearchResults([]);
@@ -196,7 +200,7 @@ export default function ScanOrderPage() {
             ]);
             console.log('Scan catalog loaded:', catalog);
             console.log('Doctors loaded:', doctorsList);
-            setScanCatalog(catalog || []);
+            setScanCatalog((catalog || []).sort((a: any, b: any) => String(b.id).localeCompare(String(a.id))));
             setDoctors(doctorsList || []);
         } catch (err) {
             console.error('Error loading initial data:', err);
@@ -233,6 +237,7 @@ export default function ScanOrderPage() {
         setUhidSearch(patient.name); // Show selected patient name
         setShowSearchDropdown(false);
         setSearchResults([]);
+        setActivePatientIndex(-1);
         setError(null);
     };
 
@@ -282,7 +287,7 @@ export default function ScanOrderPage() {
             });
 
             // Update master data
-            setScanCatalog(prev => [...prev, newEntry]);
+            setScanCatalog(prev => [newEntry, ...prev]);
 
             // Automatically select this new test in the current list
             setSelectedTests(prev => {
@@ -462,453 +467,496 @@ export default function ScanOrderPage() {
 
     return (
         <div className="min-h-screen bg-[#f8fafc] p-6">
-            <div className="max-w-6xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <Link href="/lab-xray" className="group flex items-center gap-2 text-slate-500 hover:text-purple-600 transition-colors">
-                        <div className="p-2 rounded-lg bg-white border border-slate-200 group-hover:border-purple-200 transition-all">
-                            <ChevronLeft size={20} />
-                        </div>
-                        <span className="font-bold tracking-tight">Return to Dashboard</span>
-                    </Link>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl border border-purple-100">
-                            <Clock size={16} />
-                            <span className="text-xs font-bold uppercase tracking-wider">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+            <div className="max-w-[1550px] mx-auto space-y-8">
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                        <Link 
+                            href="/lab-xray" 
+                            className="p-4 bg-white border border-slate-200 rounded-[24px] text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:shadow-xl hover:shadow-purple-900/5 transition-all active:scale-90"
+                        >
+                            <ChevronLeft size={24} />
+                        </Link>
+                        <div>
+                            <div className="flex items-center gap-3 mb-1">
+                                <span className="px-3 py-1 bg-purple-100 text-purple-700 text-[10px] font-black uppercase tracking-[0.2em] rounded-lg">Imaging Suite</span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Scan & MRI Dept</span>
+                            </div>
+                            <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter">Diagnostic Scan Order</h1>
                         </div>
                     </div>
                 </div>
 
-                {/* Main Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left: Patient and Details (1/3) */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
-                        >
-                            <div className="p-6 bg-gradient-to-br from-teal-600 to-teal-700 text-white">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
-                                        <User size={24} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold">Patient Information</h2>
-                                        <p className="text-teal-100 text-xs">Register diagnostic clinical order</p>
-                                    </div>
+                {/* Patient Information Section (Rectangular Design) */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden"
+                >
+                    <div className="p-8 border-b border-slate-100 bg-slate-50/50">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                                <div className="p-4 bg-purple-600 rounded-[22px] text-white shadow-lg shadow-purple-200">
+                                    <User size={24} />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-900">Patient Information</h2>
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Demographics & Identity</p>
                                 </div>
                             </div>
 
-                            <div className="p-6 space-y-5">
-                                {/* UHID Search */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">UHID / Patient Name</label>
-                                    <div className="relative group search-container">
-                                        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchingPatient ? 'text-purple-500' : 'text-slate-400 group-focus-within:text-purple-500'}`} size={18} />
-                                        <input
-                                            type="text"
-                                            placeholder="Enter UHID or Patient Name..."
-                                            value={uhidSearch}
-                                            onChange={(e) => setUhidSearch(e.target.value)}
-                                            onFocus={() => setShowSearchDropdown(searchResults.length > 0)}
-                                            className="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-2 border-transparent focus:border-purple-500 focus:bg-white rounded-2xl transition-all outline-none text-sm font-semibold text-slate-700"
-                                            autoFocus
-                                        />
-                                        {uhidSearch && (
-                                            <button
-                                                onClick={() => {
-                                                    setUhidSearch('');
-                                                    setSearchResults([]);
+                            <div className="w-full md:w-96 search-container">
+                                <div className="relative group">
+                                    <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchingPatient ? 'text-purple-500' : 'text-slate-400 group-focus-within:text-purple-500'}`} size={18} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search UHID or Name..."
+                                        value={uhidSearch}
+                                        onChange={(e) => setUhidSearch(e.target.value)}
+                                        onFocus={() => setShowSearchDropdown(searchResults.length > 0)}
+                                        onKeyDown={(e) => {
+                                            if (showSearchDropdown && searchResults.length > 0) {
+                                                if (e.key === 'ArrowDown') {
+                                                    e.preventDefault();
+                                                    setActivePatientIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev));
+                                                } else if (e.key === 'ArrowUp') {
+                                                    e.preventDefault();
+                                                    setActivePatientIndex(prev => (prev > 0 ? prev - 1 : 0));
+                                                } else if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (activePatientIndex >= 0 && activePatientIndex < searchResults.length) {
+                                                        handlePatientSelect(searchResults[activePatientIndex]);
+                                                    }
+                                                } else if (e.key === 'Escape') {
                                                     setShowSearchDropdown(false);
-                                                }}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
-                                            >
-                                                <X size={18} />
-                                            </button>
-                                        )}
+                                                }
+                                            }
+                                        }}
+                                        className="w-full pl-12 pr-12 py-3 bg-white border-2 border-slate-100 focus:border-purple-500 rounded-2xl transition-all outline-none text-sm font-semibold text-slate-700 shadow-sm"
+                                    />
+                                    {uhidSearch && (
+                                        <button
+                                            onClick={() => {
+                                                setUhidSearch('');
+                                                setPatientDetails({ id: '', uhid: '', name: '', gender: '', age: '', contactNo: '', emailId: '' });
+                                                setSearchResults([]);
+                                                setShowSearchDropdown(false);
+                                                setActivePatientIndex(-1);
+                                            }}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    )}
 
-                                        {/* Search Results Dropdown */}
-                                        {showSearchDropdown && searchResults.length > 0 && (
-                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-lg max-h-80 overflow-y-auto z-50">
-                                                {searchResults.map((patient) => (
-                                                    <button
-                                                        key={patient.id}
-                                                        onClick={() => handlePatientSelect(patient)}
-                                                        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100 last:border-b-0"
-                                                    >
-                                                        <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                                                            <User size={16} className="text-teal-600" />
+                                    {/* Search Results Dropdown */}
+                                    {showSearchDropdown && searchResults.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-80 overflow-y-auto z-50">
+                                            {searchResults.map((patient, index) => (
+                                                <button
+                                                    key={patient.id}
+                                                    onClick={() => handlePatientSelect(patient)}
+                                                    onMouseEnter={() => setActivePatientIndex(index)}
+                                                    className={`w-full px-4 py-3 flex items-center gap-3 transition-colors text-left border-b border-slate-100 last:border-b-0 ${
+                                                        activePatientIndex === index ? 'bg-purple-50' : 'hover:bg-slate-50'
+                                                    }`}
+                                                >
+                                                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                                        <User size={16} className="text-purple-600" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-semibold text-slate-900 truncate">{patient.name}</div>
+                                                        <div className="text-xs text-slate-500 flex items-center gap-2">
+                                                            <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold">{patient.patient_id}</span>
+                                                            <span>{patient.gender}</span>
+                                                            {patient.phone && <span>• {patient.phone}</span>}
                                                         </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="font-semibold text-slate-900 truncate">
-                                                                {patient.name}
-                                                            </div>
-                                                            <div className="text-xs text-slate-500 flex items-center gap-2">
-                                                                <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono">
-                                                                    {patient.patient_id}
-                                                                </span>
-                                                                <span>{patient.gender}</span>
-                                                                {patient.phone && <span>• {patient.phone}</span>}
-                                                            </div>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Auto-filled Fields */}
-                                <div className="grid grid-cols-1 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">UHID</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-teal-700">
-                                            {patientDetails.uhid || '--'}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                            {patientDetails.name || '--'}
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gender</label>
-                                            <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 capitalize">
-                                                {patientDetails.gender || '--'}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</label>
-                                            <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                                {patientDetails.age ? `${patientDetails.age} Years` : '--'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Number</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                            {patientDetails.contactNo || '--'}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email ID</label>
-                                        <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 truncate">
-                                            {patientDetails.emailId || '--'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-
-                        <div className="bg-amber-50 border border-amber-100 p-5 rounded-3xl flex gap-3">
-                            <AlertCircle size={20} className="text-amber-500 shrink-0" />
-                            <div>
-                                <h4 className="text-xs font-bold text-amber-900 mb-1">Billing Note</h4>
-                                <p className="text-[10px] text-amber-700 leading-relaxed font-medium">Once generated, this bill will create a pending transaction in the patient's account. This cannot be undone easily.</p>
                             </div>
                         </div>
                     </div>
 
+                    <div className="p-8 space-y-8">
+                        {/* Info Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">UHID</label>
+                                <div className="text-sm font-bold text-purple-600 truncate">{patientDetails.uhid || '--'}</div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</label>
+                                <div className="text-sm font-bold text-slate-800 truncate">{patientDetails.name || '--'}</div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</label>
+                                <div className="text-sm font-bold text-slate-800">{patientDetails.age ? `${patientDetails.age} Yrs` : '--'}</div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gender</label>
+                                <div className="text-sm font-bold text-slate-800 capitalize">{patientDetails.gender || '--'}</div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact</label>
+                                <div className="text-sm font-bold text-slate-800">{patientDetails.contactNo || '--'}</div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</label>
+                                <div className="text-sm font-bold text-slate-800 truncate">{patientDetails.emailId || '--'}</div>
+                            </div>
+                        </div>
 
-                    {/* Right: Test Selection & Billing (2/3) */}
-                    <div className="lg:col-span-2 flex flex-col gap-6">
+                        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-center gap-3">
+                            <AlertCircle size={18} className="text-amber-500 shrink-0" />
+                            <p className="text-[11px] text-amber-800 font-bold uppercase tracking-wider">
+                                NOTE: Verify patient identity before proceeding with imaging diagnostics to ensure clinical accuracy.
+                            </p>
+                        </div>
+                    </div>
+                </motion.div>
+
+
+
+                {/* Scan Selection Workspace (Split Layout) */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+                    
+                    {/* Left Column: Selection Console (4/12) */}
+                    <div className="xl:col-span-4 space-y-6 sticky top-6 h-fit">
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="bg-white rounded-[32px] border border-slate-200 shadow-sm"
                         >
-                            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-teal-50 rounded-xl text-teal-600">
-                                        <Beaker size={20} />
+                                    <div className="p-2 bg-purple-100 rounded-xl text-purple-600">
+                                        <Plus size={20} />
                                     </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold text-slate-900">Scan Test Selection</h2>
-                                        <p className="text-slate-400 text-xs font-medium">Add required diagnostics for clinical analysis</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setShowNewTestModal(true)}
-                                        className="flex items-center gap-2 px-4 py-2 border-2 border-teal-600 text-teal-600 rounded-xl text-sm font-bold hover:bg-teal-50 transition-all"
-                                    >
-                                        <Beaker size={18} />
-                                        New Catalog Entry
-                                    </button>
+                                    <h3 className="font-black text-slate-800 uppercase tracking-tight">Select New Scan</h3>
                                 </div>
                             </div>
 
-                            <div className="p-6">
-                                {/* Group selector (optional) */}
-                                <div className="mb-5 p-4 bg-white border border-slate-200 rounded-2xl">
-                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                        <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                                            <input
-                                                type="checkbox"
-                                                checked={useGroup}
-                                                onChange={(e) => {
-                                                    const next = e.target.checked;
-                                                    setUseGroup(next);
-                                                    if (!next) {
-                                                        setSelectedGroupId('');
-                                                    }
-                                                }}
-                                            />
-                                            Use Group
-                                        </label>
-
-                                        {useGroup && (
-                                            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                                                <select
-                                                    value={selectedGroupId}
-                                                    onChange={async (e) => {
-                                                        const id = e.target.value;
-                                                        setSelectedGroupId(id);
-                                                        await applyGroupToSelection(id);
-                                                    }}
-                                                    className="w-full md:w-80 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none"
-                                                >
-                                                    <option value="">Select Group...</option>
-                                                    {availableGroups.map((g: any) => (
-                                                        <option key={g.id} value={g.id}>{g.name}</option>
-                                                    ))}
-                                                </select>
-                                                <button
-                                                    type="button"
-                                                    onClick={clearGroupSelection}
-                                                    className="px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-black text-slate-700 hover:bg-slate-200 transition-all"
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                        )}
+                            <div className="p-8 space-y-8">
+                                {/* Group Selector Toggle */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Procurement Mode</label>
+                                        <button 
+                                            onClick={() => {
+                                                setUseGroup(!useGroup);
+                                                if (useGroup) setSelectedGroupId('');
+                                            }}
+                                            className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all ${
+                                                useGroup ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'
+                                            }`}
+                                        >
+                                            {useGroup ? 'Using Groups' : 'Individual Scan'}
+                                        </button>
                                     </div>
+                                    
+                                    {useGroup && (
+                                        <motion.div 
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            className="space-y-3"
+                                        >
+                                            <select
+                                                value={selectedGroupId}
+                                                onChange={async (e) => {
+                                                    const id = e.target.value;
+                                                    setSelectedGroupId(id);
+                                                    await applyGroupToSelection(id);
+                                                }}
+                                                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-purple-500 transition-all outline-none"
+                                            >
+                                                <option value="">Select Protocol Group...</option>
+                                                {availableGroups.map((g: any) => (
+                                                    <option key={g.id} value={g.id}>{g.name}</option>
+                                                ))}
+                                            </select>
+                                        </motion.div>
+                                    )}
                                 </div>
-                            </div>
 
-                            <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
-                                {/* Pinned selection bar */}
-                                <div className="sticky top-0 z-10 -mx-4 px-4 pb-4 bg-slate-50">
-                                    <div className="hidden md:grid grid-cols-12 gap-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                        <div className="md:col-span-5 pl-1">Test Name</div>
-                                        <div className="md:col-span-4 pl-1">Group Name</div>
-                                        <div className="md:col-span-2 pl-1">Amount (₹)</div>
-                                        <div className="md:col-span-1" />
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                                        <div className="md:col-span-5">
-                                            <SearchableSelect
-                                                value={pendingTestId}
-                                                onChange={(value: string) => {
-                                                    setPendingTestId(value);
-                                                    // Auto-add test when selected
-                                                    if (value) {
-                                                        const test = scanCatalog.find(t => t.id === value);
-                                                        if (test) {
-                                                            setSelectedTests(prev => [
-                                                                ...prev.filter(t => t.testId !== test.id),
-                                                                {
-                                                                    testId: test.id,
-                                                                    testName: test.test_name || test.scan_name || '',
-                                                                    groupName: test.modality || test.category || 'N/A',
-                                                                    amount: test.test_cost || 0
-                                                                 }
-                                                            ]);
-                                                            // Reset pending selection
-                                                            setPendingTestId('');
-                                                            setPendingAmount(0);
-                                                        }
+                                {/* Main Study Search */}
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Scan / Procedure Study</label>
+                                        <SearchableSelect
+                                            value={pendingTestId}
+                                            onChange={(value: string) => {
+                                                if (value) {
+                                                    const test = scanCatalog.find(t => t.id === value);
+                                                    if (test) {
+                                                        setSelectedTests(prev => [
+                                                            {
+                                                                testId: test.id,
+                                                                testName: test.test_name || test.scan_name || '',
+                                                                groupName: test.modality || test.category || 'N/A',
+                                                                amount: test.test_cost || 0
+                                                            },
+                                                            ...prev.filter(t => t.testId !== test.id)
+                                                        ]);
+                                                        setPendingTestId('');
+                                                        setPendingAmount(0);
                                                     }
-                                                }}
-                                                options={scanCatalog.map(item => ({
-                                                    value: item.id,
-                                                    label: item.test_name || item.scan_name || '',
-                                                    group: item.modality || item.category,
-                                                    subLabel: `₹${item.test_cost}`
-                                                }))}
-                                                placeholder="Search & Select Test..."
-                                                keepOpenAfterSelect={true}
-                                            />
-                                        </div>
-                                        <div className="md:col-span-4">
-                                            <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
-                                                {scanCatalog.find(i => i.id === pendingTestId)?.category || scanCatalog.find(i => i.id === pendingTestId)?.modality || 'N/A'}
+                                                } else {
+                                                    setPendingTestId('');
+                                                    setPendingAmount(0);
+                                                }
+                                            }}
+                                            options={scanCatalog.map(item => ({
+                                                value: item.id,
+                                                label: item.test_name || item.scan_name || '',
+                                                group: item.modality || item.category,
+                                                subLabel: `₹${item.test_cost}`
+                                            }))}
+                                            placeholder="SEARCH FOR SCAN / MRI PROTOCOL..."
+                                            keepOpenAfterSelect={true}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Modality</label>
+                                            <div className="px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-400">
+                                                {scanCatalog.find(i => i.id === pendingTestId)?.category || scanCatalog.find(i => i.id === pendingTestId)?.modality || 'MRI/CT'}
                                             </div>
                                         </div>
-                                        <div className="md:col-span-2">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Base Price (₹)</label>
                                             <div className="relative">
-                                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
                                                 <input
                                                     type="number"
                                                     value={pendingAmount}
                                                     onChange={(e) => setPendingAmount(parseFloat(e.target.value) || 0)}
-                                                    className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-purple-700 focus:ring-2 focus:ring-purple-500 outline-none"
+                                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-black text-purple-600 focus:border-purple-500 transition-all outline-none"
                                                 />
                                             </div>
                                         </div>
-                                        <div className="md:col-span-1">
-                                            <button
-                                                type="button"
-                                                onClick={handleAddPendingTest}
-                                                disabled={!pendingTestId}
-                                                className="w-full md:w-auto flex items-center justify-center gap-1 px-2 py-1.5 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 transition-all disabled:opacity-50"
-                                            >
-                                                <Plus size={12} />
-                                                <span className="hidden md:inline text-[10px] uppercase">Add</span>
-                                            </button>
-                                        </div>
                                     </div>
+
                                 </div>
 
-                                {/* Selected tests list */}
-                                <div className="space-y-2 pt-2">
-                                    <AnimatePresence>
-                                        {selectedTests.map((test) => (
-                                            <motion.div
-                                                key={`test-${test.testId}`}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, scale: 0.95 }}
-                                                className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative group p-4 bg-white border border-slate-200 rounded-2xl shadow-sm"
-                                            >
-                                                <button
-                                                    onClick={() => handleRemoveSelectedTest(test.testId)}
-                                                    className="absolute -top-2 -right-2 p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-500 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20"
-                                                    title="Remove"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+                                <div className="pt-6 border-t border-slate-100">
+                                    <button
+                                        onClick={() => setShowNewTestModal(true)}
+                                        className="w-full py-4 bg-white border-2 border-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:border-purple-200 hover:text-purple-600 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Beaker size={14} />
+                                        Register Custom Scan Protocol
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
 
-                                                <div className="md:col-span-5 space-y-2">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 md:hidden">Test Name</label>
-                                                    <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700">
-                                                        {test.testName}
-                                                    </div>
-                                                </div>
-
-                                                <div className="md:col-span-4 space-y-2">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 md:hidden">Group Name</label>
-                                                    <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">
-                                                        {test.groupName || 'N/A'}
-                                                    </div>
-                                                </div>
-
-                                                <div className="md:col-span-3 space-y-2">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 md:hidden">Amount (₹)</label>
-                                                    <div className="relative">
-                                                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                                                        <input
-                                                            type="number"
-                                                            value={test.amount}
-                                                            onChange={(e) => handleAmountChange(test.testId, parseFloat(e.target.value) || 0)}
-                                                            className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-purple-700 focus:ring-2 focus:ring-purple-500 outline-none"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </AnimatePresence>
+                    {/* Right Column: Order Sheet (8/12) */}
+                    <div className="xl:col-span-8 flex flex-col gap-8">
+                        {/* Selected Scans List */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex-1"
+                        >
+                            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-purple-100 rounded-xl text-purple-600">
+                                        <FileText size={20} />
+                                    </div>
+                                    <h3 className="font-black text-slate-800 uppercase tracking-tight">Studies to be Performed</h3>
+                                    <span className="px-2 py-0.5 bg-purple-600 text-white text-[10px] font-black rounded-lg ml-2">
+                                        {selectedTests.length} Items
+                                    </span>
                                 </div>
                             </div>
 
-                            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 pr-6">
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Ordering Doctor (Optional)</label>
-                                        <select
-                                            value={orderingDoctorId}
-                                            onChange={(e) => setOrderingDoctorId(e.target.value)}
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none"
-                                        >
-                                            <option value="">Select Doctor...</option>
-                                            {doctors.map(d => (
-                                                <option key={d.id} value={d.id}>Dr. {d.user?.name || d.name}</option>
+                            <div className="p-8">
+                                {selectedTests.length === 0 ? (
+                                    <div className="py-20 flex flex-col items-center justify-center text-center opacity-40">
+                                        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-6">
+                                            <Beaker size={32} className="text-slate-400" />
+                                        </div>
+                                        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No scan studies selected for this order</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <AnimatePresence mode="popLayout">
+                                            {selectedTests.map((test) => (
+                                                <motion.div
+                                                    key={test.testId}
+                                                    layout
+                                                    initial={{ opacity: 0, scale: 0.95 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    exit={{ opacity: 0, scale: 0.95 }}
+                                                    className="p-6 bg-slate-50/50 border border-slate-100 rounded-3xl group hover:border-purple-200 hover:bg-white hover:shadow-xl hover:shadow-purple-900/5 transition-all"
+                                                >
+                                                    <div className="flex flex-col md:flex-row md:items-center gap-6">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] mb-1">
+                                                                {test.groupName || 'Radiology Study'}
+                                                            </div>
+                                                            <div className="text-lg font-black text-slate-900 truncate tracking-tight uppercase">
+                                                                {test.testName}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-6">
+                                                            <div className="space-y-1.5 w-40">
+                                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Amount (₹)</label>
+                                                                <div className="relative">
+                                                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-300" size={12} />
+                                                                    <input
+                                                                        type="number"
+                                                                        value={test.amount}
+                                                                        onChange={(e) => handleAmountChange(test.testId, parseFloat(e.target.value) || 0)}
+                                                                        className="w-full pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-purple-700 focus:border-purple-500 outline-none transition-all"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleRemoveSelectedTest(test.testId)}
+                                                                className="p-3 bg-red-50 text-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
                                             ))}
-                                        </select>
+                                        </AnimatePresence>
                                     </div>
-                                    <div>
-                                        <StaffSelect
-                                            value={staffId}
-                                            onChange={setStaffId}
-                                            label="Ordered By (Staff) (Optional)"
-                                            required={false}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Clinical Indication</label>
-                                        <textarea
-                                            rows={3}
-                                            value={clinicalIndication}
-                                            onChange={(e) => setClinicalIndication(e.target.value)}
-                                            placeholder="Reason for test..."
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none resize-none"
-                                        />
+                                )}
+                            </div>
+                        </motion.div>
+
+                        {/* Order Details & Meta */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-white rounded-[32px] border border-slate-200 shadow-sm p-8 space-y-6"
+                            >
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Ordering Physician</label>
+                                    <select
+                                        value={orderingDoctorId}
+                                        onChange={(e) => setOrderingDoctorId(e.target.value)}
+                                        className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-purple-500 transition-all outline-none"
+                                    >
+                                        <option value="">Select Practitioner...</option>
+                                        {doctors.map(d => (
+                                            <option key={d.id} value={d.id}>Dr. {d.user?.name || d.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Clinical Indication</label>
+                                    <textarea
+                                        rows={4}
+                                        value={clinicalIndication}
+                                        onChange={(e) => setClinicalIndication(e.target.value)}
+                                        placeholder="Enter reason for requested study..."
+                                        className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-purple-500 transition-all outline-none resize-none"
+                                    />
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-white rounded-[32px] border border-slate-200 shadow-sm p-8 space-y-6"
+                            >
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Processing Urgency</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {(['routine', 'urgent', 'stat', 'emergency'] as const).map((u) => (
+                                            <button
+                                                key={u}
+                                                type="button"
+                                                onClick={() => setUrgency(u)}
+                                                className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${
+                                                    urgency === u 
+                                                    ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-900/20' 
+                                                    : 'bg-white border-slate-100 text-slate-400 hover:border-purple-200'
+                                                }`}
+                                            >
+                                                {u}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
 
-                                    <div className="flex flex-col justify-between">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Scan Test Attachments</label>
-                                            <LabXrayAttachments
-                                                patientId={patientDetails.id}
-                                                testType="scan"
-                                                testName={selectedTests.filter(t => t.testId).map(t => t.testName).join(', ')}
-                                                uploadedBy={undefined}
-                                                onAttachmentChange={() => {
-                                                    // Refresh attachments if needed
-                                                }}
-                                                showFileBrowser={false}
-                                            />
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Study Attachments</label>
+                                    <LabXrayAttachments
+                                        patientId={patientDetails.id}
+                                        testType="scan"
+                                        testName={selectedTests.filter(t => t.testId).map(t => t.testName).join(', ')}
+                                        uploadedBy={undefined}
+                                        onAttachmentChange={() => {}}
+                                        showFileBrowser={false}
+                                    />
+                                </div>
+                            </motion.div>
+                        </div>
+
+                        {/* Billing Footer Panel */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-slate-900 rounded-[40px] p-8 md:p-10 shadow-2xl overflow-hidden relative"
+                        >
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-[100px] -mr-32 -mt-32 rounded-full" />
+                            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
+                                <div className="flex items-center gap-12">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-3">Order Total (Estimate)</span>
+                                        <div className="flex items-baseline gap-3">
+                                            <span className="text-purple-500 text-2xl font-black">₹</span>
+                                            <span className="text-6xl font-[1000] text-white tracking-tighter tabular-nums">{totalAmount.toLocaleString()}</span>
+                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-4">Tax incl.</span>
+                                        </div>
+                                    </div>
+                                    <div className="hidden md:flex flex-col border-l border-slate-800 pl-12">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-3">Protocol Count</span>
+                                        <div className="flex items-baseline gap-2 text-white">
+                                            <span className="text-4xl font-black">{selectedTests.length}</span>
+                                            <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Studies</span>
                                         </div>
                                     </div>
                                 </div>
 
-                            {/* Total Billing Footer */}
-                            <div className="p-8 bg-slate-900 border-t border-slate-800">
-                                <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                                    <div className="flex items-center gap-10">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Total Estimated Bill</span>
-                                            <div className="flex items-baseline gap-2">
-                                                <span className="text-purple-500 text-xl font-black">₹</span>
-                                                <span className="text-5xl font-black text-white tracking-tighter">{totalAmount.toLocaleString()}</span>
-                                                <span className="text-purple-400 text-[10px] font-black ml-2 opacity-50">GST incl.</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col border-l border-slate-800 pl-10">
-                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Tests Selected</span>
-                                            <span className="text-2xl font-black text-white">{selectedTests.filter(t => t.testId).length} <span className="text-xs text-slate-500 uppercase ml-1">Items</span></span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-4 w-full md:w-auto">
-                                        <button
-                                            onClick={() => router.push('/lab-xray')}
-                                            className="flex-1 md:flex-none px-6 py-4 bg-slate-800 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:text-white transition-all border border-slate-700 active:scale-95"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={handleSubmit}
-                                            disabled={submitting || success}
-                                            className="flex-1 md:flex-none flex items-center justify-center gap-3 px-10 py-4 bg-purple-500 text-white rounded-2xl font-black text-lg hover:bg-purple-400 transition-all shadow-xl shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 min-w-[240px]"
-                                        >
-                                            {submitting ? (
-                                                <>
-                                                    <Loader2 className="animate-spin h-5 w-5" />
-                                                    <span className="uppercase tracking-widest text-xs">Processing...</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <CreditCard size={24} />
-                                                    <span className="uppercase tracking-widest text-sm">Generate Bill</span>
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
+                                <div className="flex gap-4 w-full md:w-auto">
+                                    <button
+                                        onClick={() => router.push('/lab-xray')}
+                                        className="flex-1 md:flex-none px-6 py-4 bg-slate-800 text-slate-400 rounded-3xl font-black text-xs uppercase tracking-[0.3em] hover:text-white hover:bg-slate-700 transition-all active:scale-95"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSubmit}
+                                        disabled={submitting || success || selectedTests.length === 0}
+                                        className="flex-1 md:flex-none flex items-center justify-center gap-4 px-8 py-4 bg-purple-500 text-white rounded-3xl font-black text-lg hover:bg-purple-400 transition-all shadow-xl shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-20 disabled:scale-100 min-w-[220px]"
+                                    >
+                                        {submitting ? (
+                                            <>
+                                                <Loader2 className="animate-spin h-6 w-6" />
+                                                <span className="uppercase tracking-[0.2em] font-black text-xs">Processing...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CreditCard size={28} />
+                                                <span className="uppercase tracking-[0.2em] font-black text-sm">Checkout Order</span>
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                         </motion.div>
