@@ -93,8 +93,7 @@ const Sidebar: React.FC = () => {
       href: '/inpatient',
       label: 'Inpatient (IP)',
       icon: <BedDouble size={18} />,
-      color: 'text-purple-600',
-      disabled: true
+      color: 'text-purple-600'
     },
     {
       href: '/appointments',

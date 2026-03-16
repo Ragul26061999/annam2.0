@@ -1,674 +1,824 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Search, User, Building, Stethoscope,
-    CreditCard, FileText, Bed, CheckCircle,
-    Loader2, AlertCircle, X, Hash, Phone, Upload, Plus, Check, Trash2,
-    Calendar, Users, Activity, Info, ChevronDown, ChevronUp, Clock
+  Search, User, Building, Stethoscope,
+  Bed,
+  Loader2, AlertCircle, X, Hash, Phone,
+  Plus, Check,
+  Calendar, Clock, BedDouble, Layers, Filter,
+  ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getAllDoctorsSimple, type Doctor } from '../lib/doctorService';
-import { getAvailableBeds, allocateBed, type Bed as BedType, getNextIPNumber } from '../lib/bedAllocationService';
+import {
+  getAvailableBeds, allocateBed, getAllBeds,
+  type Bed as BedType, getNextIPNumber,
+} from '../lib/bedAllocationService';
 import { updatePatientAdmissionStatus } from '../lib/patientService';
 import StaffSelect from './StaffSelect';
-import DocumentUpload from './DocumentUpload';
-import DocumentList from './DocumentList';
 
 interface InpatientAdmissionFormProps {
-    onComplete: (result: { uhid: string; patientName: string; qrCode?: string }) => void;
-    onCancel: () => void;
-    initialPatientId?: string;
+  onComplete: (result: { uhid: string; patientName: string; qrCode?: string }) => void;
+  onCancel: () => void;
+  initialPatientId?: string;
 }
 
-export default function InpatientAdmissionForm({ onComplete, onCancel, initialPatientId }: InpatientAdmissionFormProps) {
-    const [loading, setLoading] = useState(false);
-    const [searching, setSearching] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [patients, setPatients] = useState<any[]>([]);
-    const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
+// ─── Floor Room Bed Picker Modal ──────────────────────────────────────────────
+function BedPickerModal({
+  onSelect,
+  onClose,
+  selectedBedId,
+}: {
+  onSelect: (bed: BedType) => void;
+  onClose: () => void;
+  selectedBedId: string;
+}) {
+  const [allBeds, setAllBeds]         = useState<BedType[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [activeFloor, setActiveFloor] = useState<number | null>(null);
+  const [filterType, setFilterType]   = useState<string>('all');
 
-    const [doctors, setDoctors] = useState<Doctor[]>([]);
-    const [availableBeds, setAvailableBeds] = useState<BedType[]>([]);
+  useEffect(() => {
+    getAllBeds({})
+      .then(res => {
+        const beds: BedType[] = (res as any).beds ?? res ?? [];
+        setAllBeds(beds);
+        const floors = [...new Set(beds.map(b => b.floor_number ?? 0))].sort((a,b)=>a-b);
+        if (floors.length) setActiveFloor(floors[0]);
+      })
+      .catch(() => {
+        // fallback: try getAvailableBeds
+        getAvailableBeds().then(beds => {
+          setAllBeds(beds);
+          const floors = [...new Set(beds.map(b => b.floor_number ?? 0))].sort((a,b)=>a-b);
+          if (floors.length) setActiveFloor(floors[0]);
+        });
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-    const [formData, setFormData] = useState({
-        department: '',
-        attendingDoctorId: '',
-        advanceAmount: '',
-        advancePaymentMethod: 'cash',
-        advanceReferenceNumber: '',
-        advanceNotes: '',
-        reasonForAdmission: '',
-        diagnosisAtAdmission: '',
-        selectedBedId: '',
-        admissionDate: new Date().toISOString().split('T')[0],
-        staffId: '',
-        admissionCategory: '',
-        ipNumber: '' // Added IP Number
-    });
-    const [admissionCategories, setAdmissionCategories] = useState<string[]>([]);
-    const [isAddingCategory, setIsAddingCategory] = useState(false);
-    const [newCategory, setNewCategory] = useState('');
-    const [documentRefreshTrigger, setDocumentRefreshTrigger] = useState(0);
+  const floors = [...new Set(allBeds.map(b => b.floor_number ?? 0))].sort((a,b)=>a-b);
+  const bedTypes = ['all', ...new Set(allBeds.map(b => b.bed_type).filter(Boolean))];
 
-    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const floorBeds = allBeds.filter(b => {
+    const floorMatch = (b.floor_number ?? 0) === activeFloor;
+    const typeMatch  = filterType === 'all' || b.bed_type === filterType;
+    return floorMatch && typeMatch;
+  });
 
-    useEffect(() => {
-        loadInitialData();
-        if (initialPatientId) {
-            fetchAndSelectPatient(initialPatientId);
-        }
-    }, []);
+  // Group by room
+  const byRoom: Record<string, BedType[]> = {};
+  floorBeds.forEach(b => {
+    const r = b.room_number || 'General';
+    if (!byRoom[r]) byRoom[r] = [];
+    byRoom[r].push(b);
+  });
+  const rooms = Object.keys(byRoom).sort();
 
-    const fetchAndSelectPatient = async (patientId: string) => {
-        try {
-            const { data, error } = await supabase
-                .from('patients')
-                .select('*')
-                .eq('id', patientId)
-                .single();
-            if (!error && data) {
-                selectPatient(data);
-            }
-        } catch (err) {
-            console.error('Error fetching patient for IP admission:', err);
-        }
-    };
+  const statusColor = (s: string) => {
+    if (s === 'available') return 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 cursor-pointer';
+    if (s === 'occupied')  return 'bg-red-50 border-red-300 text-red-700 cursor-not-allowed opacity-80';
+    if (s === 'maintenance') return 'bg-amber-50 border-amber-300 text-amber-700 cursor-not-allowed opacity-80';
+    return 'bg-slate-50 border-slate-300 text-slate-600 cursor-not-allowed opacity-80';
+  };
 
-    const loadInitialData = async () => {
-        try {
-            const doctorsList = await getAllDoctorsSimple();
-            setDoctors(doctorsList);
+  const statusLabel = (s: string) => {
+    if (s === 'available')   return '✓ Available';
+    if (s === 'occupied')    return '✗ Occupied';
+    if (s === 'maintenance') return '⚠ Maintenance';
+    return s;
+  };
 
-            const beds = await getAvailableBeds();
-            setAvailableBeds(beds);
+  const floorStats = (floor: number) => {
+    const bs = allBeds.filter(b => (b.floor_number ?? 0) === floor);
+    const avail = bs.filter(b => b.status === 'available').length;
+    return { total: bs.length, avail };
+  };
 
-            const ipNum = await getNextIPNumber();
-            setFormData(prev => ({ ...prev, ipNumber: ipNum }));
-        } catch (error) {
-            console.error('Error loading initial data:', error);
-        }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
 
-        fetchAdmissionCategories();
-    };
-
-    const fetchAdmissionCategories = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('admission_categories')
-                .select('name')
-                .eq('status', 'active')
-                .order('name');
-            if (error) throw error;
-            setAdmissionCategories((data || []).map((c: any) => c.name));
-        } catch (err) {
-            console.error('Error fetching categories:', err);
-        }
-    };
-
-    const handleAddCategory = async () => {
-        if (!newCategory.trim()) return;
-        try {
-            const { error } = await supabase
-                .from('admission_categories')
-                .insert([{ name: newCategory.trim() }]);
-            if (error) throw error;
-            setAdmissionCategories(prev => [...prev, newCategory.trim()].sort());
-            setFormData(prev => ({ ...prev, admissionCategory: newCategory.trim() }));
-            setNewCategory('');
-            setIsAddingCategory(false);
-        } catch (err) {
-            console.error('Error adding category:', err);
-            setMessage({ type: 'error', text: 'Failed to add category' });
-        }
-    };
-
-    const handlePatientSearch = async (term: string) => {
-        setSearchTerm(term);
-        if (term.length < 3) {
-            setPatients([]);
-            return;
-        }
-
-        setSearching(true);
-        try {
-            const { data, error } = await supabase
-                .from('patients')
-                .select('*')
-                .or(`patient_id.ilike.%${term}%,phone.ilike.%${term}%,name.ilike.%${term}%`)
-                .limit(5);
-
-            if (error) throw error;
-            setPatients(data || []);
-        } catch (error) {
-            console.error('Error searching patients:', error);
-        } finally {
-            setSearching(false);
-        }
-    };
-
-    const selectPatient = (patient: any) => {
-        setSelectedPatient(patient);
-        setSearchTerm(patient.name);
-        setPatients([]);
-
-        // Auto-fill diagnosis if available
-        if (patient.diagnosis) {
-            setFormData(prev => ({ ...prev, diagnosisAtAdmission: patient.diagnosis }));
-        }
-    };
-
-    const departments = [
-        'General Medicine', 'Cardiology', 'Pediatrics', 'Orthopedics',
-        'Neurology', 'Gastroenterology', 'Oncology', 'Gynecology', 'Surgery'
-    ];
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedPatient) {
-            setMessage({ type: 'error', text: 'Please select a patient' });
-            return;
-        }
-
-        setLoading(true);
-        setMessage(null);
-
-        try {
-            // 1. Create a specialized admission record or just handle bed allocation
-            // For now, since "admissions" table doesn't exist, we use bed_allocations as the primary source of admission info
-
-            // 2. Allocate bed if selected
-            if (formData.selectedBedId) {
-                await allocateBed({
-                    patientId: selectedPatient.id,
-                    bedId: formData.selectedBedId,
-                    doctorId: formData.attendingDoctorId,
-                    admissionDate: formData.admissionDate,
-                    admissionType: 'inpatient',
-                    reason: formData.reasonForAdmission || formData.diagnosisAtAdmission,
-                    staffId: formData.staffId,
-                    admissionCategory: formData.admissionCategory,
-                    ipNumber: formData.ipNumber
-                });
-            }
-
-            // 3. Update patient admission status with all details
-            const patientUpdateData = {
-                department_ward: formData.department,
-                diagnosis: formData.diagnosisAtAdmission,
-                primary_complaint: formData.reasonForAdmission,
-                admission_date: formData.admissionDate,
-                admission_category: formData.admissionCategory,
-                // Add advance payment details to patient record
-                advance_amount: formData.advanceAmount ? parseFloat(formData.advanceAmount) : 0.00,
-                advance_payment_method: formData.advanceAmount ? formData.advancePaymentMethod : null,
-                advance_payment_date: formData.advanceAmount ? new Date().toISOString() : null,
-                advance_reference_number: formData.advanceAmount ? formData.advanceReferenceNumber : null,
-                advance_notes: formData.advanceAmount ? formData.advanceNotes : null
-            };
-
-            await updatePatientAdmissionStatus(
-                selectedPatient.patient_id,
-                true,
-                'inpatient',
-                patientUpdateData
-            );
-
-            // 4. Record the advance amount if provided
-            if (formData.advanceAmount && parseFloat(formData.advanceAmount) > 0 && formData.selectedBedId) {
-                try {
-                    // Get the bed allocation to link the advance
-                    const { data: bedAllocation } = await supabase
-                        .from('bed_allocations')
-                        .select('id')
-                        .eq('patient_id', selectedPatient.id)
-                        .eq('bed_id', formData.selectedBedId)
-                        .eq('status', 'active')
-                        .single();
-
-                    if (bedAllocation) {
-                        // Import the service function dynamically
-                        const { createAdvanceFromPatientRegistration } = await import('../lib/ipFlexibleBillingService');
-                        const advance = await createAdvanceFromPatientRegistration(
-                            bedAllocation.id,
-                            selectedPatient.id,
-                            parseFloat(formData.advanceAmount),
-                            formData.advancePaymentMethod || 'cash',
-                            formData.advanceReferenceNumber || '',
-                            formData.advanceNotes || 'Advance paid during inpatient admission',
-                            formData.staffId
-                        );
-                        console.log('Advance recorded successfully:', advance.id);
-                    }
-                } catch (advanceError) {
-                    console.error('Error recording advance:', advanceError);
-                    // Don't fail the admission if advance recording fails
-                }
-            }
-
-            onComplete({
-                uhid: selectedPatient.patient_id,
-                patientName: selectedPatient.name,
-                qrCode: selectedPatient.qr_code
-            });
-        } catch (error: any) {
-            console.error('Admission error:', error);
-            setMessage({ type: 'error', text: error.message || 'Failed to create admission' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-blue-50/50">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Bed className="h-6 w-6 text-blue-600" />
-                    Create Inpatient Admission
-                </h2>
-                <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
-                    <X size={20} />
-                </button>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
+              <BedDouble size={18} className="text-white" />
             </div>
+            <div>
+              <h2 className="text-white font-bold text-base">Select Room &amp; Bed</h2>
+              <p className="text-blue-100 text-xs">Click an available bed to assign</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                {/* Patient Selection */}
-                <div className="relative">
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Patient (UHID / Mobile / Name)
-                    </label>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => handlePatientSearch(e.target.value)}
-                            placeholder="Search outpatient for admission..."
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition-all"
-                            required={!selectedPatient}
-                        />
-                        {searching && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                            </div>
-                        )}
+        {/* Legend + filter bar */}
+        <div className="flex items-center justify-between px-6 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0 gap-4">
+          <div className="flex items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-400 inline-block"/> Available</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-400 inline-block"/>  Occupied</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-400 inline-block"/> Maintenance</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter size={13} className="text-slate-400" />
+            <span className="text-xs text-slate-500">Type:</span>
+            {bedTypes.map(t => (
+              <button key={t} onClick={() => setFilterType(t)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all capitalize
+                  ${filterType === t ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* Floor sidebar */}
+          <div className="w-36 flex-shrink-0 bg-slate-50 border-r border-slate-200 overflow-y-auto">
+            <div className="p-3">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Layers size={11}/> Floors
+              </p>
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-blue-400 mx-auto mt-4" />
+              ) : floors.map(floor => {
+                const { total, avail } = floorStats(floor);
+                return (
+                  <button key={floor} onClick={() => setActiveFloor(floor)}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl mb-1 transition-all
+                      ${activeFloor === floor
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'hover:bg-slate-200 text-slate-700'}`}>
+                    <div className="font-bold text-sm">{floor === 0 ? 'Ground' : `Floor ${floor}`}</div>
+                    <div className={`text-[10px] mt-0.5 ${activeFloor === floor ? 'text-blue-100' : 'text-slate-500'}`}>
+                      {avail}/{total} available
                     </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-                    {patients.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                            {patients.map(patient => (
-                                <button
-                                    key={patient.id}
-                                    type="button"
-                                    onClick={() => selectPatient(patient)}
-                                    className="w-full text-left p-3 hover:bg-blue-50 flex items-center justify-between border-b last:border-0 border-gray-100"
-                                >
-                                    <div>
-                                        <p className="font-semibold text-gray-900">{patient.name}</p>
-                                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                                            <Hash size={12} /> {patient.patient_id} • <Phone size={12} /> {patient.phone}
-                                        </p>
-                                    </div>
-                                    {patient.is_admitted ? (
-                                        <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-bold">ALREADY ADMITTED</span>
-                                    ) : (
-                                        <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-bold uppercase">{patient.admission_type || 'OUTPATIENT'}</span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+          {/* Room grid */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {loading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : rooms.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                <BedDouble size={40} className="mb-2 opacity-30" />
+                <p className="text-sm">No beds found for this floor</p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {rooms.map(room => (
+                  <div key={room}>
+                    {/* Room header */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full">
+                        <Building size={12} className="text-slate-500" />
+                        <span className="text-xs font-bold text-slate-700">Room {room}</span>
+                      </div>
+                      <div className="flex-1 h-px bg-slate-200"/>
+                      <span className="text-[10px] text-slate-400">
+                        {byRoom[room].filter(b => b.status === 'available').length} of {byRoom[room].length} free
+                      </span>
+                    </div>
+                    {/* Bed cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                      {byRoom[room].map(bed => {
+                        const isSelected = bed.id === selectedBedId;
+                        const isAvail    = bed.status === 'available';
+                        return (
+                          <button
+                            key={bed.id}
+                            type="button"
+                            disabled={!isAvail}
+                            onClick={() => isAvail && onSelect(bed)}
+                            className={`
+                              relative flex flex-col items-center justify-center p-3 rounded-xl border-2
+                              transition-all duration-150 text-center
+                              ${statusColor(bed.status)}
+                              ${isSelected ? '!border-blue-600 !bg-blue-50 ring-2 ring-blue-400 ring-offset-1' : ''}
+                            `}
+                          >
+                            {isSelected && (
+                              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center">
+                                <Check size={10} className="text-white" />
+                              </span>
+                            )}
+                            <BedDouble size={22} className={`mb-1 ${
+                              bed.status === 'available' ? 'text-emerald-500' :
+                              bed.status === 'occupied'  ? 'text-red-400' : 'text-amber-500'
+                            }`} />
+                            <span className="font-bold text-xs leading-tight">{bed.bed_number}</span>
+                            {bed.bed_type && (
+                              <span className="text-[9px] mt-0.5 opacity-70 capitalize">{bed.bed_type}</span>
+                            )}
+                            <span className={`text-[9px] mt-1 font-semibold px-1.5 py-0.5 rounded-full ${
+                              bed.status === 'available' ? 'bg-emerald-200 text-emerald-800' :
+                              bed.status === 'occupied'  ? 'bg-red-200 text-red-700' :
+                              'bg-amber-200 text-amber-700'
+                            }`}>
+                              {statusLabel(bed.status)}
+                            </span>
+                            {bed.daily_rate && (
+                              <span className="text-[9px] mt-0.5 text-slate-500">₹{bed.daily_rate}/day</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
-                    {selectedPatient && (
-                        <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-white rounded-full">
-                                    <User className="h-4 w-4 text-blue-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-blue-900">{selectedPatient.name}</p>
-                                    <p className="text-xs text-blue-700">{selectedPatient.patient_id} • {selectedPatient.gender} • {selectedPatient.age} Yrs</p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSelectedPatient(null);
-                                    setSearchTerm('');
-                                }}
-                                className="text-xs text-red-600 hover:underline font-medium"
-                            >
-                                Change Patient
-                            </button>
-                        </div>
-                    )}
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 bg-slate-50 flex-shrink-0">
+          <p className="text-xs text-slate-500">
+            {selectedBedId
+              ? `Selected: ${allBeds.find(b => b.id === selectedBedId)?.bed_number || '—'} · ${allBeds.find(b => b.id === selectedBedId)?.bed_type || ''}`
+              : 'No bed selected — you can also assign later'}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => onSelect({ id: '', bed_number: '', room_number: '', bed_type: '', status: 'available' })}
+              className="px-4 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors font-medium">
+              Skip for Now
+            </button>
+            <button onClick={onClose}
+              className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Form ────────────────────────────────────────────────────────────────
+export default function InpatientAdmissionForm({ onComplete, onCancel, initialPatientId }: InpatientAdmissionFormProps) {
+  const [loading,    setLoading]    = useState(false);
+  const [searching,  setSearching]  = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [patients,   setPatients]   = useState<any[]>([]);
+  const [highlightedIdx, setHighlightedIdx] = useState(-1);
+  const [selectedPatient, setSelectedPatient] = useState<any|null>(null);
+  const [doctors,    setDoctors]    = useState<Doctor[]>([]);
+  const [message,    setMessage]    = useState<{type:'success'|'error', text:string}|null>(null);
+  const [showBedPicker, setShowBedPicker] = useState(false);
+  const [selectedBed, setSelectedBed]     = useState<BedType|null>(null);
+  const [admissionCategories, setAdmissionCategories] = useState<string[]>([]);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
+  const selectRoomBtnRef  = React.useRef<HTMLButtonElement>(null);
+  const departmentSelRef  = React.useRef<HTMLSelectElement>(null);
+
+  const [formData, setFormData] = useState({
+    department:             '',
+    attendingDoctorIds:     [] as string[],
+    reasonForAdmission:     '',
+    selectedBedId:          '',
+    admissionDate:          new Date().toISOString().split('T')[0],
+    admissionTime:          new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+    staffId:                '',
+    admissionCategory:      '',
+    ipNumber:               '',
+  });
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+
+  const set = (key: string, val: string) => setFormData(p => ({ ...p, [key]: val }));
+  const toggleDoctor = (id: string) => setFormData(p => ({ ...p, attendingDoctorIds: p.attendingDoctorIds.includes(id) ? p.attendingDoctorIds.filter(x => x !== id) : [...p.attendingDoctorIds, id] }));
+
+  useEffect(() => {
+    loadInitialData();
+    if (initialPatientId) fetchAndSelectPatient(initialPatientId);
+  }, []);
+
+  const fetchAndSelectPatient = async (id: string) => {
+    try {
+      const { data, error } = await supabase.from('patients').select('*').eq('id', id).single();
+      if (!error && data) selectPatient(data);
+    } catch {}
+  };
+
+  const loadInitialData = async () => {
+    try {
+      const [docs, ipNum] = await Promise.all([getAllDoctorsSimple(), getNextIPNumber()]);
+      setDoctors(docs);
+      setFormData(p => ({ ...p, ipNumber: ipNum }));
+    } catch {}
+    fetchAdmissionCategories();
+  };
+
+  const fetchAdmissionCategories = async () => {
+    try {
+      const { data } = await supabase.from('admission_categories').select('name').eq('status', 'active').order('name');
+      setAdmissionCategories((data || []).map((c: any) => c.name));
+    } catch {}
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategory.trim()) return;
+    try {
+      const { error } = await supabase.from('admission_categories').insert([{ name: newCategory.trim() }]);
+      if (error) throw error;
+      setAdmissionCategories(p => [...p, newCategory.trim()].sort());
+      set('admissionCategory', newCategory.trim());
+      setNewCategory('');
+      setIsAddingCategory(false);
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to add category' });
+    }
+  };
+
+  const handlePatientSearch = async (term: string) => {
+    setSearchTerm(term);
+    if (term.length < 3) { setPatients([]); return; }
+    setSearching(true);
+    try {
+      const { data, error } = await supabase.from('patients').select('*')
+        .or(`patient_id.ilike.%${term}%,phone.ilike.%${term}%,name.ilike.%${term}%`)
+        .limit(5);
+      if (error) throw error;
+      setPatients(data || []);
+    } catch {} finally { setSearching(false); }
+  };
+
+  const selectPatient = (patient: any) => {
+    setSelectedPatient(patient);
+    setSearchTerm(patient.name);
+    setPatients([]);
+    setHighlightedIdx(-1);
+    // Auto-focus Select Room button after patient selected
+    setTimeout(() => selectRoomBtnRef.current?.focus(), 50);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') { onCancel(); return; }
+    if (!patients.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIdx(i => (i < patients.length - 1 ? i + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIdx(i => (i > 0 ? i - 1 : patients.length - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIdx >= 0 && patients[highlightedIdx]) {
+        selectPatient(patients[highlightedIdx]);
+      }
+    }
+  };
+
+  const departments = [
+    'General Medicine', 'Cardiology', 'Pediatrics', 'Orthopedics',
+    'Neurology', 'Gastroenterology', 'Oncology', 'Gynecology', 'Surgery',
+  ];
+
+  const handleBedSelect = (bed: BedType) => {
+    if (!bed.id) {
+      setSelectedBed(null);
+      setFormData(p => ({ ...p, selectedBedId: '' }));
+    } else {
+      setSelectedBed(bed);
+      setFormData(p => ({ ...p, selectedBedId: bed.id }));
+    }
+    setShowBedPicker(false);
+    // Auto-focus Department dropdown after bed selected
+    setTimeout(() => departmentSelRef.current?.focus(), 50);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatient) { setMessage({ type: 'error', text: 'Please select a patient' }); return; }
+    setLoading(true); setMessage(null);
+    try {
+      if (formData.selectedBedId) {
+        await allocateBed({
+          patientId:        selectedPatient.id,
+          bedId:            formData.selectedBedId,
+          doctorId:         formData.attendingDoctorIds[0],
+          admissionDate:    formData.admissionDate,
+          admissionType:    'inpatient',
+          reason:           formData.reasonForAdmission,
+          staffId:          formData.staffId,
+          admissionCategory: formData.admissionCategory,
+          ipNumber:         formData.ipNumber,
+        });
+      }
+
+      await updatePatientAdmissionStatus(selectedPatient.patient_id, true, 'inpatient', {
+        department_ward:        formData.department,
+        diagnosis:              selectedPatient.diagnosis || '',
+        primary_complaint:      formData.reasonForAdmission,
+        admission_date:         formData.admissionDate,
+        admission_category:     formData.admissionCategory,
+      });
+
+      onComplete({ uhid: selectedPatient.patient_id, patientName: selectedPatient.name, qrCode: selectedPatient.qr_code });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message || 'Failed to create admission' });
+    } finally { setLoading(false); }
+  };
+
+  // ── shared classes ──
+  const inp  = 'w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white placeholder:text-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400/60 focus:border-blue-400 transition-all';
+  const lbl  = 'block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1';
+
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <div
+      className="flex h-screen bg-slate-100 overflow-hidden font-sans"
+      onKeyDown={e => { if (e.key === 'Escape' && !showBedPicker) onCancel(); }}
+      tabIndex={-1}
+    >
+
+      {/* ════ Thin nav sidebar ════ */}
+      <aside className="w-12 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col items-center py-3 gap-2">
+        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mb-2">
+          <Bed size={15} className="text-white" />
+        </div>
+        {[
+          { href: '/inpatient',         icon: <Bed size={16}/>,          tip: 'Inpatient List' },
+          { href: '/outpatient',         icon: <User size={16}/>,         tip: 'Outpatient' },
+          { href: '/dashboard',          icon: <Building size={16}/>,      tip: 'Dashboard' },
+        ].map(item => (
+          <a key={item.href} href={item.href} title={item.tip}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+            {item.icon}
+          </a>
+        ))}
+        <div className="flex-1"/>
+        <button onClick={onCancel} title="Cancel / Go back"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+          <X size={16}/>
+        </button>
+      </aside>
+
+      {/* ════ Main area ════ */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+        {/* Top bar */}
+        <header className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-blue-700 shadow-lg">
+          <div className="flex items-center justify-between px-5 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                <Bed size={16} className="text-white"/>
+              </div>
+              <div>
+                <h1 className="text-white font-bold text-sm leading-tight">IP Registration</h1>
+                <p className="text-blue-100 text-[11px]">New InPatient Entry</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-5 text-xs text-blue-100">
+              <span className="bg-white/20 px-3 py-1 rounded-full font-bold text-white text-sm font-mono">
+                {formData.ipNumber || '—'}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Calendar size={12}/>
+                <strong className="text-white">{new Date(formData.admissionDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</strong>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock size={12}/>
+                <strong className="text-white">{formData.admissionTime}</strong>
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="p-4 space-y-3 max-w-screen-2xl mx-auto">
+
+            {message && (
+              <div className={`flex items-center gap-3 text-xs px-4 py-2.5 rounded-xl border ${
+                message.type === 'success'
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-red-50 border-red-200 text-red-700'}`}>
+                <AlertCircle size={14}/>
+                {message.text}
+              </div>
+            )}
+
+            {/* ══ SECTION 1: IP Registration Details ══ */}
+            <SCard icon={<User size={14}/>} title="IP Registration Details" accent="blue">
+              {/* Row 1 */}
+              <div className="grid grid-cols-12 gap-3 mb-3">
+                {/* IP Reg No — compact */}
+                <div className="col-span-1">
+                  <label className={lbl}>IP No</label>
+                  <input type="text" value={formData.ipNumber} readOnly
+                    className={`${inp} bg-blue-50 border-blue-200 text-blue-800 font-mono font-bold cursor-default text-xs px-2`}/>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Department */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                            <Building className="h-4 w-4 text-gray-400" /> Department
-                        </label>
-                        <select
-                            value={formData.department}
-                            onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required
-                        >
-                            <option value="">Select Department</option>
-                            {departments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                        </select>
-                    </div>
+                {/* Admission Date — compact */}
+                <div className="col-span-1">
+                  <label className={lbl}>Date</label>
+                  <input type="date" value={formData.admissionDate}
+                    onChange={e => set('admissionDate', e.target.value)} className={`${inp} text-xs px-2`}/>
+                </div>
 
-                    {/* Advance Amount */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                            <CreditCard className="h-4 w-4 text-gray-400" /> Advance Amount (₹)
-                        </label>
-                        <input
-                            type="number"
-                            value={formData.advanceAmount}
-                            onChange={(e) => setFormData(prev => ({ ...prev, advanceAmount: e.target.value }))}
-                            placeholder="e.g. 5000"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required
-                        />
-                    </div>
+                {/* Admission Time — slightly wider */}
+                <div className="col-span-2">
+                  <label className={lbl}>Time</label>
+                  <input type="time" value={formData.admissionTime}
+                    onChange={e => set('admissionTime', e.target.value)} className={`${inp} text-sm`}/>
+                </div>
 
-                    {/* Advance Payment Method */}
-                    {formData.advanceAmount && parseFloat(formData.advanceAmount) > 0 && (
-                        <>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                                    <CreditCard className="h-4 w-4 text-gray-400" /> Payment Method
-                                </label>
-                                <select
-                                    value={formData.advancePaymentMethod}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, advancePaymentMethod: e.target.value }))}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    required
-                                >
-                                    <option value="cash">Cash</option>
-                                    <option value="card">Card</option>
-                                    <option value="upi">UPI</option>
-                                    <option value="net_banking">Net Banking</option>
-                                    <option value="cheque">Cheque</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                                    <Hash className="h-4 w-4 text-gray-400" /> Reference Number (Optional)
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.advanceReferenceNumber}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, advanceReferenceNumber: e.target.value }))}
-                                    placeholder="Transaction/Check number"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-gray-400" /> Advance Notes (Optional)
-                                </label>
-                                <textarea
-                                    value={formData.advanceNotes}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, advanceNotes: e.target.value }))}
-                                    placeholder="Any additional notes about the advance payment"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    rows={2}
-                                />
-                            </div>
-                        </>
-                    )}
-
-                    {/* Advance Payment Summary */}
-                    {formData.advanceAmount && parseFloat(formData.advanceAmount) > 0 && (
-                        <div className="md:col-span-2 p-3 bg-green-100 rounded-lg border border-green-300">
-                            <p className="text-sm text-green-800">
-                                <strong>Advance Payment:</strong> ₹{parseFloat(formData.advanceAmount || '0').toFixed(0)} via {formData.advancePaymentMethod?.charAt(0).toUpperCase() + formData.advancePaymentMethod?.slice(1) || 'Cash'}
-                                {formData.advanceReferenceNumber && ` (Ref: ${formData.advanceReferenceNumber})`}
+                {/* Patient Search — takes remaining space */}
+                <div className="col-span-8 relative">
+                  <label className={lbl}>Patient Search (UHID / Mobile / Name) <span className="text-red-400">*</span></label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4"/>
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={e => { handlePatientSearch(e.target.value); setHighlightedIdx(-1); }}
+                      onKeyDown={handleSearchKeyDown}
+                      placeholder="Type UHID, phone, or name… (↑↓ to navigate, Enter to select)"
+                      className={`${inp} pl-9`}
+                      autoComplete="off"
+                    />
+                    {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-500"/>}
+                  </div>
+                  {patients.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto"
+                      style={{ zIndex: 99999, position: 'absolute' }}>
+                      {patients.map((p, idx) => (
+                        <button key={p.id} type="button"
+                          onMouseDown={e => { e.preventDefault(); selectPatient(p); }}
+                          onMouseEnter={() => setHighlightedIdx(idx)}
+                          className={`w-full text-left px-4 py-3 flex items-center justify-between border-b last:border-0 border-slate-100 transition-colors
+                            ${idx === highlightedIdx ? 'bg-blue-50' : 'hover:bg-blue-50'}`}>
+                          <div>
+                            <p className="font-semibold text-slate-900 text-sm">{p.name}</p>
+                            <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                              <Hash size={10}/>{p.patient_id} · <Phone size={10}/>{p.phone}
+                              {p.age && ` · ${p.age} yrs`}
                             </p>
-                        </div>
-                    )}
-
-                    {/* Inpatient Number (Automatic) */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                            <Hash className="h-4 w-4 text-gray-400" /> Inpatient Number (Automatic)
-                        </label>
-                        <input
-                            type="text"
-                            value={formData.ipNumber}
-                            onChange={(e) => setFormData(prev => ({ ...prev, ipNumber: e.target.value }))}
-                            className="w-full px-4 py-2 border border-blue-200 bg-blue-50 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono font-bold text-blue-900"
-                            placeholder="Generating..."
-                            readOnly
-                        />
-                        <p className="text-[10px] text-blue-600 mt-1">This number is generated automatically for each admission.</p>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            p.is_admitted ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                            {p.is_admitted ? 'ADMITTED' : p.admission_type?.toUpperCase() || 'OUTPATIENT'}
+                          </span>
+                        </button>
+                      ))}
                     </div>
+                  )}
+                </div>
+              </div>
 
-                    {/* Attending Doctor */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                            <Stethoscope className="h-4 w-4 text-gray-400" /> Attending Doctor
-                        </label>
-                        <select
-                            value={formData.attendingDoctorId}
-                            onChange={(e) => setFormData(prev => ({ ...prev, attendingDoctorId: e.target.value }))}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required
-                        >
-                            <option value="">Select Attending Doctor</option>
-                            {doctors.map(doctor => (
-                                <option key={doctor.id} value={doctor.id}>
-                                    Dr. {doctor.user?.name} - {doctor.specialization}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    
-                    {/* Admission Category */}
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                                <Stethoscope className="h-4 w-4 text-gray-400" /> Admission Category
-                            </span>
-                            {!isAddingCategory ? (
-                                <button
-                                    type="button"
-                                    onClick={() => setIsAddingCategory(true)}
-                                    className="text-blue-600 hover:text-blue-700 text-xs font-medium flex items-center gap-1"
-                                >
-                                    <Plus size={14} /> Add Category
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => setIsAddingCategory(false)}
-                                    className="text-gray-500 hover:text-gray-600 text-xs font-medium"
-                                >
-                                    Cancel
-                                </button>
-                            )}
-                        </label>
-
-                        {!isAddingCategory ? (
-                            <select
-                                value={formData.admissionCategory}
-                                onChange={(e) => setFormData(prev => ({ ...prev, admissionCategory: e.target.value }))}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                required
-                            >
-                                <option value="">Select Admission Category</option>
-                                {admissionCategories.map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                            </select>
-                        ) : (
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={newCategory}
-                                    onChange={(e) => setNewCategory(e.target.value)}
-                                    placeholder="Enter new category..."
-                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    autoFocus
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleAddCategory}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                >
-                                    <Check size={18} />
-                                </button>
-                            </div>
+              {/* Row 2: patient info + gender + select room */}
+              {selectedPatient ? (
+                <div className="grid grid-cols-12 gap-3 items-start">
+                  {/* Patient details card */}
+                  <div className="col-span-5">
+                    <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                      <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <User size={18} className="text-white"/>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-blue-900 text-sm truncate">{selectedPatient.name}</p>
+                        <p className="text-xs text-blue-700 truncate">
+                          {selectedPatient.patient_id} · {selectedPatient.gender} · {selectedPatient.age} yrs
+                        </p>
+                        {selectedPatient.phone && (
+                          <p className="text-xs text-blue-600">{selectedPatient.phone}</p>
                         )}
+                      </div>
+                      <button type="button" onClick={() => { setSelectedPatient(null); setSearchTerm(''); }}
+                        className="text-xs text-red-500 hover:text-red-700 font-semibold flex-shrink-0">
+                        Change
+                      </button>
                     </div>
+                  </div>
+
+                  {/* OP Reg No */}
+                  <div className="col-span-2">
+                    <label className={lbl}>OP Reg No</label>
+                    <input type="text" value={selectedPatient.patient_id} readOnly
+                      className={`${inp} bg-slate-50 text-slate-500 cursor-default`}/>
+                  </div>
+
+                  {/* Age */}
+                  <div className="col-span-1">
+                    <label className={lbl}>Age</label>
+                    <input type="text" value={selectedPatient.age || '—'} readOnly
+                      className={`${inp} bg-slate-50 text-slate-500 cursor-default`}/>
+                  </div>
+
+                  {/* Gender radios */}
+                  <div className="col-span-2">
+                    <label className={lbl}>Gender</label>
+                    <div className="flex items-center gap-4 py-2">
+                      {['Male','Female','Other'].map(g => (
+                        <label key={g} className="flex items-center gap-1.5 text-xs cursor-default text-slate-600">
+                          <input type="radio" readOnly checked={selectedPatient.gender?.toLowerCase() === g.toLowerCase()} className="accent-blue-600"/>
+                          {g}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Select Room button + display */}
+                  <div className="col-span-2">
+                    <label className={lbl}>Room / Bed</label>
+                    <button ref={selectRoomBtnRef} type="button" onClick={() => setShowBedPicker(true)}
+                      className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-semibold transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-200 focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:outline-none">
+                      <BedDouble size={15}/>
+                      {selectedBed ? `${selectedBed.room_number} / ${selectedBed.bed_number}` : 'Select Room'}
+                    </button>
+                    {selectedBed && (
+                      <p className="text-[10px] text-blue-600 mt-1 text-center">
+                        {selectedBed.bed_type} · Floor {selectedBed.floor_number ?? 0}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-12 gap-3 items-center">
+                  <div className="col-span-12">
+                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 border-dashed text-slate-400 text-xs">
+                      <User size={14}/> Search and select a patient above to continue
+                    </div>
+                  </div>
+                </div>
+              )}
+            </SCard>
+
+            {/* ══ SECTION 2: Address Details (from patient, read-only) ══ */}
+            {selectedPatient && (
+              <SCard icon={<Building size={14}/>} title="Address Details" accent="slate">
+                <div className="grid grid-cols-12 gap-3">
+                  <div className="col-span-4">
+                    <label className={lbl}>Address</label>
+                    <textarea readOnly rows={2} value={selectedPatient.address || '—'}
+                      className={`${inp} bg-slate-50 text-slate-600 resize-none cursor-default`}/>
+                  </div>
+                  <div className="col-span-2">
+                    <label className={lbl}>City</label>
+                    <input readOnly value={selectedPatient.city || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                  </div>
+                  <div className="col-span-2">
+                    <label className={lbl}>State</label>
+                    <input readOnly value={selectedPatient.state || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                  </div>
+                  <div className="col-span-1">
+                    <label className={lbl}>Pincode</label>
+                    <input readOnly value={selectedPatient.pincode || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                  </div>
+                  <div className="col-span-2">
+                    <label className={lbl}>Phone</label>
+                    <input readOnly value={selectedPatient.phone || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                  </div>
+                  <div className="col-span-1">
+                    <label className={lbl}>Place</label>
+                    <input readOnly value={selectedPatient.place || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                  </div>
+                </div>
+              </SCard>
+            )}
+
+            {/* ══ SECTION 3: Clinical + Ward + Doctor ══ */}
+            <SCard icon={<Stethoscope size={14}/>} title="Clinical & Ward Details" accent="blue">
+              <div className="grid grid-cols-12 gap-3">
+                {/* Department */}
+                <div className="col-span-3">
+                  <label className={lbl}>Department / Ward</label>
+                  <select ref={departmentSelRef} value={formData.department} onChange={e => set('department', e.target.value)} className={inp}>
+                    <option value="">Select Department</option>
+                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+
+                {/* Attending Doctors (multi-select) */}
+                <div className="col-span-3">
+                  <label className={lbl}>Attending Doctor(s)</label>
+                  <div className="relative">
+                    <button type="button" onClick={() => setShowDoctorDropdown(v => !v)}
+                      className={`${inp} text-left flex items-center justify-between`}>
+                      <span className={formData.attendingDoctorIds.length === 0 ? 'text-slate-400' : 'text-slate-800'}>
+                        {formData.attendingDoctorIds.length === 0 ? 'Select doctors…' : `${formData.attendingDoctorIds.length} doctor${formData.attendingDoctorIds.length > 1 ? 's' : ''} selected`}
+                      </span>
+                      <ChevronDown size={14} className="text-slate-400 shrink-0" />
+                    </button>
+                    {showDoctorDropdown && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        {doctors.map(doc => (
+                          <label key={doc.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                            <input type="checkbox" checked={formData.attendingDoctorIds.includes(doc.id)}
+                              onChange={() => toggleDoctor(doc.id)}
+                              className="w-3.5 h-3.5 rounded accent-indigo-600" />
+                            <span className="text-xs text-slate-700">Dr. {doc.user?.name} — {doc.specialization}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Admission Category */}
+                <div className="col-span-3">
+                  <label className={`${lbl} flex items-center justify-between`}>
+                    <span>Admission Category</span>
+                    {!isAddingCategory
+                      ? <button type="button" onClick={() => setIsAddingCategory(true)} className="text-blue-500 hover:text-blue-700 font-medium normal-case text-[10px] flex items-center gap-0.5"><Plus size={11}/> Add</button>
+                      : <button type="button" onClick={() => setIsAddingCategory(false)} className="text-slate-400 hover:text-slate-600 normal-case text-[10px]">Cancel</button>
+                    }
+                  </label>
+                  {!isAddingCategory ? (
+                    <select value={formData.admissionCategory} onChange={e => set('admissionCategory', e.target.value)} className={inp}>
+                      <option value="">Select Category</option>
+                      {admissionCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)}
+                        placeholder="New category…" className={`${inp} flex-1`} autoFocus
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddCategory())}/>
+                      <button type="button" onClick={handleAddCategory}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <Check size={15}/>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Staff */}
+                <div className="col-span-3">
+                  <StaffSelect value={formData.staffId} onChange={v => set('staffId', v)} label="Admitted By"/>
                 </div>
 
                 {/* Reason for Admission */}
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-gray-400" /> Reason for Admission
-                    </label>
-                    <textarea
-                        value={formData.reasonForAdmission}
-                        onChange={(e) => setFormData(prev => ({ ...prev, reasonForAdmission: e.target.value }))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        rows={2}
-                        placeholder="Main reason for recommending admission"
-                        required
-                    ></textarea>
+                <div className="col-span-12">
+                  <label className={lbl}>Reason for Admission</label>
+                  <textarea rows={2} value={formData.reasonForAdmission}
+                    onChange={e => set('reasonForAdmission', e.target.value)}
+                    placeholder="Main reason for recommending admission…"
+                    className={`${inp} resize-none`}/>
                 </div>
+              </div>
+            </SCard>
 
-                {/* Diagnosis at Admission */}
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-gray-400" /> Diagnosis at Admission
-                    </label>
-                    <textarea
-                        value={formData.diagnosisAtAdmission}
-                        onChange={(e) => setFormData(prev => ({ ...prev, diagnosisAtAdmission: e.target.value }))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        rows={2}
-                        placeholder="Preliminary or final diagnosis"
-                        required
-                    ></textarea>
-                </div>
+            {/* ── Action bar ── */}
+            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-5 py-3 shadow-sm">
+              <span className="text-[11px] text-slate-400">
+                <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono text-[10px]">Esc</kbd>
+                {' '}or click ✕ in sidebar to cancel
+              </span>
+              <button type="submit" disabled={loading}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-300 disabled:to-slate-400 text-white px-8 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-200 disabled:shadow-none">
+                {loading
+                  ? <><Loader2 className="h-4 w-4 animate-spin"/><span>Admitting…</span></>
+                  : <><Bed className="h-4 w-4"/><span>Create IP Admission</span></>
+                }
+              </button>
+            </div>
 
-                {/* Staff Selection */}
-                <div>
-                    <StaffSelect
-                        value={formData.staffId}
-                        onChange={(val) => setFormData(prev => ({ ...prev, staffId: val }))}
-                        label="Admitted By (Staff)"
-                        required
-                    />
-                </div>
-
-                {/* Document Upload Section (Moved) */}
-                {selectedPatient && (
-                    <div className="bg-blue-50/30 p-6 rounded-xl border border-blue-100/50">
-                        <div className="flex items-center gap-3 mb-4">
-                            <FileText className="h-5 w-5 text-blue-600" />
-                            <h3 className="text-sm font-bold text-gray-900">Patient Documents (Optional)</h3>
-                        </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {/* Upload Section */}
-                            <div className="bg-white rounded-lg p-4 border border-blue-100">
-                                <h4 className="text-xs font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                    <Upload className="h-4 w-4 text-blue-600" />
-                                    Upload Documents
-                                </h4>
-                                <DocumentUpload
-                                    patientId={selectedPatient.id}
-                                    uhid={selectedPatient.patient_id}
-                                    staffId={formData.staffId}
-                                    category="general"
-                                    onUploadComplete={(doc) => {
-                                        setDocumentRefreshTrigger(prev => prev + 1);
-                                    }}
-                                />
-                            </div>
-
-                            {/* Documents List */}
-                            <div className="bg-white rounded-lg p-4 border border-gray-100">
-                                <DocumentList
-                                    patientId={selectedPatient.id}
-                                    showDelete={true}
-                                    refreshTrigger={documentRefreshTrigger}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-
-                {/* Bed Allocation (Optional) */}
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                            <Bed className="h-5 w-5 text-gray-600" />
-                            Allocate Bed Now (Optional)
-                        </h3>
-                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-medium">
-                            {availableBeds.length} Available
-                        </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <select
-                            value={formData.selectedBedId}
-                            onChange={(e) => setFormData(prev => ({ ...prev, selectedBedId: e.target.value }))}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                        >
-                            <option value="">Choose an available bed later</option>
-                            {availableBeds.map(bed => (
-                                <option key={bed.id} value={bed.id}>
-                                    {bed.bed_number} ({bed.bed_type}) - Room {bed.room_number}, Floor {bed.floor_number}
-                                </option>
-                            ))}
-                        </select>
-
-                        <div className="text-xs text-gray-500 flex items-center italic">
-                            * Bed can also be allocated after admission from the inpatient list.
-                        </div>
-                    </div>
-                </div>
-
-                {message && (
-                    <div className={`p-4 rounded-lg flex items-center gap-3 ${message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'
-                        }`}>
-                        {message.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
-                        <span className="text-sm font-medium">{message.text}</span>
-                    </div>
-                )}
-
-
-                {/* Action Buttons */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="px-8 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-md hover:shadow-lg disabled:bg-blue-300 flex items-center gap-2 transition-all"
-                    >
-                        {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Admitting...</> : 'Create IP Admission'}
-                    </button>
-                </div>
-            </form>
+          </form>
         </div>
-    );
+      </div>
+
+      {/* Bed Picker Modal */}
+      {showBedPicker && (
+        <BedPickerModal
+          onSelect={handleBedSelect}
+          onClose={() => setShowBedPicker(false)}
+          selectedBedId={formData.selectedBedId}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Section Card ─────────────────────────────────────────────────────────────
+function SCard({ icon, title, accent = 'blue', children }: {
+  icon: React.ReactNode;
+  title: string;
+  accent?: 'blue' | 'green' | 'slate';
+  children: React.ReactNode;
+}) {
+  const colors = {
+    blue:  'text-blue-500',
+    green: 'text-emerald-500',
+    slate: 'text-slate-500',
+  };
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 rounded-t-xl">
+        <span className={colors[accent]}>{icon}</span>
+        <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{title}</span>
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
 }

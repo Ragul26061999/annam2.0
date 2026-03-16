@@ -75,9 +75,9 @@ export interface BedStats {
  */
 export async function getNextIPNumber(): Promise<string> {
   const now = new Date();
-  const yearTwoDigits = now.getFullYear().toString().slice(-2);
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const prefix = `IP${yearTwoDigits}${month}`;
+  const yearTwoDigits = now.getFullYear().toString().slice(-2); // e.g. "26"
+  // prefix = IP + YY, e.g. "IP26"
+  const prefix = `IP${yearTwoDigits}`;
 
   try {
     const { data, error } = await supabase
@@ -89,19 +89,22 @@ export async function getNextIPNumber(): Promise<string> {
 
     if (error) {
       console.warn('Error fetching last IP number:', error);
-      return `${prefix}0001`;
+      return `${prefix}01`;
     }
 
     if (data && data.length > 0 && data[0].ip_number) {
       const lastNumber = parseInt(data[0].ip_number.slice(prefix.length));
-      const nextNumber = (lastNumber + 1).toString().padStart(4, '0');
-      return `${prefix}${nextNumber}`;
+      if (!isNaN(lastNumber)) {
+        // 2-digit sequential: IP2601, IP2602, ...
+        const nextNumber = (lastNumber + 1).toString().padStart(2, '0');
+        return `${prefix}${nextNumber}`;
+      }
     }
 
-    return `${prefix}0001`;
+    return `${prefix}01`;
   } catch (error) {
     console.error('Error in getNextIPNumber:', error);
-    return `${prefix}0001`;
+    return `${prefix}01`;
   }
 }
 

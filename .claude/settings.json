@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const l = require\\(''lucide-react''\\); console.log\\(''HeartPulse:'', !!l.HeartPulse, ''BarChart3:'', !!l.BarChart3, ''Building2:'', !!l.Building2, ''Layers:'', !!l.Layers, ''Plus:'', !!l.Plus\\)\")",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(grep -n \"currentUser\\\\|supabase.*auth\\\\|session\" /Users/nisha/Desktop/rnd/annam2.0/app/inpatient/view/[id]/page.tsx)"
+    ],
+    "additionalDirectories": [
+      "/tmp",
+      "/Users/nisha/Desktop/rnd/annam2.0/app/inpatient/view"
     ]
   }
 }

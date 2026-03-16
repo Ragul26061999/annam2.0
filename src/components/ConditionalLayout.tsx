@@ -6,7 +6,7 @@ import Sidebar from './Sidebar';
 export default function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
-  const isStandalonePage = pathname === '/batch-validation' || pathname === '/settings/pharmacy/batch-validation' || pathname === '/outpatient/quick-register';
+  const isStandalonePage = pathname === '/batch-validation' || pathname === '/settings/pharmacy/batch-validation' || pathname === '/outpatient/quick-register' || pathname === '/inpatient/create-inpatient';
 
   if (isLoginPage || isStandalonePage) {
     return <>{children}</>;

@@ -406,7 +406,50 @@ export async function getPatientMedicationHistory(patientId: string): Promise<Me
 
     if (prescError) {
       console.error('Error fetching prescriptions:', prescError);
-    } else if (prescriptions) {
+      return history;
+    }
+
+    const prescriptionIds = (prescriptions || []).map((prescription: any) => prescription.id).filter(Boolean);
+    const { data: dispensed, error: dispError } = prescriptionIds.length > 0
+      ? await supabase
+          .from('prescription_dispensing')
+          .select(`
+            id,
+            prescription_id,
+            medication_id,
+            quantity_dispensed,
+            dispensed_by,
+            dispensed_at,
+            notes,
+            status
+          `)
+          .in('prescription_id', prescriptionIds)
+          .order('dispensed_at', { ascending: false })
+      : { data: [], error: null };
+
+    if (dispError) {
+      console.error('Error fetching dispensed medications:', dispError);
+    }
+
+    const dispenserIds = [...new Set((dispensed || []).map((row: any) => row.dispensed_by).filter(Boolean))];
+    const dispenserResult: { data: any[] | null } = dispenserIds.length > 0
+      ? await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', dispenserIds)
+      : { data: [] };
+
+    const dispenserNameById = new Map((dispenserResult.data || []).map((user: any) => [user.id, user.name]));
+    const dispensingByPrescriptionMedication = new Map<string, any[]>();
+
+    (dispensed || []).forEach((row: any) => {
+      const key = `${row.prescription_id}:${row.medication_id}`;
+      const existing = dispensingByPrescriptionMedication.get(key) || [];
+      existing.push(row);
+      dispensingByPrescriptionMedication.set(key, existing);
+    });
+
+    if (prescriptions) {
       prescriptions.forEach((prescription: any) => {
         const doctorName = prescription.doctor?.user?.name || 'Unknown Doctor';
 
@@ -414,6 +457,9 @@ export async function getPatientMedicationHistory(patientId: string): Promise<Me
         items.forEach((item: any) => {
           if (!item) return;
           const medicine = item.medication;
+
+          const dispensingRows = dispensingByPrescriptionMedication.get(`${prescription.id}:${item.medication_id}`) || [];
+          const latestDispensing = dispensingRows[0];
 
           history.push({
             id: `presc_${prescription.id}_${item.medication_id}`,
@@ -426,72 +472,10 @@ export async function getPatientMedicationHistory(patientId: string): Promise<Me
             duration: item.duration || '',
             prescribed_date: prescription.created_at,
             prescribed_by: doctorName,
-            status: 'prescribed',
+            dispensed_date: latestDispensing?.dispensed_at,
+            dispensed_by: latestDispensing?.dispensed_by ? String(dispenserNameById.get(latestDispensing.dispensed_by) || 'Unknown Pharmacist') : undefined,
+            status: latestDispensing ? 'dispensed' : 'prescribed',
             prescription_image_url: prescription.prescription_image_url
-          });
-        });
-      });
-    }
-
-    // Get dispensed medications
-    const { data: dispensed, error: dispError } = await supabase
-      .from('prescription_dispensing')
-      .select(`
-        id,
-        dispensed_at,
-        quantity_dispensed,
-        medication_id,
-        dispensed_by,
-        prescription_id,
-        batch_id,
-        notes
-      `)
-      .eq('prescription_id', patientId)
-      .order('dispensed_at', { ascending: false });
-
-    if (dispError) {
-      console.error('Error fetching dispensed medications:', dispError);
-    } else if (dispensed) {
-      // Get pharmacist names
-      const pharmacistIds = [...new Set(dispensed.map((d: any) => d.pharmacist_id))];
-      const { data: pharmacists } = await supabase
-        .from('users')
-        .select('id, name')
-        .in('id', pharmacistIds);
-
-      // Get medication names
-      const medicationIds = dispensed.flatMap((d: any) =>
-        d.prescription_dispensed_items?.map((item: any) => item.medication_id) || []
-      );
-      const { data: medications } = await supabase
-        .from('medications')
-        .select('id, name, generic_name, strength, dosage_form')
-        .in('id', medicationIds);
-
-      dispensed.forEach((dispense: any) => {
-        const pharmacist = pharmacists?.find((p: any) => p.id === dispense.pharmacist_id);
-
-        const dispensedItems = dispense.prescription_dispensed_items || [];
-        dispensedItems.forEach((item: any) => {
-          if (!item) return; // Skip if item is null/undefined
-          const medication = medications?.find((m: any) => m.id === item.medication_id);
-
-          history.push({
-            id: `disp_${dispense.id}_${item.medication_id}`,
-            patient_id: patientId,
-            medication_name: medication?.name || 'Unknown',
-            generic_name: medication?.generic_name || '',
-            dosage: medication ? `${medication.strength || ''} ${medication.dosage_form || ''}`.trim() : '',
-            dosage_form: medication?.dosage_form || '',
-            frequency: `Qty: ${item.dispensed_quantity}`,
-            duration: '',
-            prescribed_date: '',
-            dispensed_date: dispense.dispensed_date,
-            prescribed_by: '',
-            dispensed_by: pharmacist?.name || 'Unknown Pharmacist',
-            status: 'dispensed',
-            total_amount: item.total_price,
-            payment_status: dispense.payment_status
           });
         });
       });
@@ -538,13 +522,63 @@ export async function getPatientPrescriptionGroups(patientId: string): Promise<P
 
     if (prescError) {
       console.error('Error fetching prescriptions:', prescError);
-    } else if (prescriptions) {
+      return prescriptionGroups;
+    }
+
+    const prescriptionIds = (prescriptions || []).map((prescription: any) => prescription.id).filter(Boolean);
+    const { data: dispensed, error: dispError } = prescriptionIds.length > 0
+      ? await supabase
+          .from('prescription_dispensing')
+          .select(`
+            id,
+            prescription_id,
+            medication_id,
+            quantity_dispensed,
+            dispensed_by,
+            dispensed_at,
+            notes,
+            status
+          `)
+          .in('prescription_id', prescriptionIds)
+          .order('dispensed_at', { ascending: false })
+      : { data: [], error: null };
+
+    if (dispError) {
+      console.error('Error fetching dispensed medications:', dispError);
+    }
+
+    const dispenserIds = [...new Set((dispensed || []).map((row: any) => row.dispensed_by).filter(Boolean))];
+    const dispenserResult: { data: any[] | null } = dispenserIds.length > 0
+      ? await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', dispenserIds)
+      : { data: [] };
+
+    const dispenserNameById = new Map((dispenserResult.data || []).map((user: any) => [user.id, user.name]));
+    const dispensingByPrescriptionId = new Map<string, any[]>();
+    const dispensingByPrescriptionMedication = new Map<string, any[]>();
+
+    (dispensed || []).forEach((row: any) => {
+      const byPrescription = dispensingByPrescriptionId.get(row.prescription_id) || [];
+      byPrescription.push(row);
+      dispensingByPrescriptionId.set(row.prescription_id, byPrescription);
+
+      const medicationKey = `${row.prescription_id}:${row.medication_id}`;
+      const byMedication = dispensingByPrescriptionMedication.get(medicationKey) || [];
+      byMedication.push(row);
+      dispensingByPrescriptionMedication.set(medicationKey, byMedication);
+    });
+
+    if (prescriptions) {
       prescriptions.forEach((prescription: any) => {
         const doctorName = prescription.doctor?.user?.name || 'Unknown Doctor';
         const items = prescription.prescription_items || [];
+        const dispensingRows = dispensingByPrescriptionId.get(prescription.id) || [];
         
         const medications: MedicationItem[] = items.map((item: any) => {
           const medicine = item.medication;
+          const itemDispensing = dispensingByPrescriptionMedication.get(`${prescription.id}:${item.medication_id}`) || [];
           return {
             id: `${prescription.id}_${item.medication_id}`,
             medication_id: item.medication_id,
@@ -552,90 +586,30 @@ export async function getPatientPrescriptionGroups(patientId: string): Promise<P
             generic_name: medicine?.generic_name || '',
             dosage: item.dosage || '',
             dosage_form: medicine?.dosage_form || '',
-            frequency: item.frequency || '',
+            frequency: itemDispensing.length > 0
+              ? `${item.frequency || ''}${item.frequency ? ' • ' : ''}Qty dispensed: ${itemDispensing.reduce((sum: number, row: any) => sum + (Number(row.quantity_dispensed) || 0), 0)}`
+              : item.frequency || '',
             duration: item.duration || ''
           };
         });
+
+        const latestDispensing = dispensingRows[0];
+        const allItemsDispensed = items.length > 0 && items.every((item: any) =>
+          (dispensingByPrescriptionMedication.get(`${prescription.id}:${item.medication_id}`) || []).length > 0
+        );
 
         prescriptionGroups.push({
           id: prescription.id,
           prescription_id: prescription.prescription_id,
           patient_id: patientId,
           prescribed_date: prescription.created_at,
+          dispensed_date: latestDispensing?.dispensed_at,
           prescribed_by: doctorName,
-          status: 'prescribed',
+          dispensed_by: latestDispensing?.dispensed_by ? String(dispenserNameById.get(latestDispensing.dispensed_by) || 'Unknown Pharmacist') : undefined,
+          status: allItemsDispensed ? 'dispensed' : 'prescribed',
           prescription_image_url: prescription.prescription_image_url,
           instructions: prescription.instructions,
           medications: medications
-        });
-      });
-    }
-
-    // Get dispensed medications (grouped by dispense record)
-    const { data: dispensed, error: dispError } = await supabase
-      .from('prescription_dispensing')
-      .select(`
-        id,
-        dispensed_at,
-        quantity_dispensed,
-        medication_id,
-        dispensed_by,
-        prescription_id,
-        batch_id,
-        notes
-      `)
-      .eq('prescription_id', patientId)
-      .order('dispensed_at', { ascending: false });
-
-    if (dispError) {
-      console.error('Error fetching dispensed medications:', dispError);
-    } else if (dispensed) {
-      // Get pharmacist names
-      const pharmacistIds = [...new Set(dispensed.map((d: any) => d.pharmacist_id))];
-      const { data: pharmacists } = await supabase
-        .from('users')
-        .select('id, name')
-        .in('id', pharmacistIds);
-
-      // Get medication names
-      const medicationIds = dispensed.flatMap((d: any) =>
-        d.prescription_dispensed_items?.map((item: any) => item.medication_id) || []
-      );
-      const { data: medications } = await supabase
-        .from('medications')
-        .select('id, name, generic_name, strength, dosage_form')
-        .in('id', medicationIds);
-
-      dispensed.forEach((dispense: any) => {
-        const pharmacist = pharmacists?.find((p: any) => p.id === dispense.pharmacist_id);
-        const dispensedItems = dispense.prescription_dispensed_items || [];
-        
-        const medicationItems: MedicationItem[] = dispensedItems.map((item: any) => {
-          if (!item) return null;
-          const medication = medications?.find((m: any) => m.id === item.medication_id);
-          return {
-            id: `${dispense.id}_${item.medication_id}`,
-            medication_id: item.medication_id,
-            medication_name: medication?.name || 'Unknown',
-            generic_name: medication?.generic_name || '',
-            dosage: medication ? `${medication.strength || ''} ${medication.dosage_form || ''}`.trim() : '',
-            dosage_form: medication?.dosage_form || '',
-            frequency: `Qty: ${item.dispensed_quantity}`,
-            duration: ''
-          };
-        }).filter(Boolean);
-
-        prescriptionGroups.push({
-          id: dispense.id,
-          patient_id: patientId,
-          prescribed_date: '',
-          dispensed_date: dispense.dispensed_date,
-          prescribed_by: '',
-          dispensed_by: pharmacist?.name || 'Unknown Pharmacist',
-          status: 'dispensed',
-          total_amount: dispense.total_amount,
-          payment_status: dispense.payment_status,
-          medications: medicationItems
         });
       });
     }
