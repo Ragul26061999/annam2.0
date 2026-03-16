@@ -1157,7 +1157,7 @@ export default function ClinicalEntryForm2({
       }
 
       // Save Prescriptions (including Injections and Notes)
-      if (prescriptions.length > 0 || injectionItems.length > 0 || labNotes.trim() !== '' || radiologyNotes.trim() !== '' || injectionNotes.trim() !== '') {
+      if (prescriptions.length > 0 || injectionItems.length > 0 || labNotes.trim() !== '' || radiologyNotes.trim() !== '' || injectionNotes.trim() !== '' || validLabRows.length > 0 || validXrayRows.length > 0) {
         try {
           const combinedInstructions = [
             injectionNotes.trim() ? `INJECTION NOTES: ${injectionNotes}` : '',

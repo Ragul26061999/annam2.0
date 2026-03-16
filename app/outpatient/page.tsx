@@ -879,13 +879,33 @@ function OutpatientPageContent() {
         return;
       }
 
-      console.log('Lab test prescriptions data:', data); // Debug log
+      // Fetch ALL diagnostic orders for today to match with prescriptions
+      const [labRes, radioRes, scanRes, groupedRes] = await Promise.all([
+        supabase.from('lab_test_orders').select('*, catalog:lab_test_catalog(test_name)').gte('created_at', today),
+        supabase.from('radiology_test_orders').select('*, catalog:radiology_test_catalog(test_name)').gte('created_at', today),
+        supabase.from('scan_test_orders').select('*').gte('created_at', today),
+        supabase.from('diagnostic_group_orders').select('*, items:diagnostic_group_order_items(*)').gte('created_at', today)
+      ]);
+
+      const labOrders = labRes.data || [];
+      const radioOrders = radioRes.data || [];
+      const scanOrders = scanRes.data || [];
+      const groupedOrders = groupedRes.data || [];
 
       // Format data for display
       const formattedLabTestPrescriptions = (data || []).map((prescription: any) => {
         const patient = prescription.patient;
         const doctor = prescription.doctor?.user || prescription.doctor;
         const items = prescription.prescription_items || [];
+        
+        const appointmentId = prescription.appointment_id;
+        const encounterId = prescription.encounter_id;
+
+        // Match tests
+        const matchedLab = labOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
+        const matchedRadio = radioOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
+        const matchedScan = scanOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
+        const matchedGrouped = groupedOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
 
         return {
           id: prescription.id,
@@ -898,7 +918,13 @@ function OutpatientPageContent() {
           items: items,
           created_at: prescription.created_at,
           issue_date: prescription.issue_date,
-          status: prescription.status
+          status: prescription.status,
+          tests: {
+            lab: matchedLab,
+            radiology: matchedRadio,
+            scan: matchedScan,
+            grouped: matchedGrouped
+          }
         };
       });
 
@@ -2905,6 +2931,7 @@ function OutpatientPageContent() {
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prescription ID</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ordered Tests</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Doctor</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -2921,6 +2948,35 @@ function OutpatientPageContent() {
                           <div className="text-sm">
                             <div className="font-medium text-gray-900">{prescription.patient?.name}</div>
                             <div className="text-gray-500">{prescription.patient?.patient_id}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-1.5 max-w-sm">
+                            {/* Individual Lab Tests */}
+                            {(prescription.tests?.lab || []).map((test: any, idx: number) => (
+                              <span key={`lab-${idx}`} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-100 uppercase tracking-tight">
+                                {test.catalog?.test_name || 'Lab Test'}
+                              </span>
+                            ))}
+                            
+                            {/* Individual Radiology/X-Ray Tests */}
+                            {(prescription.tests?.radiology || []).map((test: any, idx: number) => (
+                              <span key={`rad-${idx}`} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-tight">
+                                {test.catalog?.test_name || 'X-Ray'}
+                              </span>
+                            ))}
+                            
+                            {/* Individual Scans */}
+                            {(prescription.tests?.scan || []).map((test: any, idx: number) => (
+                              <span key={`scan-${idx}`} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-100 uppercase tracking-tight">
+                                {test.scan_name || 'Scan'}
+                              </span>
+                            ))}
+
+                            {/* No tests found */}
+                            {(!prescription.tests?.lab?.length && !prescription.tests?.radiology?.length && !prescription.tests?.scan?.length) && (
+                              <span className="text-xs text-gray-400 italic">No diagnostic items matched</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
