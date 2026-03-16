@@ -51,7 +51,7 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
             <title>Patient Label - ${patient.patient_id}</title>
             <style>
               @page {
-                size: 10cm 3.5cm;
+                size: 10cm 3.5cm landscape;
                 margin: 0;
               }
               

@@ -1,1255 +1,1089 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft,
-  User,
-  Phone,
-  MapPin,
-  Calendar,
-  Hash,
-  Clock,
+  ChevronLeft,
+  ChevronRight,
   Save,
   Loader2,
   CheckCircle,
   AlertCircle,
   Printer,
   AlertTriangle,
+  RefreshCw,
+  User,
+  MapPin,
+  Phone,
   Stethoscope,
   IndianRupee,
-  Calculator
+  Hash,
+  Calendar,
+  Clock,
 } from 'lucide-react';
-import { generateUHID, registerNewPatient, PatientRegistrationData } from '../../../src/lib/patientService';
 import { addToQueue } from '../../../src/lib/outpatientQueueService';
 import StaffSelect from '../../../src/components/StaffSelect';
 import BarcodeModal from '../../../src/components/BarcodeModal';
 import { supabase } from '../../../src/lib/supabase';
+import { generateUHID } from '../../../src/lib/patientService';
 
 const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
-  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
-  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
-  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
-  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh',
+  'Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand',
+  'Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur',
+  'Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
+  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura',
+  'Uttar Pradesh','Uttarakhand','West Bengal',
+  'Andaman and Nicobar Islands','Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry',
 ];
 
-// Common places/areas for typeahead suggestions
 const COMMON_PLACES = [
-  'T. Nagar', 'Anna Nagar', 'Adyar', 'Mylapore', 'Velachery', 'Tambaram',
-  'Chromepet', 'Pallavaram', 'Guindy', 'Nungambakkam', 'Kodambakkam',
-  'Teynampet', 'Alwarpet', 'Royapettah', 'Triplicane', 'Chepauk',
-  'Egmore', 'Park Town', 'George Town', 'Parrys', 'Saidapet',
-  'Mambalam', 'Ashok Nagar', 'K.K. Nagar', 'Vadapalani', 'Saligramam',
-  'Porur', 'Poonamallee', 'Avadi', 'Ambattur', 'Madhavaram',
-  'Red Hills', 'Thiruvanmiyur', 'Besant Nagar', 'Thiruvanmiyur', 'Sholinganallur',
-  'Medavakkam', 'Keelkattalai', 'Kovilambakkam', 'Pallikaranai', 'Velachery',
-  'Thoraipakkam', 'Karapakkam', 'Navalur', 'Kelambakkam', 'Siruseri',
-  'OMR', 'ECR', 'GST Road', 'Arcot Road', 'Poonamallee High Road'
+  'T. Nagar','Anna Nagar','Adyar','Mylapore','Velachery','Tambaram',
+  'Chromepet','Pallavaram','Guindy','Nungambakkam','Kodambakkam',
+  'Teynampet','Alwarpet','Royapettah','Triplicane','Chepauk',
+  'Egmore','Park Town','George Town','Parrys','Saidapet',
+  'Mambalam','Ashok Nagar','K.K. Nagar','Vadapalani','Saligramam',
+  'Porur','Poonamallee','Avadi','Ambattur','Madhavaram',
+  'Red Hills','Thiruvanmiyur','Besant Nagar','Sholinganallur',
+  'Medavakkam','Keelkattalai','Kovilambakkam','Pallikaranai',
+  'Thoraipakkam','Karapakkam','Navalur','Kelambakkam','Siruseri',
+  'OMR','ECR','GST Road','Arcot Road','Poonamallee High Road',
+];
+
+// Every interactive field in exact visual order — used for Enter-key focus chain
+const FIELDS: string[] = [
+  'registrationDate','registrationTime',
+  'firstName','lastName','gender','age','dob','contactNo',
+  'alternateNo','address','city','state','pincode','place',
+  'emergencyName','emergencyPhone','relationship',
+  'primaryComplaint','priority',
+  'consultingDoctorId','diagnosis',
+  'consultationFee','opCardAmount','paymentMode',
 ];
 
 export default function QuickRegisterPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [previewUHID, setPreviewUHID] = useState('');
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [queueNumber, setQueueNumber] = useState<number | null>(null);
-  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
-  const [registeredPatient, setRegisteredPatient] = useState<any>(null);
-  const [contactExists, setContactExists] = useState(false);
-  const [checkingContact, setCheckingContact] = useState(false);
-  const [placeSuggestions, setPlaceSuggestions] = useState<string[]>([]);
-  const [showPlaceSuggestions, setShowPlaceSuggestions] = useState(false);
-  const [placeSearchTerm, setPlaceSearchTerm] = useState('');
-  const [existingPlaces, setExistingPlaces] = useState<string[]>([]);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
-  const [duplicatePatient, setDuplicatePatient] = useState<any | null>(null);
-  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
-  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
-  const [doctors, setDoctors] = useState<any[]>([]);
-  const [contactValidationError, setContactValidationError] = useState('');
 
-  const [formData, setFormData] = useState({
+  const [loading,           setLoading]           = useState(false);
+  const [isSuccess,         setIsSuccess]          = useState(false);
+  const [error,             setError]              = useState<string|null>(null);
+  const [queueNumber,       setQueueNumber]        = useState<number|null>(null);
+  const [showBarcodeModal,  setShowBarcodeModal]   = useState(false);
+  const [registeredPatient, setRegisteredPatient]  = useState<any>(null);
+  const [contactExists,     setContactExists]      = useState(false);
+  const [checkingContact,   setCheckingContact]    = useState(false);
+  const [placeSuggestions,  setPlaceSuggestions]   = useState<string[]>([]);
+  const [showPlaceSug,      setShowPlaceSug]       = useState(false);
+  const [existingPlaces,    setExistingPlaces]     = useState<string[]>([]);
+  const [selectedSugIdx,    setSelectedSugIdx]     = useState(-1);
+  const [duplicatePatient,  setDuplicatePatient]   = useState<any|null>(null);
+  const [checkingDuplicate, setCheckingDuplicate]  = useState(false);
+  const [showDupAlert,      setShowDupAlert]       = useState(false);
+  const [doctors,           setDoctors]            = useState<any[]>([]);
+  const [contactErr,        setContactErr]         = useState('');
+  const [sidebarOpen,       setSidebarOpen]        = useState(true);
+
+  // One ref map for every field — keyed by FIELDS array values
+  const refs = useRef<Record<string, HTMLElement|null>>({});
+  const reg  = useCallback(
+    (id: string) => (el: HTMLElement|null) => { refs.current[id] = el; },
+    [],
+  );
+
+  const [form, setForm] = useState({
     registrationDate: new Date().toISOString().split('T')[0],
-    registrationTime: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+    registrationTime: new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'}),
     uhid: '',
-    firstName: '',
-    lastName: '',
-    age: '',
-    dob: '',
-    gender: '',
-    contactNo: '',
-    alternateNo: '',
-    address: '',
-    city: '',
-    state: 'Tamil Nadu',
-    pincode: '',
-    place: '',
-    emergencyName: '',
-    emergencyPhone: '',
-    relationship: '',
-    primaryComplaint: '',
-    priority: '0',
-    staffId: '',
-    // Consultation Details
-    consultingDoctorId: '',
-    consultingDoctorName: '',
-    diagnosis: '',
-    // Billing Information
-    consultationFee: '',
-    opCardAmount: '',
-    totalAmount: '',
-    paymentMode: 'Cash'
+    firstName:'', lastName:'', age:'', dob:'', gender:'',
+    contactNo:'', alternateNo:'',
+    address:'', city:'', state:'Tamil Nadu', pincode:'', place:'',
+    emergencyName:'', emergencyPhone:'', relationship:'',
+    primaryComplaint:'', priority:'0',
+    consultingDoctorId:'', consultingDoctorName:'', diagnosis:'',
+    consultationFee:'', opCardAmount:'', totalAmount:'', paymentMode:'Cash',
+    staffId:'',
   });
 
-  useEffect(() => {
-    const fetchUHID = async () => {
-      try {
-        const uhid = await generateUHID();
-        setPreviewUHID(uhid);
-        setFormData(prev => ({ ...prev, uhid }));
-      } catch (error) {
-        console.error('Error generating UHID:', error);
-      }
-    };
-    fetchUHID();
-  }, []);
+  const submitRef = useRef<HTMLButtonElement>(null);
 
-  // Load existing places from database
-  useEffect(() => {
-    const loadExistingPlaces = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('patients')
-          .select('place')
-          .not('place', 'is', null)
-          .not('place', 'eq', '')
-          .limit(100);
-        
-        if (error) {
-          console.error('Error loading existing places:', error);
-          return;
-        }
-        
-        const places = data?.map((p: any) => p.place).filter(Boolean) || [];
-        setExistingPlaces(places);
-      } catch (error) {
-        console.error('Error loading existing places:', error);
-      }
-    };
-    loadExistingPlaces();
-  }, []);
-
-  // Load doctors for consultation
-  useEffect(() => {
-    const loadDoctors = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('doctors')
-          .select(`
-            id,
-            users(name),
-            specialization,
-            consultation_fee,
-            department
-          `)
-          .eq('status', 'active');
-        
-        if (error) {
-          console.error('Error loading doctors:', error);
-          return;
-        }
-        
-        setDoctors(data || []);
-      } catch (error) {
-        console.error('Error loading doctors:', error);
-      }
-    };
-    loadDoctors();
-  }, []);
-
-  // Close place suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (!target.closest('.place-input-container')) {
-        setShowPlaceSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Auto-calculate age from DOB
-  useEffect(() => {
-    if (formData.dob) {
-      const birthDate = new Date(formData.dob);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      setFormData(prev => ({ ...prev, age: age.toString() }));
-    }
-  }, [formData.dob]);
-
-  // Function to calculate DOB from age
-  const calculateDOBFromAge = () => {
-    const ageValue = formData.age.replace(/\D/g, '');
-    const age = parseInt(ageValue);
-    
-    if (!ageValue || age < 0 || age > 150) {
-      setError('Please enter a valid age between 0 and 150');
+  // ── Enter / Esc global key handler ───────────────────────────────────────
+  const handleFormKey = useCallback((e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      router.push('/outpatient');
       return;
     }
-    
-    // Calculate DOB based on age with default date as April 14
-    const today = new Date();
-    const birthYear = today.getFullYear() - age;
-    const birthMonth = 3; // April (0-indexed, so 3 = April)
-    const birthDay = 14;  // 14th day
-    
-    // Create DOB as April 14, birthYear
-    const dob = `${birthYear}-${String(birthMonth + 1).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`;
-    
-    // Update both DOB and preserve the original age to prevent auto-calculation override
-    setFormData(prev => ({ ...prev, dob, age: ageValue }));
-    setError(null); // Clear any previous error
-  };
+    if (e.key !== 'Enter') return;
+    // Allow Enter inside <textarea> normally
+    if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+    // Place dropdown: let handlePlaceKey manage it
+    if (showPlaceSug) return;
+    e.preventDefault();
 
-  // Auto-calculate total amount when fees change
+    const activeId = (e.target as HTMLElement).dataset.fieldid;
+
+    // If focused on submit button itself, submit
+    if ((e.target as HTMLElement) === submitRef.current) {
+      submitRef.current?.click();
+      return;
+    }
+
+    // Auto-calc DOB when leaving the age field
+    if (activeId === 'age') {
+      const age = parseInt(form.age.replace?.(/\D/g,'') ?? form.age);
+      if (!isNaN(age) && age >= 0 && age <= 150) {
+        const y = new Date().getFullYear() - age;
+        setForm(p => ({...p, dob:`${y}-04-14`}));
+      }
+    }
+
+    if (!activeId) return;
+    const idx = FIELDS.indexOf(activeId);
+    if (idx === -1) return;
+
+    // Walk forward to next focusable field
+    for (let i = idx + 1; i < FIELDS.length; i++) {
+      const el = refs.current[FIELDS[i]];
+      if (el && !(el as any).disabled && !(el as any).readOnly) {
+        el.focus();
+        return;
+      }
+    }
+
+    // No more fields — submit
+    submitRef.current?.click();
+  }, [showPlaceSug, router, form.age]);
+
+  // ── Data loading ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const consultationFee = parseFloat(formData.consultationFee) || 0;
-    const opCardAmount = parseFloat(formData.opCardAmount) || 0;
-    const total = consultationFee + opCardAmount;
-    setFormData(prev => ({ 
-      ...prev, 
-      totalAmount: total.toString() 
-    }));
-  }, [formData.consultationFee, formData.opCardAmount]);
+    generateUHID().then(uhid => setForm(p => ({...p, uhid}))).catch(() => {});
+  }, []);
 
-  const handleDoctorSelect = (doctorId: string) => {
-    const selectedDoctor = doctors.find(doc => doc.id === doctorId);
-    setFormData(prev => {
-      const consultationFee = selectedDoctor?.consultation_fee ? selectedDoctor.consultation_fee.toString() : prev.consultationFee;
-      
-      return {
-        ...prev,
-        consultingDoctorId: doctorId,
-        consultingDoctorName: selectedDoctor?.users?.name || '',
-        consultationFee
-      };
-    });
-  };
+  useEffect(() => {
+    supabase.from('patients').select('place')
+      .not('place','is',null).not('place','eq','').limit(100)
+      .then(({data}: {data: {place:string}[]|null}) => setExistingPlaces((data||[]).map(r=>r.place).filter(Boolean)));
+  }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    
-    // Special handling for contact number field
+  useEffect(() => {
+    supabase.from('doctors')
+      .select('id,users(name),specialization,consultation_fee,department')
+      .eq('status','active')
+      .then(({data}: {data: any[]|null}) => setDoctors(data||[]));
+  }, []);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('.place-wrap')) setShowPlaceSug(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  // Age from DOB
+  useEffect(() => {
+    if (!form.dob) return;
+    const d = new Date(form.dob), today = new Date();
+    let age = today.getFullYear() - d.getFullYear();
+    const m = today.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+    setForm(p => ({...p, age: String(age)}));
+  }, [form.dob]);
+
+  // Total
+  useEffect(() => {
+    const t = (parseFloat(form.consultationFee)||0) + (parseFloat(form.opCardAmount)||0);
+    setForm(p => ({...p, totalAmount: String(t)}));
+  }, [form.consultationFee, form.opCardAmount]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => {
+    const {name, value} = e.target;
+
     if (name === 'contactNo') {
-      // Only allow digits
-      const digitsOnly = value.replace(/\D/g, '');
-      
-      // Limit to 10 digits
-      const truncatedValue = digitsOnly.slice(0, 10);
-      
-      // Update form data
-      setFormData(prev => ({ ...prev, [name]: truncatedValue }));
-      
-      // Validate 10-digit requirement
-      if (truncatedValue.length > 0 && truncatedValue.length < 10) {
-        setContactValidationError('Contact number must be exactly 10 digits');
-      } else {
-        setContactValidationError('');
-      }
-      
-      // Check if contact number exists when exactly 10 digits are entered
-      if (truncatedValue.length === 10) {
-        checkContactExists(truncatedValue);
-      } else {
-        setContactExists(false);
-      }
-      
-      return; // Don't continue with general handling
+      const v = value.replace(/\D/g,'').slice(0,10);
+      setForm(p => ({...p, contactNo:v}));
+      setContactErr(v.length > 0 && v.length < 10 ? 'Must be exactly 10 digits' : '');
+      if (v.length === 10) checkContact(v); else setContactExists(false);
+      return;
     }
-    
-    // Special handling for DOB field - clear age when DOB is manually set
-    if (name === 'dob') {
-      // When DOB is manually changed, clear the age field to let the auto-calculation work
-      setFormData(prev => ({ ...prev, [name]: value, age: '' }));
-      return; // Don't continue with general handling since we already updated
-    }
-    
-    // General handling for other fields (including age - no auto-calculation)
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Handle place suggestions and trigger duplicate check
+    if (name === 'dob') { setForm(p => ({...p, dob:value, age:''})); return; }
+    setForm(p => ({...p, [name]:value}));
+
     if (name === 'place') {
-      setPlaceSearchTerm(value);
       if (value.length >= 2) {
-        // Combine common places with existing places from database
-        const allPlaces = [...COMMON_PLACES, ...existingPlaces];
-        const uniquePlaces = [...new Set(allPlaces)]; // Remove duplicates
-        
-        const filteredPlaces = uniquePlaces.filter(place =>
-          place.toLowerCase().includes(value.toLowerCase())
-        );
-        
-        // Sort: exact matches first, then alphabetical
-        const sortedPlaces = filteredPlaces.sort((a, b) => {
-          const aLower = a.toLowerCase();
-          const bLower = b.toLowerCase();
-          const searchLower = value.toLowerCase();
-          
-          // Exact match first
-          if (aLower === searchLower) return -1;
-          if (bLower === searchLower) return 1;
-          
-          // Starts with search term next
-          if (aLower.startsWith(searchLower) && !bLower.startsWith(searchLower)) return -1;
-          if (bLower.startsWith(searchLower) && !aLower.startsWith(searchLower)) return 1;
-          
-          // Then alphabetical
-          return a.localeCompare(b);
-        });
-        
-        setPlaceSuggestions(sortedPlaces.slice(0, 8)); // Limit to 8 suggestions
-        setShowPlaceSuggestions(true);
-        setSelectedSuggestionIndex(-1); // Reset selection
-        
-        // Trigger duplicate patient check when place field is filled
-        const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-        if (fullName && formData.gender && formData.dob) {
-          checkDuplicatePatient(fullName, formData.gender, formData.dob);
-        }
+        const all = [...new Set([...COMMON_PLACES, ...existingPlaces])];
+        const filtered = all
+          .filter(pl => pl.toLowerCase().includes(value.toLowerCase()))
+          .sort((a,b) => {
+            const aL=a.toLowerCase(), bL=b.toLowerCase(), sL=value.toLowerCase();
+            if (aL===sL) return -1; if (bL===sL) return 1;
+            if (aL.startsWith(sL)&&!bL.startsWith(sL)) return -1;
+            if (bL.startsWith(sL)&&!aL.startsWith(sL)) return 1;
+            return a.localeCompare(b);
+          }).slice(0,8);
+        setPlaceSuggestions(filtered);
+        setShowPlaceSug(true);
+        setSelectedSugIdx(-1);
       } else {
-        setShowPlaceSuggestions(false);
+        setShowPlaceSug(false);
         setPlaceSuggestions([]);
-        setSelectedSuggestionIndex(-1);
       }
     }
   };
 
-  // Function to select a place from suggestions
   const selectPlace = (place: string) => {
-    setFormData(prev => ({ ...prev, place }));
-    setPlaceSearchTerm(place);
-    setShowPlaceSuggestions(false);
+    setForm(p => ({...p, place}));
+    setShowPlaceSug(false);
     setPlaceSuggestions([]);
-    setSelectedSuggestionIndex(-1);
-    
-    // Trigger duplicate patient check when place is selected
-    const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-    if (fullName && formData.gender && formData.dob) {
-      checkDuplicatePatient(fullName, formData.gender, formData.dob);
+    setSelectedSugIdx(-1);
+    // Move to next field after place
+    const idx = FIELDS.indexOf('place');
+    for (let i = idx+1; i < FIELDS.length; i++) {
+      const el = refs.current[FIELDS[i]];
+      if (el && !(el as any).disabled && !(el as any).readOnly) { el.focus(); return; }
     }
   };
 
-  // Handle keyboard navigation for place suggestions
-  const handlePlaceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        if (showPlaceSuggestions && placeSuggestions.length > 0) {
-          setSelectedSuggestionIndex(prev => 
-            prev < placeSuggestions.length - 1 ? prev + 1 : 0
-          );
-        }
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        if (showPlaceSuggestions && placeSuggestions.length > 0) {
-          setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : placeSuggestions.length - 1);
-        }
-        break;
-      case 'Enter':
-        e.preventDefault();
-        const currentValue = formData.place;
-        
-        // If we have suggestions and one is selected, use the selected one
-        if (selectedSuggestionIndex >= 0 && placeSuggestions[selectedSuggestionIndex]) {
-          selectPlace(placeSuggestions[selectedSuggestionIndex]);
-        } 
-        // If we have suggestions but none selected, don't auto-select - just close suggestions
-        else if (placeSuggestions.length > 0) {
-          setShowPlaceSuggestions(false);
-          setSelectedSuggestionIndex(-1);
-          // Trigger duplicate check if applicable
-          const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-          if (fullName && formData.gender && formData.dob && currentValue) {
-            checkDuplicatePatient(fullName, formData.gender, formData.dob);
-          }
-        }
-        // If no suggestions exist, just trigger duplicate check if applicable
-        else {
-          const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-          if (fullName && formData.gender && formData.dob && currentValue) {
-            checkDuplicatePatient(fullName, formData.gender, formData.dob);
-          }
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setShowPlaceSuggestions(false);
-        setSelectedSuggestionIndex(-1);
-        break;
+  const handlePlaceKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') { e.preventDefault(); setShowPlaceSug(false); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (showPlaceSug && placeSuggestions.length)
+        setSelectedSugIdx(p => p < placeSuggestions.length-1 ? p+1 : 0);
+      return;
     }
-  };
-
-  // Handle blur event for place field to trigger duplicate check
-  const handlePlaceBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    // Use setTimeout to allow click events on suggestions to process first
-    setTimeout(() => {
-      setShowPlaceSuggestions(false);
-      setSelectedSuggestionIndex(-1);
-      
-      // Trigger duplicate check when place field loses focus
-      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-      if (fullName && formData.gender && formData.dob && formData.place) {
-        checkDuplicatePatient(fullName, formData.gender, formData.dob);
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (showPlaceSug && placeSuggestions.length)
+        setSelectedSugIdx(p => p > 0 ? p-1 : placeSuggestions.length-1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedSugIdx >= 0 && placeSuggestions[selectedSugIdx]) {
+        selectPlace(placeSuggestions[selectedSugIdx]);
+      } else {
+        setShowPlaceSug(false);
+        setSelectedSugIdx(-1);
+        // move forward
+        const idx = FIELDS.indexOf('place');
+        for (let i = idx+1; i < FIELDS.length; i++) {
+          const el = refs.current[FIELDS[i]];
+          if (el && !(el as any).disabled && !(el as any).readOnly) { el.focus(); return; }
+        }
       }
-    }, 200);
+    }
   };
 
-  // Function to check if contact number already exists
-  const checkContactExists = async (contactNo: string) => {
-    if (!contactNo || contactNo.length < 10) return;
-    
+  const checkContact = async (v: string) => {
     setCheckingContact(true);
     try {
-      const { data, error } = await supabase
-        .from('patients')
-        .select('patient_id, name')
-        .eq('phone', contactNo)
-        .limit(1);
-      
-      if (error) {
-        console.error('Error checking contact:', error);
-        return;
-      }
-      
-      setContactExists(data && data.length > 0);
-    } catch (error) {
-      console.error('Error checking contact:', error);
-    } finally {
-      setCheckingContact(false);
-    }
+      const {data} = await supabase.from('patients').select('patient_id').eq('phone',v).limit(1);
+      setContactExists(!!(data&&data.length>0));
+    } finally { setCheckingContact(false); }
   };
 
-  // Function to check for duplicate patients
-  const checkDuplicatePatient = async (fullName: string, gender: string, dob: string) => {
-    if (!fullName.trim() || !gender || !dob) return;
-    
+  const checkDuplicate = async (name: string, gender: string, dob: string) => {
+    if (!name||!gender||!dob) return;
     setCheckingDuplicate(true);
     try {
-      const { data, error } = await supabase
-        .from('patients')
-        .select('*')
-        .eq('name', fullName.trim())
-        .eq('gender', gender.toLowerCase())
-        .eq('date_of_birth', dob)
-        .limit(1);
-      
-      if (error) {
-        console.error('Error checking duplicate patient:', error);
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        setDuplicatePatient(data[0]);
-        setShowDuplicateAlert(true);
-      } else {
-        setDuplicatePatient(null);
-        setShowDuplicateAlert(false);
-      }
-    } catch (error) {
-      console.error('Error checking duplicate patient:', error);
-    } finally {
-      setCheckingDuplicate(false);
-    }
+      const {data} = await supabase.from('patients').select('*')
+        .eq('name',name.trim()).eq('gender',gender.toLowerCase()).eq('date_of_birth',dob).limit(1);
+      if (data&&data.length>0) { setDuplicatePatient(data[0]); setShowDupAlert(true); }
+      else { setDuplicatePatient(null); setShowDupAlert(false); }
+    } finally { setCheckingDuplicate(false); }
+  };
+
+  const handleDoctorSelect = (id: string) => {
+    const doc = doctors.find(d=>d.id===id);
+    setForm(p => ({
+      ...p,
+      consultingDoctorId: id,
+      consultingDoctorName: doc?.users?.name||'',
+      consultationFee: doc?.consultation_fee ? String(doc.consultation_fee) : p.consultationFee,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
+    setLoading(true); setError(null);
     try {
-      // Check for duplicate patient before proceeding
-      if (duplicatePatient && showDuplicateAlert) {
-        throw new Error('This patient already exists. Please check the existing patient record or use a different name/gender/date of birth combination.');
-      }
+      if (duplicatePatient && showDupAlert)
+        throw new Error('Duplicate patient detected. Dismiss the alert to continue or cancel.');
+      if (!form.firstName.trim()) throw new Error('First name is required');
+      if (!form.gender) throw new Error('Gender is required');
+      if (!['male','female','other'].includes(form.gender.toLowerCase()))
+        throw new Error('Invalid gender');
+      if (!form.uhid.trim()) throw new Error('Patient ID is required');
 
-      // Validate required fields
-      if (!formData.firstName.trim()) {
-        throw new Error('First name is required');
-      }
-      if (!formData.gender) {
-        throw new Error('Gender is required');
-      }
-      // Validate gender value
-      const validGenders = ['male', 'female', 'other'];
-      if (!validGenders.includes(formData.gender.toLowerCase())) {
-        throw new Error('Invalid gender value. Please select Male, Female, or Other');
-      }
-      if (!formData.uhid.trim()) {
-        throw new Error('Patient ID is required');
-      }
-
-      // Direct patient registration without appointment creation for quick registration
-      const { supabase } = await import('../../../src/lib/supabase');
-      
-      // Debug log the form data
-      console.log('Form data being submitted:', {
-        uhid: formData.uhid,
-        name: `${formData.firstName} ${formData.lastName}`.trim(),
-        gender: formData.gender,
-        primaryComplaint: formData.primaryComplaint,
-        registrationDate: formData.registrationDate
-      });
-
-      // Create patient record directly
-      const patientData = {
-        patient_id: formData.uhid,
-        name: `${formData.firstName} ${formData.lastName}`.trim(),
-        date_of_birth: formData.dob || null,
-        age: formData.age ? parseInt(formData.age) : null,
-        gender: formData.gender.toLowerCase(),
-        phone: formData.contactNo || null,
-        email: null,
-        address: formData.address || null,
-        city: formData.city || null,
-        state: formData.state || null,
-        pincode: formData.pincode || null,
-        place: formData.place || null,
-        emergency_contact_name: formData.emergencyName || null,
-        emergency_contact_phone: formData.emergencyPhone || null,
-        emergency_contact_relationship: formData.relationship || null,
-        blood_group: null,
-        allergies: null,
-        medical_history: null,
-        admission_type: 'outpatient',
-        primary_complaint: formData.primaryComplaint || null,
-        admission_date: formData.registrationDate,
-        admission_time: formData.registrationTime,
-        staff_id: formData.staffId && formData.staffId.trim() !== '' ? formData.staffId : null,
+      const {data:patient, error:pe} = await supabase.from('patients').insert({
+        patient_id:          form.uhid,
+        name:                `${form.firstName} ${form.lastName}`.trim(),
+        date_of_birth:       form.dob||null,
+        age:                 form.age ? parseInt(form.age) : null,
+        gender:              form.gender.toLowerCase(),
+        phone:               form.contactNo||null,
+        email:               null,
+        address:             form.address||null,
+        city:                form.city||null,
+        state:               form.state||null,
+        pincode:             form.pincode||null,
+        place:               form.place||null,
+        emergency_contact_name:         form.emergencyName||null,
+        emergency_contact_phone:        form.emergencyPhone||null,
+        emergency_contact_relationship: form.relationship||null,
+        blood_group:null, allergies:null, medical_history:null,
+        admission_type:      'outpatient',
+        primary_complaint:   form.primaryComplaint||null,
+        admission_date:      form.registrationDate,
+        admission_time:      form.registrationTime,
+        staff_id:            null,
         registration_status: 'pending_vitals',
-        status: 'active',
-        // Consultation Details
-        consulting_doctor_id: formData.consultingDoctorId || null,
-        consulting_doctor_name: formData.consultingDoctorName || null,
-        diagnosis: formData.diagnosis || null,
-        // Billing Information
-        consultation_fee: formData.consultationFee ? parseFloat(formData.consultationFee) : null,
-        op_card_amount: formData.opCardAmount ? parseFloat(formData.opCardAmount) : null,
-        total_amount: formData.totalAmount ? parseFloat(formData.totalAmount) : null,
-        payment_mode: formData.paymentMode || null
-      };
+        status:              'active',
+        consulting_doctor_id:   form.consultingDoctorId||null,
+        consulting_doctor_name: form.consultingDoctorName||null,
+        diagnosis:              form.diagnosis||null,
+        consultation_fee:  form.consultationFee ? parseFloat(form.consultationFee) : null,
+        op_card_amount:    form.opCardAmount    ? parseFloat(form.opCardAmount)    : null,
+        total_amount:      form.totalAmount     ? parseFloat(form.totalAmount)     : null,
+        payment_mode:      form.paymentMode||null,
+      }).select().single();
 
-      console.log('Patient data to insert:', patientData);
+      if (pe) throw new Error(`Database error: ${pe.message}`);
 
-      const { data: patient, error: patientError } = await supabase
-        .from('patients')
-        .insert(patientData)
-        .select()
-        .single();
+      const qr = await addToQueue(
+        patient.id, form.registrationDate, parseInt(form.priority),
+        form.primaryComplaint, undefined,
+      );
+      if (!qr.success||!qr.queueEntry) throw new Error('Failed to add to queue');
 
-      console.log('Patient insertion result:', { patient, patientError });
-
-      if (patientError) {
-        console.error('Patient insertion error details:', patientError);
-        throw new Error(`Database error: ${patientError.message || JSON.stringify(patientError)}`);
-      }
-      
-      const result = { success: true, patient, uhid: formData.uhid };
-
-      if (result.success && result.patient) {
-        // Add to queue
-        console.log('Adding patient to queue with params:', {
-          patientId: result.patient.id,
-          registrationDate: formData.registrationDate,
-          priority: parseInt(formData.priority),
-          notes: formData.primaryComplaint,
-          staffId: formData.staffId
-        });
-        
-        const queueResult = await addToQueue(
-          result.patient.id,
-          formData.registrationDate,
-          parseInt(formData.priority),
-          formData.primaryComplaint,
-          formData.staffId && formData.staffId.trim() !== '' ? formData.staffId : undefined
-        );
-        
-        console.log('Queue result:', queueResult);
-
-        if (queueResult.success && queueResult.queueEntry) {
-          setQueueNumber(queueResult.queueEntry.queue_number);
-          setRegisteredPatient(result.patient);
-          setIsSuccess(true);
-          
-          // No auto-redirect to allow printing
-        } else {
-          throw new Error('Failed to add patient to queue');
-        }
-      } else {
-        throw new Error('Registration failed');
-      }
-    } catch (err) {
-      console.error('Registration failed:', err);
-      console.error('Error details:', {
-        message: (err as Error).message,
-        stack: (err as Error).stack,
-        name: (err as Error).name,
-        cause: (err as Error).cause
-      });
-      
-      // Provide more detailed error message
-      const errorMessage = (err as Error).message || 'Unknown error occurred during registration';
-      setError(`Registration failed: ${errorMessage}`);
-    } finally {
-      setLoading(false);
-    }
+      setQueueNumber(qr.queueEntry.queue_number);
+      setRegisteredPatient(patient);
+      setIsSuccess(true);
+    } catch(err) {
+      setError(`Registration failed: ${(err as Error).message}`);
+    } finally { setLoading(false); }
   };
 
+  // ── Blur check for duplicates ─────────────────────────────────────────────
+  const onNameBlur = () => {
+    const name = `${form.firstName} ${form.lastName}`.trim();
+    if (name && form.gender && form.dob) checkDuplicate(name, form.gender, form.dob);
+  };
+
+  // ── Shared class builders ─────────────────────────────────────────────────
+  const field = (extra='') =>
+    `w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white
+     placeholder:text-slate-400 text-slate-800
+     focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:border-orange-400
+     transition-all duration-150 ${extra}`;
+  const label = 'block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1';
+
+  // ── Attach data-fieldid to every registered element ───────────────────────
+  // We use a wrapper so we can attach data-fieldid correctly
+  const fieldRef = (id: string) => (el: HTMLElement|null) => {
+    refs.current[id] = el;
+    if (el) el.dataset.fieldid = id;
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SUCCESS SCREEN
+  // ─────────────────────────────────────────────────────────────────────────
   if (isSuccess) {
     return (
-      <div className="min-h-screen bg-orange-50/30 py-8 px-6 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-            <CheckCircle className="h-10 w-10 text-green-600" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-orange-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-slate-100">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-5">
+            <CheckCircle className="h-11 w-11 text-green-500" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Patient Registered!</h2>
-          <p className="text-gray-600 mb-4">Patient has been added to the vitals queue.</p>
+          <h2 className="text-2xl font-bold text-slate-900 mb-1">Patient Registered!</h2>
+          <p className="text-slate-500 text-sm mb-5">Added to the vitals queue successfully.</p>
           {queueNumber && (
-            <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 mb-4">
-              <p className="text-sm text-orange-600 font-medium mb-1">Queue Token Number</p>
-              <p className="text-4xl font-bold text-orange-600">{queueNumber}</p>
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-xl p-5 mb-5">
+              <p className="text-xs text-orange-500 font-semibold uppercase tracking-wide mb-1">Queue Token</p>
+              <p className="text-5xl font-black text-orange-500">{queueNumber}</p>
             </div>
           )}
-          
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => setShowBarcodeModal(true)}
-              className="w-full py-3 px-4 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-            >
-              <Printer className="h-5 w-5" />
-              Print Barcode
+          <div className="flex flex-col gap-2.5">
+            <button onClick={() => setShowBarcodeModal(true)}
+              className="w-full py-2.5 px-4 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center gap-2">
+              <Printer className="h-4 w-4" /> Print Barcode
             </button>
-            
-            <button
-              onClick={() => router.push('/outpatient?tab=queue')}
-              className="w-full py-3 px-4 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
-            >
+            <button onClick={() => router.push('/outpatient?tab=queue')}
+              className="w-full py-2.5 px-4 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-colors">
               Go to Queue
             </button>
-            
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full py-3 px-4 text-orange-600 font-semibold hover:bg-orange-50 rounded-lg transition-colors"
-            >
-              Register Another Patient
+            <button onClick={() => window.location.reload()}
+              className="w-full py-2.5 px-4 text-orange-500 font-semibold hover:bg-orange-50 rounded-xl transition-colors flex items-center justify-center gap-2">
+              <RefreshCw className="h-4 w-4" /> Register Another Patient
             </button>
           </div>
         </div>
-        
         {showBarcodeModal && registeredPatient && (
-          <BarcodeModal
-            patient={registeredPatient}
-            onClose={() => setShowBarcodeModal(false)}
-          />
+          <BarcodeModal patient={registeredPatient} onClose={() => setShowBarcodeModal(false)} />
         )}
       </div>
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // MAIN FORM
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-orange-50/30 py-8 px-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <Link
-            href="/outpatient"
-            className="inline-flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium transition-colors"
+    <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+
+      {/* ════════ Collapsible Sidebar ════════ */}
+      <aside className={`
+        flex-shrink-0 bg-white border-r border-slate-200 shadow-sm
+        flex flex-col transition-all duration-200
+        ${sidebarOpen ? 'w-48' : 'w-12'}
+      `}>
+        {/* Sidebar header */}
+        <div className="flex items-center justify-between px-3 py-3 border-b border-slate-100 bg-gradient-to-r from-orange-500 to-orange-600">
+          {sidebarOpen && (
+            <span className="text-white text-xs font-bold tracking-wide truncate">OP Registration</span>
+          )}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="text-white/80 hover:text-white ml-auto flex-shrink-0"
           >
-            <ArrowLeft size={16} />
-            Back to Outpatient
-          </Link>
+            {sidebarOpen ? <ChevronLeft size={15}/> : <ChevronRight size={15}/>}
+          </button>
         </div>
 
-        {/* Form */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-          <div className="bg-gradient-to-r from-orange-400 to-orange-500 p-6 text-white">
+        {/* Nav links */}
+        <nav className="flex flex-col gap-0.5 p-2 flex-1 mt-1">
+          {[
+            {href:'/outpatient',          label:'Outpatient'},
+            {href:'/outpatient?tab=queue',label:'Queue'},
+            {href:'/outpatient/revisit',  label:'Revisit'},
+            {href:'/dashboard',           label:'Dashboard'},
+            {href:'/patients',            label:'Patients'},
+          ].map(item => (
+            <Link key={item.href} href={item.href}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition-colors font-medium truncate">
+              {sidebarOpen ? item.label : '›'}
+            </Link>
+          ))}
+        </nav>
+
+        {!sidebarOpen || (
+          <div className="p-3 border-t border-slate-100">
+            <p className="text-[10px] text-slate-400 text-center">Press <kbd className="bg-slate-100 px-1 rounded text-slate-500">Esc</kbd> to go back</p>
+          </div>
+        )}
+      </aside>
+
+      {/* ════════ Main area ════════ */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+        {/* ── Top bar ── */}
+        <header className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-orange-600 shadow-lg">
+          <div className="flex items-center justify-between px-5 py-3">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                <User size={24} />
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                <User size={16} className="text-white"/>
               </div>
               <div>
-                <h1 className="text-xl font-bold">Quick Patient Registration</h1>
-                <p className="text-white/80 text-sm">Register patient details - vitals will be entered later</p>
+                <h1 className="text-white font-bold text-sm leading-tight">Quick Patient Registration</h1>
+                <p className="text-orange-100 text-[11px]">Register now — vitals entered later</p>
               </div>
             </div>
+            <div className="flex items-center gap-5 text-xs text-orange-100">
+              <span className="flex items-center gap-1.5">
+                <Hash size={12}/>
+                <span className="font-mono font-bold text-white text-sm">{form.uhid||'—'}</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Calendar size={12}/>
+                <strong className="text-white">{new Date(form.registrationDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</strong>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock size={12}/>
+                <strong className="text-white">{form.registrationTime}</strong>
+              </span>
+            </div>
           </div>
+        </header>
 
-          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        {/* ── Scrollable form ── */}
+        <div className="flex-1 overflow-y-auto">
+          <form
+            onSubmit={handleSubmit}
+            onKeyDown={handleFormKey}
+            className="p-4 space-y-3 max-w-screen-2xl mx-auto"
+          >
+
+            {/* Error banner */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 text-red-500 mr-3" />
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
+              <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-2.5 rounded-xl">
+                <AlertCircle size={14} className="flex-shrink-0"/>
+                <span>{error}</span>
               </div>
             )}
 
-            {/* Duplicate Patient Alert */}
-            {showDuplicateAlert && duplicatePatient && (
-              <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <h4 className="text-sm font-semibold text-yellow-800 mb-2">This patient already exists!</h4>
-                    <div className="bg-white rounded-lg p-3 border border-yellow-200 mb-3">
-                      <p className="text-sm text-gray-700 mb-1">
-                        <strong>Patient ID:</strong> {duplicatePatient.patient_id}
-                      </p>
-                      <p className="text-sm text-gray-700 mb-1">
-                        <strong>Name:</strong> {duplicatePatient.name}
-                      </p>
-                      <p className="text-sm text-gray-700 mb-1">
-                        <strong>Gender:</strong> {duplicatePatient.gender?.charAt(0).toUpperCase() + duplicatePatient.gender?.slice(1)}
-                      </p>
-                      <p className="text-sm text-gray-700 mb-1">
-                        <strong>Date of Birth:</strong> {new Date(duplicatePatient.date_of_birth).toLocaleDateString()}
-                      </p>
-                      <p className="text-sm text-gray-700 mb-1">
-                        <strong>Contact:</strong> {duplicatePatient.phone || 'Not provided'}
-                      </p>
-                      <p className="text-sm text-gray-700">
-                        <strong>Place:</strong> {duplicatePatient.place || 'Not provided'}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowDuplicateAlert(false);
-                          setDuplicatePatient(null);
-                        }}
-                        className="px-3 py-1.5 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors"
-                      >
-                        I Understand - Continue Registration
-                      </button>
-                      <Link
-                        href="/outpatient"
-                        className="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
-                      >
-                        Go to Patient Search
-                      </Link>
-                    </div>
+            {/* Duplicate alert */}
+            {showDupAlert && duplicatePatient && (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-2.5 rounded-xl">
+                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-amber-500"/>
+                <div className="flex-1">
+                  <p className="font-semibold mb-1">
+                    Duplicate detected — <span className="font-mono">{duplicatePatient.patient_id}</span> · {duplicatePatient.name}
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button"
+                      onClick={() => { setShowDupAlert(false); setDuplicatePatient(null); }}
+                      className="px-2.5 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-semibold">
+                      Continue Anyway
+                    </button>
+                    <Link href="/outpatient"
+                      className="px-2.5 py-1 bg-slate-600 text-white rounded-lg hover:bg-slate-700 font-semibold">
+                      Cancel
+                    </Link>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Registration Header Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Registration Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            {/* ══════════════════════════════════════
+                SECTION 1 — Registration Details
+            ══════════════════════════════════════ */}
+            <Card icon={<User size={14}/>} title="Registration Details">
+              {/* Row 1 */}
+              <div className="grid grid-cols-12 gap-3">
+                {/* Reg Date */}
+                <div className="col-span-2">
+                  <label className={label}>Reg Date</label>
                   <input
+                    ref={fieldRef('registrationDate') as any}
+                    data-fieldid="registrationDate"
                     type="date"
                     name="registrationDate"
-                    value={formData.registrationDate}
-                    onChange={handleInputChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
+                    value={form.registrationDate}
+                    onChange={handleChange}
+                    className={field()}
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Registration Time</label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                {/* Reg Time */}
+                <div className="col-span-1">
+                  <label className={label}>Time</label>
                   <input
+                    ref={fieldRef('registrationTime') as any}
+                    data-fieldid="registrationTime"
                     type="time"
                     name="registrationTime"
-                    value={formData.registrationTime}
-                    onChange={handleInputChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
+                    value={form.registrationTime}
+                    onChange={handleChange}
+                    className={field()}
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Patient UHID</label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500" size={16} />
+                {/* UHID (read-only) */}
+                <div className="col-span-2">
+                  <label className={label}>UH ID</label>
                   <input
                     type="text"
-                    value={formData.uhid}
+                    value={form.uhid}
                     readOnly
-                    className="w-full pl-10 pr-4 py-2.5 bg-orange-50 border border-orange-100 text-orange-700 font-mono font-bold rounded-xl"
+                    className={field('bg-orange-50 border-orange-200 text-orange-700 font-mono font-bold cursor-default')}
                   />
                 </div>
-              </div>
-            </div>
-
-            {/* Basic Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Patient Full Name *</label>
-                <div className="grid grid-cols-2 gap-4">
+                {/* First Name */}
+                <div className="col-span-2">
+                  <label className={label}>First Name <span className="text-red-400">*</span></label>
                   <input
+                    ref={fieldRef('firstName') as any}
+                    data-fieldid="firstName"
                     type="text"
                     name="firstName"
                     placeholder="First Name"
-                    value={formData.firstName}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
+                    value={form.firstName}
+                    onChange={handleChange}
+                    onBlur={onNameBlur}
+                    className={field()}
                     required
                   />
+                </div>
+                {/* Last Name */}
+                <div className="col-span-2">
+                  <label className={label}>Last Name</label>
                   <input
+                    ref={fieldRef('lastName') as any}
+                    data-fieldid="lastName"
                     type="text"
                     name="lastName"
-                    placeholder="Last Name (Optional)"
-                    value={formData.lastName}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
+                    placeholder="Last Name"
+                    value={form.lastName}
+                    onChange={handleChange}
+                    onBlur={onNameBlur}
+                    className={field()}
                   />
                 </div>
+                {/* Gender select */}
+                <div className="col-span-2">
+                  <label className={label}>Gender <span className="text-red-400">*</span></label>
+                  <select
+                    ref={fieldRef('gender') as any}
+                    data-fieldid="gender"
+                    name="gender"
+                    value={form.gender}
+                    onChange={handleChange}
+                    className={field()}
+                    required
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                {/* Gender radio (visual aid) */}
+                <div className="col-span-1 flex items-end pb-2 gap-3">
+                  {['Male','Female'].map(g => (
+                    <label key={g} className="flex items-center gap-1 text-[11px] text-slate-500 cursor-pointer">
+                      <input type="radio" name="gender" value={g}
+                        checked={form.gender===g} onChange={handleChange}
+                        className="accent-orange-500"/>
+                      {g[0]}
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Gender *</label>
-                <select
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                  required
-                >
-                  <option value="">Select Gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Date of Birth</label>
-                <input
-                  type="date"
-                  name="dob"
-                  value={formData.dob}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Age (Optional)</label>
-                <div className="flex gap-2">
+              {/* Row 2 */}
+              <div className="grid grid-cols-12 gap-3 mt-3">
+                {/* Age */}
+                <div className="col-span-1">
+                  <label className={label}>Age <span className="text-slate-400 font-normal normal-case">(Enter→auto DOB)</span></label>
                   <input
+                    ref={fieldRef('age') as any}
+                    data-fieldid="age"
                     type="number"
                     name="age"
-                    value={formData.age}
-                    onChange={handleInputChange}
-                    placeholder="Enter age"
-                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
+                    placeholder="Yrs"
+                    value={form.age}
+                    onChange={handleChange}
+                    min={0} max={150}
+                    className={field()}
                   />
-                  <button
-                    type="button"
-                    onClick={calculateDOBFromAge}
-                    disabled={!formData.age || formData.age === ''}
-                    className="px-3 py-2.5 bg-orange-500 text-white rounded-xl hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                    title="Calculate DOB from age"
-                  >
-                    <Calculator size={16} />
-                    Calculate
-                  </button>
                 </div>
-                {formData.age && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Enter age and click "Calculate" to auto-fill Date of Birth (April 14)
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Contact No</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                {/* DOB */}
+                <div className="col-span-2">
+                  <label className={label}>Date of Birth</label>
                   <input
+                    ref={fieldRef('dob') as any}
+                    data-fieldid="dob"
+                    type="date"
+                    name="dob"
+                    value={form.dob}
+                    onChange={handleChange}
+                    className={field()}
+                  />
+                </div>
+                {/* Contact */}
+                <div className="col-span-2">
+                  <label className={label}>Contact No</label>
+                  <div className="relative">
+                    <input
+                      ref={fieldRef('contactNo') as any}
+                      data-fieldid="contactNo"
+                      type="tel"
+                      name="contactNo"
+                      placeholder="10-digit mobile"
+                      value={form.contactNo}
+                      onChange={handleChange}
+                      className={field(contactExists ? 'border-red-300 bg-red-50' : '')}
+                    />
+                    {checkingContact && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-slate-400"/>}
+                    {contactExists && !checkingContact && <AlertTriangle className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-red-400"/>}
+                  </div>
+                  {contactErr    && <p className="mt-1 text-[10px] text-red-500">{contactErr}</p>}
+                  {contactExists && <p className="mt-1 text-[10px] text-red-500">Number already registered</p>}
+                </div>
+                {/* Alternate No */}
+                <div className="col-span-2">
+                  <label className={label}>Alternate No</label>
+                  <input
+                    ref={fieldRef('alternateNo') as any}
+                    data-fieldid="alternateNo"
                     type="tel"
-                    name="contactNo"
-                    placeholder="Primary Number"
-                    value={formData.contactNo}
-                    onChange={handleInputChange}
-                    className={`w-full pl-10 pr-10 py-2.5 border rounded-xl focus:ring-2 focus:ring-orange-500 ${
-                      contactExists ? 'border-red-300 bg-red-50' : 'border-gray-200'
-                    }`}
+                    name="alternateNo"
+                    placeholder="Alternate number"
+                    value={form.alternateNo}
+                    onChange={handleChange}
+                    className={field()}
                   />
-                  {checkingContact && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
-                    </div>
-                  )}
-                  {contactExists && !checkingContact && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <AlertTriangle className="h-4 w-4 text-red-500" />
-                    </div>
-                  )}
                 </div>
-                {contactValidationError && (
-                  <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    {contactValidationError}
-                  </p>
-                )}
-                {contactExists && (
-                  <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
-                    <AlertTriangle size={12} />
-                    This number is already registered with a patient
-                  </p>
+                {/* Duplicate check indicator */}
+                {checkingDuplicate && (
+                  <div className="col-span-4 flex items-end pb-2">
+                    <span className="text-[10px] text-amber-500 flex items-center gap-1">
+                      <Loader2 size={11} className="animate-spin"/> Checking for duplicates…
+                    </span>
+                  </div>
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Place</label>
-                <div className="relative place-input-container">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="text"
-                    name="place"
-                    placeholder="Enter Place/Area"
-                    value={formData.place}
-                    onChange={handleInputChange}
-                    onKeyDown={handlePlaceKeyDown}
-                    onBlur={handlePlaceBlur}
-                    onFocus={() => {
-                      if (placeSearchTerm.length >= 2 && placeSuggestions.length > 0) {
-                        setShowPlaceSuggestions(true);
-                      }
-                    }}
-                    className={`w-full pl-10 pr-10 py-2.5 border rounded-xl focus:ring-2 focus:ring-orange-500 ${
-                      checkingDuplicate ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'
-                    }`}
+            {/* ══════════════════════════════════════
+                SECTION 2 — Address Details
+            ══════════════════════════════════════ */}
+            <Card icon={<MapPin size={14}/>} title="Address Details">
+              <div className="grid grid-cols-12 gap-3">
+                {/* Address textarea */}
+                <div className="col-span-3">
+                  <label className={label}>Address</label>
+                  <textarea
+                    ref={fieldRef('address') as any}
+                    data-fieldid="address"
+                    name="address"
+                    rows={3}
+                    value={form.address}
+                    onChange={handleChange}
+                    placeholder="Street, locality, area…"
+                    className={`${field()} resize-none`}
                   />
-                  {checkingDuplicate && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />
-                    </div>
-                  )}
-                  {showPlaceSuggestions && placeSuggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-50">
-                      {placeSuggestions.map((place, index) => {
-                        const isExistingPlace = existingPlaces.includes(place);
-                        const isCommonPlace = COMMON_PLACES.includes(place);
-                        
-                        return (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              selectPlace(place);
-                            }}
-                            onMouseEnter={() => setSelectedSuggestionIndex(index)}
-                            className={`w-full px-4 py-2 text-left hover:bg-orange-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center justify-between group ${
-                              index === selectedSuggestionIndex ? 'bg-orange-50' : ''
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <MapPin size={14} className="text-gray-400" />
-                              <span className="text-sm text-gray-700">{place}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {isExistingPlace && (
-                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                                  Used
-                                </span>
-                              )}
-                              {isCommonPlace && !isExistingPlace && (
-                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                  Common
-                                </span>
-                              )}
-                            </div>
+                </div>
+                {/* City */}
+                <div className="col-span-2">
+                  <label className={label}>City</label>
+                  <input
+                    ref={fieldRef('city') as any}
+                    data-fieldid="city"
+                    type="text"
+                    name="city"
+                    placeholder="City"
+                    value={form.city}
+                    onChange={handleChange}
+                    className={field()}
+                  />
+                </div>
+                {/* State */}
+                <div className="col-span-2">
+                  <label className={label}>State</label>
+                  <select
+                    ref={fieldRef('state') as any}
+                    data-fieldid="state"
+                    name="state"
+                    value={form.state}
+                    onChange={handleChange}
+                    className={field()}
+                  >
+                    {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                {/* Pincode */}
+                <div className="col-span-1">
+                  <label className={label}>Pincode</label>
+                  <input
+                    ref={fieldRef('pincode') as any}
+                    data-fieldid="pincode"
+                    type="text"
+                    name="pincode"
+                    placeholder="6-digit"
+                    value={form.pincode}
+                    onChange={handleChange}
+                    maxLength={6}
+                    className={field()}
+                  />
+                </div>
+                {/* Place with autocomplete */}
+                <div className="col-span-2">
+                  <label className={label}>Place / Area</label>
+                  <div className="relative place-wrap">
+                    <MapPin size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                    <input
+                      ref={fieldRef('place') as any}
+                      data-fieldid="place"
+                      type="text"
+                      name="place"
+                      placeholder="Place / Area"
+                      value={form.place}
+                      onChange={handleChange}
+                      onKeyDown={handlePlaceKey}
+                      onBlur={() => setTimeout(() => setShowPlaceSug(false), 200)}
+                      onFocus={() => placeSuggestions.length > 0 && setShowPlaceSug(true)}
+                      className={`${field('pl-8')} ${checkingDuplicate ? 'border-amber-300' : ''}`}
+                    />
+                    {showPlaceSug && placeSuggestions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-44 overflow-y-auto z-50">
+                        {placeSuggestions.map((pl,i) => (
+                          <button key={i} type="button"
+                            onMouseDown={e => { e.preventDefault(); selectPlace(pl); }}
+                            onMouseEnter={() => setSelectedSugIdx(i)}
+                            className={`w-full px-3 py-2 text-left text-xs hover:bg-orange-50 border-b border-slate-100 last:border-0 flex items-center justify-between
+                              ${i===selectedSugIdx?'bg-orange-50':''}`}>
+                            <span>{pl}</span>
+                            {existingPlaces.includes(pl) && (
+                              <span className="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">used</span>
+                            )}
                           </button>
-                        );
-                      })}
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Phone (display only) */}
+                <div className="col-span-2">
+                  <label className={label}>Phone</label>
+                  <div className="relative">
+                    <Phone size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
+                    <input type="text" value={form.contactNo} readOnly
+                      className={field('pl-8 bg-slate-50 text-slate-500 cursor-default')}/>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: Emergency Contact */}
+              <div className="grid grid-cols-12 gap-3 mt-3">
+                <div className="col-span-12">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Emergency Contact</p>
+                </div>
+                <div className="col-span-3">
+                  <label className={label}>Contact Name</label>
+                  <input
+                    ref={fieldRef('emergencyName') as any}
+                    data-fieldid="emergencyName"
+                    type="text"
+                    name="emergencyName"
+                    placeholder="Guardian / Family name"
+                    value={form.emergencyName}
+                    onChange={handleChange}
+                    className={field()}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className={label}>Emergency Phone</label>
+                  <input
+                    ref={fieldRef('emergencyPhone') as any}
+                    data-fieldid="emergencyPhone"
+                    type="tel"
+                    name="emergencyPhone"
+                    placeholder="Emergency number"
+                    value={form.emergencyPhone}
+                    onChange={handleChange}
+                    className={field()}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className={label}>Relationship</label>
+                  <input
+                    ref={fieldRef('relationship') as any}
+                    data-fieldid="relationship"
+                    type="text"
+                    name="relationship"
+                    placeholder="e.g. Father, Spouse"
+                    value={form.relationship}
+                    onChange={handleChange}
+                    className={field()}
+                  />
+                </div>
+              </div>
+            </Card>
+
+            {/* ══════════════════════════════════════
+                SECTION 3 — Clinical + Billing (side by side)
+            ══════════════════════════════════════ */}
+            <div className="grid grid-cols-12 gap-3">
+
+              {/* Clinical card */}
+              <div className="col-span-5">
+                <Card icon={<Stethoscope size={14}/>} title="Clinical Details">
+                  <div className="space-y-3">
+                    {/* Primary Complaint */}
+                    <div>
+                      <label className={label}>Primary Complaint / Reason for Visit</label>
+                      <textarea
+                        ref={fieldRef('primaryComplaint') as any}
+                        data-fieldid="primaryComplaint"
+                        name="primaryComplaint"
+                        rows={3}
+                        value={form.primaryComplaint}
+                        onChange={handleChange}
+                        placeholder="Symptoms or reason for visit…"
+                        className={`${field()} resize-none`}
+                      />
                     </div>
-                  )}
-                </div>
+                    {/* Priority */}
+                    <div>
+                      <label className={label}>Priority Level</label>
+                      <select
+                        ref={fieldRef('priority') as any}
+                        data-fieldid="priority"
+                        name="priority"
+                        value={form.priority}
+                        onChange={handleChange}
+                        className={field()}
+                      >
+                        <option value="0">Normal</option>
+                        <option value="1">High Priority</option>
+                        <option value="2">Urgent</option>
+                      </select>
+                    </div>
+                    {/* Consulting Doctor */}
+                    <div>
+                      <label className={label}>Consulting Doctor</label>
+                      <select
+                        ref={fieldRef('consultingDoctorId') as any}
+                        data-fieldid="consultingDoctorId"
+                        value={form.consultingDoctorId}
+                        onChange={e => handleDoctorSelect(e.target.value)}
+                        className={field()}
+                      >
+                        <option value="">Select Doctor</option>
+                        {doctors.map(doc => (
+                          <option key={doc.id} value={doc.id}>
+                            Dr. {doc.users?.name||'Unknown'}
+                            {doc.specialization ? ` · ${doc.specialization}` : ''}
+                            {doc.consultation_fee ? ` (₹${doc.consultation_fee})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Diagnosis */}
+                    <div>
+                      <label className={label}>Diagnosis / Complaint</label>
+                      <input
+                        ref={fieldRef('diagnosis') as any}
+                        data-fieldid="diagnosis"
+                        type="text"
+                        name="diagnosis"
+                        value={form.diagnosis}
+                        onChange={handleChange}
+                        placeholder="Brief diagnosis"
+                        className={field()}
+                      />
+                    </div>
+                  </div>
+                </Card>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">City</label>
-                <input
-                  type="text"
-                  name="city"
-                  placeholder="Enter City"
-                  value={formData.city}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">State</label>
-                <select
-                  name="state"
-                  value={formData.state}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                >
-                  {INDIAN_STATES.map(state => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Pincode</label>
-                <input
-                  type="text"
-                  name="pincode"
-                  placeholder="6-digit Pincode"
-                  value={formData.pincode}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-            </div>
+              {/* Billing card */}
+              <div className="col-span-7">
+                <Card icon={<IndianRupee size={14}/>} title="Billing Information">
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Consultation Fee */}
+                    <div>
+                      <label className={label}>Consultation Fee</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                        <input
+                          ref={fieldRef('consultationFee') as any}
+                          data-fieldid="consultationFee"
+                          type="number"
+                          name="consultationFee"
+                          value={form.consultationFee}
+                          onChange={handleChange}
+                          placeholder="0"
+                          className={field('pl-6')}
+                        />
+                      </div>
+                    </div>
+                    {/* OP Card */}
+                    <div>
+                      <label className={label}>OP Card Amount</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                        <input
+                          ref={fieldRef('opCardAmount') as any}
+                          data-fieldid="opCardAmount"
+                          type="number"
+                          name="opCardAmount"
+                          value={form.opCardAmount}
+                          onChange={handleChange}
+                          placeholder="0"
+                          className={field('pl-6')}
+                        />
+                      </div>
+                    </div>
+                    {/* Total (readonly) */}
+                    <div>
+                      <label className={label}>Total Amount</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 text-xs font-bold">₹</span>
+                        <input
+                          type="text"
+                          value={form.totalAmount||'0'}
+                          readOnly
+                          className={field('pl-6 bg-green-50 border-green-200 text-green-700 font-bold cursor-default')}
+                        />
+                      </div>
+                    </div>
+                    {/* Payment Mode */}
+                    <div>
+                      <label className={label}>Payment Mode</label>
+                      <select
+                        ref={fieldRef('paymentMode') as any}
+                        data-fieldid="paymentMode"
+                        name="paymentMode"
+                        value={form.paymentMode}
+                        onChange={handleChange}
+                        className={field()}
+                      >
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Card</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Insurance">Insurance</option>
+                        <option value="Fee">Fee</option>
+                        <option value="Camp">Camp</option>
+                      </select>
+                    </div>
+                  </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Complete Address</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 text-gray-400" size={16} />
-                <textarea
-                  name="address"
-                  rows={2}
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  placeholder="Street, locality, area details..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                ></textarea>
-              </div>
-            </div>
-
-            {/* Primary Complaint */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Primary Complaint / Reason for Visit</label>
-              <textarea
-                name="primaryComplaint"
-                rows={2}
-                value={formData.primaryComplaint}
-                onChange={handleInputChange}
-                placeholder="Brief description of symptoms or reason for visit..."
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-              ></textarea>
-            </div>
-
-            {/* Emergency Contact */}
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
-              <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-                <AlertCircle size={16} className="text-orange-500" />
-                Emergency Contact Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input
-                  type="text"
-                  name="emergencyName"
-                  placeholder="Emergency Contact Name"
-                  value={formData.emergencyName}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white"
-                />
-                <input
-                  type="tel"
-                  name="emergencyPhone"
-                  placeholder="Emergency Phone No"
-                  value={formData.emergencyPhone}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white"
-                />
-                <input
-                  type="text"
-                  name="relationship"
-                  placeholder="Relationship"
-                  value={formData.relationship}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white"
-                />
-              </div>
-            </div>
-
-            {/* Priority */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Priority Level</label>
-              <select
-                name="priority"
-                value={formData.priority}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-              >
-                <option value="0">Normal</option>
-                <option value="1">High Priority</option>
-                <option value="2">Urgent</option>
-              </select>
-            </div>
-
-            {/* Staff Selection */}
-            <div>
-              <StaffSelect
-                value={formData.staffId}
-                onChange={(staffId) => setFormData(prev => ({ ...prev, staffId }))}
-                label="Registered By (Optional)"
-              />
-            </div>
-
-            {/* Consultation Details */}
-            <div className="bg-purple-50/50 p-6 rounded-xl border border-purple-100">
-              <h3 className="text-sm font-bold text-purple-800 mb-6 flex items-center gap-2">
-                <Stethoscope size={18} />
-                Consultation Details
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-purple-600 uppercase mb-2">Consulting Doctor</label>
-                  <select
-                    value={formData.consultingDoctorId}
-                    onChange={(e) => handleDoctorSelect(e.target.value)}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="">Select Doctor</option>
-                    {doctors.map((doctor) => (
-                      <option key={doctor.id} value={doctor.id}>
-                        Dr. {doctor.users?.name || 'Unknown'} {doctor.specialization ? `- ${doctor.specialization}` : ''}
-                        {doctor.consultation_fee ? ` (₹${doctor.consultation_fee})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {formData.consultingDoctorName && (
-                    <p className="text-xs text-purple-600 mt-1">
-                      Selected: Dr. {formData.consultingDoctorName}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-purple-600 uppercase mb-2">Diagnosis / Complaint</label>
-                  <input
-                    type="text"
-                    name="diagnosis"
-                    value={formData.diagnosis}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
-                    placeholder="Brief diagnosis"
-                  />
-                </div>
+                  {/* Staff */}
+                  <div className="mt-3">
+                    <label className={label}>Registered By (Optional)</label>
+                    <StaffSelect
+                      value={form.staffId||''}
+                      onChange={staffId => setForm(p => ({...p, staffId}))}
+                      label=""
+                    />
+                  </div>
+                </Card>
               </div>
             </div>
 
-            {/* Billing Information */}
-            <div className="bg-green-50/50 p-6 rounded-xl border border-green-100">
-              <h3 className="text-sm font-bold text-green-800 mb-6 flex items-center gap-2">
-                <IndianRupee size={18} />
-                Billing Information
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-green-600 uppercase mb-2">Consultation Fee</label>
-                  <input
-                    type="number"
-                    name="consultationFee"
-                    value={formData.consultationFee}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-green-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
-                    placeholder="Enter consultation fee"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-green-600 uppercase mb-2">OP Card Amount</label>
-                  <input
-                    type="number"
-                    name="opCardAmount"
-                    value={formData.opCardAmount}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-green-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-green-600 uppercase mb-2">Total Amount</label>
-                  <input
-                    type="text"
-                    value={formData.totalAmount}
-                    readOnly
-                    className="w-full px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-bold text-green-700"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-green-600 uppercase mb-2">Payment Mode</label>
-                  <select
-                    name="paymentMode"
-                    value={formData.paymentMode}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-green-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="Card">Card</option>
-                    <option value="UPI">UPI</option>
-                    <option value="Insurance">Insurance</option>
-                    <option value="Fee">Fee</option>
-                    <option value="Camp">Camp</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-4 justify-end pt-4 border-t">
-              <Link href="/outpatient">
-                <button
-                  type="button"
-                  className="px-6 py-3 border border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </Link>
+            {/* ── Action bar ── */}
+            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-5 py-3 shadow-sm">
+              <span className="text-[11px] text-slate-400">
+                <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono text-[10px]">Esc</kbd>
+                {' '}to go back &nbsp;·&nbsp;
+                <kbd className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono text-[10px]">Enter</kbd>
+                {' '}to advance · auto-submits on last field
+              </span>
               <button
+                ref={submitRef}
                 type="submit"
+                data-fieldid="submitBtn"
                 disabled={loading}
-                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white px-8 py-3 rounded-xl font-semibold transition-colors shadow-lg"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Registering...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-5 w-5" />
-                    <span>Register & Add to Queue</span>
-                  </>
-                )}
+                className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-slate-300 disabled:to-slate-400 text-white px-7 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-orange-200 disabled:shadow-none">
+                {loading
+                  ? <><Loader2 className="h-4 w-4 animate-spin"/><span>Registering…</span></>
+                  : <><Save className="h-4 w-4"/><span>Register &amp; Add to Queue</span></>
+                }
               </button>
             </div>
+
           </form>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Reusable card component ───────────────────────────────────────────────
+function Card({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+        <span className="text-orange-500">{icon}</span>
+        <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{title}</span>
+      </div>
+      <div className="p-4">
+        {children}
       </div>
     </div>
   );
