@@ -3009,12 +3009,7 @@ function OutpatientPageContent() {
                           >
                             <Eye size={18} />
                           </button>
-                          <button
-                            onClick={() => window.open(`/patients/${prescription.patient_id}`, '_blank')}
-                            className="text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            View Patient
-                          </button>
+
                         </td>
                       </tr>
                     ))}

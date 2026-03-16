@@ -53,9 +53,6 @@ export default function VitalsQueueCard({ selectedDate, onRefresh }: VitalsQueue
     
     setProcessingId(entry.id);
     try {
-      // Mark as in progress
-      await updateQueueStatus(entry.id, 'in_progress');
-      
       // Navigate to vitals entry page
       router.push(`/outpatient/enter-vitals/${entry.patient.id}?queueId=${entry.id}`);
     } catch (err) {

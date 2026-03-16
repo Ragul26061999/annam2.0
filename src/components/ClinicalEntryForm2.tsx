@@ -485,6 +485,12 @@ export default function ClinicalEntryForm2({
   };
 
   const addMedicationToPrescription = (medication: any) => {
+    // Prevent duplicate medications
+    if (prescriptions.some(p => p.medication_id === medication.id)) {
+      setError(`Medication "${medication.name}" is already in the prescription list.`);
+      return;
+    }
+
     const newItem: PrescriptionItem = {
       medication_id: medication.id,
       medication_name: medication.name,
@@ -508,6 +514,7 @@ export default function ClinicalEntryForm2({
     setSearchTerm('');
     setSearchResults([]);
     setShowMedicationSearch(true);
+    setError(null);
   };
 
   const togglePrescriptionExpanded = (index: number) => {
@@ -590,6 +597,12 @@ export default function ClinicalEntryForm2({
   };
 
   const addInjectionToList = (medication: any) => {
+    // Prevent duplicate injections
+    if (injectionItems.some(i => i.medication_id === medication.id)) {
+      setError(`Injection "${medication.name}" is already in the list.`);
+      return;
+    }
+
     const newItem: PrescriptionItem = {
       medication_id: medication.id,
       medication_name: medication.name,
@@ -612,6 +625,7 @@ export default function ClinicalEntryForm2({
     setInjectionSearchTerm('');
     setInjectionSearchResults([]);
     setShowInjectionSearch(true);
+    setError(null);
   };
 
   const handleAddNewInjection = async () => {
@@ -685,6 +699,12 @@ export default function ClinicalEntryForm2({
     const test = labCatalog.find(t => t.id === testId);
     if (!test) return;
 
+    // Check for duplicate test
+    if (selectedLabTests.some((item, i) => i !== index && item.testId === testId)) {
+      setError(`Lab test "${test.test_name}" is already selected.`);
+      return;
+    }
+
     setSelectedLabTests(prev => {
       const next = [...prev];
       next[index] = {
@@ -712,6 +732,7 @@ export default function ClinicalEntryForm2({
         });
       }
 
+      setError(null);
       return [...unselected, ...selected];
     });
   };
@@ -931,6 +952,12 @@ export default function ClinicalEntryForm2({
     const test = radCatalog.find(t => t.id === testId);
     if (!test) return;
 
+    // Check for duplicate test
+    if (selectedXrayTests.some((item, i) => i !== index && item.testId === testId)) {
+      setError(`Radiology procedure "${test.test_name}" is already selected.`);
+      return;
+    }
+
     setSelectedXrayTests(prev => {
       const next = [...prev];
       next[index] = {
@@ -957,6 +984,7 @@ export default function ClinicalEntryForm2({
         });
       }
 
+      setError(null);
       return [...unselected, ...selected];
     });
   };
