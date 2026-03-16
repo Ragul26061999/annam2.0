@@ -57,8 +57,8 @@ const COMMON_PLACES = [
 const FIELDS: string[] = [
   'registrationDate','registrationTime',
   'firstName','lastName','gender','age','dob','contactNo',
-  'alternateNo','address','city','state','pincode','place',
-  'emergencyName','emergencyPhone','relationship',
+  'alternateNo','relationship',
+  'address','city','state','pincode','place',
   'primaryComplaint','priority',
   'consultingDoctorId','diagnosis',
   'consultationFee','opCardAmount','paymentMode',
@@ -98,9 +98,8 @@ export default function QuickRegisterPage() {
     registrationTime: new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'}),
     uhid: '',
     firstName:'', lastName:'', age:'', dob:'', gender:'',
-    contactNo:'', alternateNo:'',
+    contactNo:'', alternateNo:'', relationship:'',
     address:'', city:'', state:'Tamil Nadu', pincode:'', place:'',
-    emergencyName:'', emergencyPhone:'', relationship:'',
     primaryComplaint:'', priority:'0',
     consultingDoctorId:'', consultingDoctorName:'', diagnosis:'',
     consultationFee:'', opCardAmount:'', totalAmount:'', paymentMode:'Cash',
@@ -333,8 +332,8 @@ export default function QuickRegisterPage() {
         state:               form.state||null,
         pincode:             form.pincode||null,
         place:               form.place||null,
-        emergency_contact_name:         form.emergencyName||null,
-        emergency_contact_phone:        form.emergencyPhone||null,
+        emergency_contact_name:         null,
+        emergency_contact_phone:        null,
         emergency_contact_relationship: form.relationship||null,
         blood_group:null, allergies:null, medical_history:null,
         admission_type:      'outpatient',
@@ -717,9 +716,23 @@ export default function QuickRegisterPage() {
                     className={field()}
                   />
                 </div>
+                {/* Relationship */}
+                <div className="col-span-2">
+                  <label className={label}>Relationship</label>
+                  <input
+                    ref={fieldRef('relationship') as any}
+                    data-fieldid="relationship"
+                    type="text"
+                    name="relationship"
+                    placeholder="e.g. Father, Spouse"
+                    value={form.relationship}
+                    onChange={handleChange}
+                    className={field()}
+                  />
+                </div>
                 {/* Duplicate check indicator */}
                 {checkingDuplicate && (
-                  <div className="col-span-4 flex items-end pb-2">
+                  <div className="col-span-3 flex items-end pb-2">
                     <span className="text-[10px] text-amber-500 flex items-center gap-1">
                       <Loader2 size={11} className="animate-spin"/> Checking for duplicates…
                     </span>
@@ -834,52 +847,6 @@ export default function QuickRegisterPage() {
                     <input type="text" value={form.contactNo} readOnly
                       className={field('pl-8 bg-slate-50 text-slate-500 cursor-default')}/>
                   </div>
-                </div>
-              </div>
-
-              {/* Row 2: Emergency Contact */}
-              <div className="grid grid-cols-12 gap-3 mt-3">
-                <div className="col-span-12">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Emergency Contact</p>
-                </div>
-                <div className="col-span-3">
-                  <label className={label}>Contact Name</label>
-                  <input
-                    ref={fieldRef('emergencyName') as any}
-                    data-fieldid="emergencyName"
-                    type="text"
-                    name="emergencyName"
-                    placeholder="Guardian / Family name"
-                    value={form.emergencyName}
-                    onChange={handleChange}
-                    className={field()}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className={label}>Emergency Phone</label>
-                  <input
-                    ref={fieldRef('emergencyPhone') as any}
-                    data-fieldid="emergencyPhone"
-                    type="tel"
-                    name="emergencyPhone"
-                    placeholder="Emergency number"
-                    value={form.emergencyPhone}
-                    onChange={handleChange}
-                    className={field()}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className={label}>Relationship</label>
-                  <input
-                    ref={fieldRef('relationship') as any}
-                    data-fieldid="relationship"
-                    type="text"
-                    name="relationship"
-                    placeholder="e.g. Father, Spouse"
-                    value={form.relationship}
-                    onChange={handleChange}
-                    className={field()}
-                  />
                 </div>
               </div>
             </Card>
