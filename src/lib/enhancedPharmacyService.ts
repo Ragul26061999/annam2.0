@@ -1227,7 +1227,7 @@ export async function getPharmacyBillForReturn(billId: string): Promise<{
         payment_status,
         created_at
       `)
-      .is('bill_type', null)
+      .or('bill_type.eq.pharmacy,bill_type.is.null')
       .eq('id', billId)
       .single()
 
@@ -1305,21 +1305,42 @@ export async function getPharmacyBillForReturn(billId: string): Promise<{
 // Search pharmacy bills for return
 export async function searchPharmacyBills(searchTerm: string): Promise<any[]> {
   try {
-    const { data, error } = await supabase
-      .from('billing')
-      .select(`
-        id,
-        bill_number,
-        customer_name,
-        customer_phone,
-        total,
-        payment_status,
-        created_at,
-        patient_id,
-        customer_type
-      `)
-      .is('bill_type', null)
-      .or(`bill_number.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%,customer_phone.ilike.%${searchTerm}%`)
+    // 1. Search for patients if the term might be a name or UHID
+    const { data: patientMatches } = await supabase
+      .from('patients')
+      .select('id')
+      .or(`name.ilike.%${searchTerm}%,patient_id.ilike.%${searchTerm}%`)
+      .limit(10)
+
+    const patientIds = (patientMatches || []).map((p: any) => p.id)
+
+    // 2. Build the billing search query
+    let query = supabase.from('billing').select(`
+      id,
+      bill_number,
+      customer_name,
+      customer_phone,
+      total,
+      payment_status,
+      created_at,
+      patient_id,
+      customer_type
+    `)
+
+    // Include both pharmacy-specific bills and NULL (older) bills
+    query = query.or('bill_type.eq.pharmacy,bill_type.is.null')
+
+    // Or logic for search terms
+    let orConditions = `bill_number.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%,customer_phone.ilike.%${searchTerm}%`
+    
+    // If we have patient matches, add those to the OR condition
+    if (patientIds.length > 0) {
+      orConditions += `,patient_id.in.(${patientIds.map((id: any) => `"${id}"`).join(',')})`
+    }
+
+    query = query.or(orConditions)
+    
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .limit(20)
 
@@ -1350,7 +1371,7 @@ export async function getRecentBills(limit: number = 5): Promise<any[]> {
         patient_id,
         customer_type
       `)
-      .is('bill_type', null)
+      .or('bill_type.eq.pharmacy,bill_type.is.null')
       .order('created_at', { ascending: false })
       .limit(limit)
 

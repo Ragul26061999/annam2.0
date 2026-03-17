@@ -44,6 +44,7 @@ const PatientUploadPage = () => {
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1: Upload, 2: Map, 3: Review/Process
   const [progress, setProgress] = useState(0);
   const [dbCount, setDbCount] = useState<number | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
 
   React.useEffect(() => {
     fetchDbCount();
@@ -62,49 +63,156 @@ const PatientUploadPage = () => {
     }
   };
 
+  const downloadTemplate = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Patients');
+      
+      // Define headers
+      const columns = [
+        { header: 'Patient Name', key: 'name', width: 30 },
+        { header: 'UHID', key: 'patient_id', width: 20 },
+        { header: 'Phone', key: 'phone', width: 15 },
+        { header: 'Date of Birth', key: 'dob', width: 15 },
+        { header: 'Gender', key: 'gender', width: 10 },
+        { header: 'Blood Group', key: 'blood_group', width: 15 },
+        { header: 'Address', key: 'address', width: 40 },
+        { header: 'Email', key: 'email', width: 25 },
+      ];
+      
+      worksheet.columns = columns;
+      
+      // Add sample row
+      worksheet.addRow({
+        name: 'John Doe',
+        patient_id: 'UHID1001',
+        phone: '9876543210',
+        dob: '1990-05-15',
+        gender: 'Male',
+        blood_group: 'O+',
+        address: '123 Health Street, Clinic City',
+        email: 'john.doe@example.com'
+      });
+      
+      // Style header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF4F46E5' } // Blue-600
+        };
+      });
+      
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'patient_upload_template.xlsx';
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating template:', error);
+      alert('Could not generate template. Please try again.');
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
       parseExcel(selectedFile);
     }
+    // Reset file picker so the same file selection fires change again if needed
+    e.target.value = '';
   };
 
   const parseExcel = async (file: File) => {
+    console.log('Starting parseExcel for file:', file.name, file.size, file.type);
+    setIsParsing(true);
     try {
       const workbook = new ExcelJS.Workbook();
       const arrayBuffer = await file.arrayBuffer();
-      await workbook.xlsx.load(arrayBuffer);
+      console.log('ArrayBuffer loaded, length:', arrayBuffer.byteLength);
       
-      const worksheet = workbook.getWorksheet(1);
+      await workbook.xlsx.load(arrayBuffer);
+      console.log('Workbook loaded, worksheets count:', workbook.worksheets.length);
+      
+      const worksheet = workbook.worksheets[0]; // Safer than getWorksheet(1)
       if (!worksheet) {
-        throw new Error('No worksheet found');
+        console.error('No worksheet found in the workbook');
+        throw new Error('No worksheet found in the Excel file.');
       }
+      
+      console.log('Using worksheet:', worksheet.name, 'Rows:', worksheet.rowCount);
       
       const jsonData: any[] = [];
       const headers: string[] = [];
       
-      // Get headers from first row
-      worksheet.getRow(1).eachCell((cell, colNumber) => {
-        headers[colNumber - 1] = cell.value?.toString().trim() || '';
-      });
+      // Look for headers in the first row that isn't completely empty
+      let headerRowIndex = 1;
+      let headerRow = worksheet.getRow(1);
       
-      // Get data rows
-      for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+      // Try up to first 5 rows to find headers
+      for (let i = 1; i <= 5; i++) {
+        const row = worksheet.getRow(i);
+        let hasContent = false;
+        row.eachCell((cell) => {
+          if (cell.value && cell.value.toString().trim()) hasContent = true;
+        });
+        if (hasContent) {
+          headerRowIndex = i;
+          headerRow = row;
+          break;
+        }
+      }
+
+      if (!headerRow || headerRow.cellCount === 0) {
+        console.error('No headers found in first 5 rows');
+        throw new Error('The Excel file seems to be empty or has no readable headers in the first few rows.');
+      }
+
+      headerRow.eachCell((cell, colNumber) => {
+        const val = cell.value?.toString().trim() || '';
+        headers[colNumber - 1] = val;
+      });
+      console.log('Extracted headers from row', headerRowIndex, ':', headers);
+      
+      // Get data rows starting after the headerRowIndex
+      for (let rowNumber = headerRowIndex + 1; rowNumber <= worksheet.rowCount; rowNumber++) {
         const row = worksheet.getRow(rowNumber);
         const rowData: any = {};
         
+        let hasData = false;
         headers.forEach((header, colIndex) => {
+          if (!header) return; // Skip empty headers
           const cellValue = row.getCell(colIndex + 1).value;
-          rowData[header] = cellValue;
+          // Extract actual value if it's an object (RichText/Formula)
+          let finalValue = cellValue;
+          if (cellValue && typeof cellValue === 'object') {
+             if ('richText' in cellValue) {
+               finalValue = (cellValue as any).richText.map((t: any) => t.text).join('');
+             } else if ('result' in cellValue) {
+               finalValue = (cellValue as any).result;
+             } else if ('text' in cellValue) {
+               finalValue = (cellValue as any).text;
+             }
+          }
+          rowData[header] = finalValue;
+          if (finalValue !== null && finalValue !== undefined && finalValue.toString().trim() !== '') {
+            hasData = true;
+          }
         });
         
-        // Skip empty rows
-        if (Object.values(rowData).some(val => val !== null && val !== undefined && val.toString().trim() !== '')) {
+        if (hasData) {
           jsonData.push(rowData);
         }
       }
       
+      console.log('Parsed JSON data rows:', jsonData.length);
+
       if (jsonData.length > 0) {
         const cols = Object.keys(jsonData[0]);
         setColumns(cols);
@@ -125,10 +233,16 @@ const PatientUploadPage = () => {
         });
         setMapping(newMapping);
         setStep(2);
+        console.log('Successfully moved to Step 2');
+      } else {
+        console.warn('No valid data rows found (excluding headers)');
+        alert('No data rows found in the Excel file. Please make sure the file contains patient information below the header row.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error parsing Excel:', error);
-      alert('Error parsing Excel file. Please make sure it is a valid .xlsx file.');
+      alert(`Error parsing Excel file: ${error.message || 'Unknown error'}. Please make sure it is a valid .xlsx file.`);
+    } finally {
+      setIsParsing(false);
     }
   };
 
@@ -275,24 +389,45 @@ const PatientUploadPage = () => {
           </div>
 
           {step === 1 && (
-            <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
-              <FileSpreadsheet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Upload Excel File</h3>
-              <p className="text-gray-500 mb-6">Supported format: .xlsx</p>
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={handleFileChange}
-                className="hidden"
-                id="file-upload"
-              />
-              <label
-                htmlFor="file-upload"
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
-              >
-                <Upload className="w-5 h-5 mr-2" />
-                Select File
-              </label>
+            <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 relative overflow-hidden">
+              {isParsing ? (
+                <div className="flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="w-16 h-16 text-blue-600 animate-spin" />
+                  <h3 className="text-lg font-medium text-gray-900">Parsing Excel file...</h3>
+                  <p className="text-gray-500">Reading clinical data, please wait.</p>
+                </div>
+              ) : (
+                <>
+                  <FileSpreadsheet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Upload Excel File</h3>
+                  <p className="text-gray-500 mb-6">Supported format: .xlsx</p>
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 cursor-pointer transition-colors"
+                  >
+                    <Upload className="w-5 h-5 mr-2" />
+                    Select File
+                  </label>
+
+                  <div className="mt-8 pt-8 border-t border-gray-200">
+                    <p className="text-sm text-gray-500 mb-3">Haven't prepared your file yet?</p>
+                    <button
+                      onClick={downloadTemplate}
+                      className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Download Sample Template
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
