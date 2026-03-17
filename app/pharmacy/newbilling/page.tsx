@@ -713,7 +713,7 @@ function NewBillingPageInner() {
     }
 
     .receipt {
-      font-family: 'Times New Roman', Times, serif;
+      font-family: Arial, Helvetica, sans-serif;
       font-size: 11px;
       max-width: 77mm;
       margin: 0 auto;
@@ -721,15 +721,15 @@ function NewBillingPageInner() {
     }
 
     .invoice-header {
-      line-height: 1.3;
-      margin-bottom: 4px;
+      line-height: 1.2;
+      margin-bottom: 2px;
       text-transform: uppercase;
     }
 
     .bill-info {
       border-top: 1px solid #000;
       border-bottom: 1px solid #000;
-      padding: 4px 0;
+      padding: 2px 0;
     }
 
     .bill-info td {
@@ -770,9 +770,9 @@ function NewBillingPageInner() {
 
     .totals-section {
       page-break-inside: avoid;
-      margin: 4px 0 6mm 0;
+      margin: 2px 0 4mm 0;
       border: 1px solid #000;
-      padding: 4px 2mm;
+      padding: 2px 2mm;
     }
 
     .invoice-footer {
@@ -4065,16 +4065,16 @@ function NewBillingPageInner() {
         {/* Hidden Printable Receipt - This is what gets printed */}
         {generatedBill && (
           <div className="printable-area hidden print:block" aria-hidden="true">
-            <div id="receipt-content" className="p-6 receipt">
+            <div id="receipt-content" className="receipt">
               <style dangerouslySetInnerHTML={{ __html: printCss }} />
               {/* Header */}
-              <div className="text-center mb-4 invoice-header">
-                <h1 className="text-xl font-bold text-gray-900">{hospitalDetails.name || 'ANNAM PHARMACY'}</h1>
-                <p className="text-gray-700">{hospitalDetails.department}</p>
-                <p className="text-sm text-gray-600">{hospitalDetails.address}</p>
-                <p className="text-sm text-gray-600">{hospitalDetails.contactNumber}</p>
-                <p className="text-sm text-gray-500">GST No: {hospitalDetails.gstNumber}</p>
-                <p className="mt-1 text-sm font-semibold">INVOICE</p>
+              <div className="text-center mb-2 invoice-header">
+                <h1 className="text-lg font-bold text-gray-900">{hospitalDetails.name || 'ANNAM PHARMACY'}</h1>
+                <p className="text-gray-700 text-[10px]">{hospitalDetails.department}</p>
+                <p className="text-[10px] text-gray-600">{hospitalDetails.address}</p>
+                <p className="text-[10px] text-gray-600">{hospitalDetails.contactNumber}</p>
+                <p className="text-[10px] text-gray-500">GST No: {hospitalDetails.gstNumber}</p>
+                <p className="mt-1 text-xs font-bold border-y border-black py-1">INVOICE</p>
               </div>
 
               {/* Bill Info */}
@@ -4090,6 +4090,7 @@ function NewBillingPageInner() {
                         : payments;
                       if (Array.isArray(pays) && pays.length > 0) {
                         return pays
+                          .filter((p: any) => Number(p.amount) > 0 || pays.length === 1)
                           .map((p: any) => `${(p.method || '').toUpperCase()} ₹${Math.round(Number(p.amount || 0))}`)
                           .join(' + ');
                       }
@@ -4139,10 +4140,7 @@ function NewBillingPageInner() {
                         <td className="py-2">{index + 1}</td>
                         <td className="py-2">
                           <div>
-                            <p className="font-medium truncate">{groupedItem.medicine.name}</p>
-                            <p className="text-xs text-gray-500 truncate">
-                              Batches: {groupedItem.batches.join(', ')}
-                            </p>
+                            <p className="font-bold truncate">{groupedItem.medicine.name}</p>
                           </div>
                         </td>
                         <td className="text-center py-2">{groupedItem.totalQuantity}</td>
@@ -4180,7 +4178,7 @@ function NewBillingPageInner() {
               })()}
 
               {/* Totals */}
-              <div className="border-t-2 border-gray-300 pt-3 space-y-1 text-sm totals-section">
+              <div className="border-t border-black pt-2 space-y-1 text-xs totals-section">
                 <div className="flex justify-between">
                   <span className="label">Taxable Amt</span>
                   <span className="value">₹{Math.round(generatedBill.totals.subtotal)}</span>
