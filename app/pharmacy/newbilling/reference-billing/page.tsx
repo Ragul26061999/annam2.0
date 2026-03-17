@@ -284,7 +284,7 @@ function NewBillingPageInner() {
     discountType: 'amount',
     discountValue: 0,
     discountAmount: 0,
-    taxPercent: 5, // Default GST changed to 5%
+    taxPercent: 0, // Default GST changed to 0% as it is handled per-item
     taxAmount: 0,
     totalAmount: 0
   });
@@ -1905,7 +1905,7 @@ function NewBillingPageInner() {
         discountType: 'amount',
         discountValue: 0,
         discountAmount: 0,
-        taxPercent: 18,
+        taxPercent: 0,
         taxAmount: 0,
         totalAmount: 0
       });

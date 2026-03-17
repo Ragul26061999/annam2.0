@@ -2215,7 +2215,7 @@ function NewBillingPageInner() {
         discountType: 'amount',
         discountValue: 0,
         discountAmount: 0,
-        taxPercent: 18,
+        taxPercent: 0,
         taxAmount: 0,
         totalAmount: 0
       });

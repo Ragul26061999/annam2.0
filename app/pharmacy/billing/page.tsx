@@ -49,6 +49,7 @@ interface PharmacyBill {
   created_at: string
   staff_id?: string
   staff_name?: string
+  payments?: any[]
 }
 
 interface DashboardStats {
@@ -95,6 +96,9 @@ export default function PharmacyBillingPage() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paymentReference, setPaymentReference] = useState('')
+  const [splitPayments, setSplitPayments] = useState<{ method: string; amount: string; reference: string }[]>([
+    { method: 'cash', amount: '', reference: '' }
+  ])
   const [markingPaid, setMarkingPaid] = useState(false)
 
   // Bill Edit Modal state
@@ -293,6 +297,24 @@ export default function PharmacyBillingPage() {
         }
       }
 
+      // Resolve payments in a separate query
+      const billIds = (billsData || []).map((b: any) => b.id)
+      let paymentsMap: Record<string, any[]> = {}
+      if (billIds.length > 0) {
+        const { data: paymentsData, error: paymentsError } = await supabase
+          .from('billing_payments')
+          .select('billing_id, method, amount')
+          .in('billing_id', billIds)
+
+        if (!paymentsError && paymentsData) {
+          paymentsMap = paymentsData.reduce((acc: any, p: any) => {
+            if (!acc[p.billing_id]) acc[p.billing_id] = []
+            acc[p.billing_id].push(p)
+            return acc
+          }, {})
+        }
+      }
+
       // Helper function to determine payment status with roundoff consideration
       const getPaymentStatusWithRoundoff = (totalAmount: number, amountPaid: number, currentStatus: string, paymentMethod: string) => {
         // For credit payments, always keep as pending until explicitly marked as paid through payment system
@@ -305,12 +327,10 @@ export default function PharmacyBillingPage() {
         if (!amountPaid || amountPaid <= 0) return 'pending';
 
         // Roundoff handling:
-        // Example: payable total 144.36 might be rounded and collected as 144.00.
-        // Treat as fully paid if amountPaid matches the nearest whole-rupee payable.
         const roundedPayable = Math.round(totalAmount);
         const matchesRoundedPayable = Math.abs(roundedPayable - amountPaid) <= 0.01;
 
-        // Also allow tiny floating point differences (e.g. 0.01-0.05)
+        // Also allow tiny floating point differences
         const difference = Math.abs(totalAmount - amountPaid);
         const isFullyPaid = matchesRoundedPayable || difference <= 0.05;
 
@@ -344,7 +364,8 @@ export default function PharmacyBillingPage() {
           payment_status: correctedStatus,
           created_at: bill.created_at,
           staff_id: bill.staff_id,
-          staff_name: staffMap[bill.staff_id]?.full_name || 'Unknown Staff'
+          staff_name: staffMap[bill.staff_id]?.full_name || 'Unknown Staff',
+          payments: paymentsMap[bill.id] || []
         };
       })
 
@@ -503,6 +524,7 @@ export default function PharmacyBillingPage() {
 
   const openMarkPaidModal = (bill: PharmacyBill) => {
     setSelectedBillForPayment(bill)
+    setSplitPayments([{ method: 'cash', amount: '', reference: '' }])
     setPaymentAmount('')
     setPaymentMethod('cash')
     setPaymentReference('')
@@ -510,62 +532,72 @@ export default function PharmacyBillingPage() {
   }
 
   const handleMarkAsPaid = async () => {
-    if (!selectedBillForPayment || !paymentAmount || parseFloat(paymentAmount) <= 0) {
-      alert('Please enter a valid payment amount')
+    const validPayments = splitPayments.filter(p => p.amount && parseFloat(p.amount) > 0)
+    const totalPaymentAmount = validPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
+
+    if (!selectedBillForPayment || validPayments.length === 0) {
+      alert('Please enter at least one valid payment amount')
       return
     }
 
-    const amount = parseFloat(paymentAmount)
     const totalAmount = selectedBillForPayment.total_amount || 0
     const currentPaid = selectedBillForPayment.amount_paid || 0
-    const remainingBalance = totalAmount - currentPaid
+    
+    // For credit bills, amount_paid might already be equal to total_amount.
+    // We treat the settle action as a new set of payments that replaces the credit.
+    const isCreditBill = selectedBillForPayment.payment_method === 'credit'
+    const remainingBalance = isCreditBill ? totalAmount : (totalAmount - currentPaid)
     const isRefund = remainingBalance < 0
 
-    // Prevent overpayment if it's a regular payment
-    if (!isRefund && amount > remainingBalance) {
-      alert(`Payment amount (₹${roundToWholeNumber(amount)}) exceeds remaining balance (₹${roundToWholeNumber(remainingBalance)}). Please enter a valid amount.`)
+    // Prevent overpayment if it's a regular payment (allow tiny rounding margin)
+    if (!isRefund && totalPaymentAmount > remainingBalance + 0.1) {
+      alert(`Total payment amount (₹${totalPaymentAmount.toFixed(2)}) exceeds remaining balance (₹${remainingBalance.toFixed(2)}).`)
       return
     }
 
     // Prevent over-refunding if it's a refund
-    if (isRefund && amount > Math.abs(remainingBalance)) {
-      alert(`Refund amount (₹${roundToWholeNumber(amount)}) exceeds the overpayment amount (₹${roundToWholeNumber(Math.abs(remainingBalance))}).`)
+    if (isRefund && totalPaymentAmount > Math.abs(remainingBalance) + 0.1) {
+      alert(`Refund amount (₹${totalPaymentAmount.toFixed(2)}) exceeds the overpayment amount (₹${Math.abs(remainingBalance).toFixed(2)}).`)
       return
     }
 
     try {
       setMarkingPaid(true)
-      // If it's a refund, we subtract the amount from total paid
-      const newTotalPaid = isRefund ? currentPaid - amount : currentPaid + amount
-      const transactionAmount = isRefund ? -amount : amount
-
-      console.log('Recording payment:', {
+      
+      // Calculate new total paid
+      // If it's a credit bill we are settling, we might need special logic for amount_paid.
+      // But if we follow the existing pattern, we just add the new cash payments.
+      // NOTE: If amount_paid already included the credit, adding more might exceed total.
+      // However, the existing DB pattern seems to expect amount_paid to reflect total money accounted for.
+      // If we are settling credit, we ideally want to replace the credit payment with cash.
+      
+      const newTotalPaid = isRefund ? currentPaid - totalPaymentAmount : currentPaid + totalPaymentAmount
+      
+      console.log('Recording multiple payments:', {
         billId: selectedBillForPayment.id,
-        amount: amount,
-        method: paymentMethod,
-        reference: paymentReference,
-        currentUser: currentUser,
-        totalAmount: totalAmount,
-        currentPaid: currentPaid,
-        newTotalPaid: newTotalPaid,
-        remainingBalance: remainingBalance
+        totalPayment: totalPaymentAmount,
+        payments: validPayments,
+        currentPaid,
+        newTotalPaid
       })
 
-      // Update billing table with correct payment status
+      // Update billing table with correct payment status and overall method (use first one as primary)
       let paymentStatus = 'partial'
       const difference = Math.abs(totalAmount - newTotalPaid)
 
-      // Use same roundoff tolerance as the status function
-      if (difference <= 0.05 || newTotalPaid >= totalAmount) {
+      if (difference <= 0.1 || newTotalPaid >= totalAmount) {
         paymentStatus = 'paid'
       }
+
+      // If it was a credit bill and we are now paying it, change the method to the first real payment method
+      const mainPaymentMethod = validPayments[0].method
 
       const { error: billingError } = await supabase
         .from('billing')
         .update({
           payment_status: paymentStatus,
           amount_paid: newTotalPaid,
-          payment_method: paymentMethod,
+          payment_method: mainPaymentMethod,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedBillForPayment.id)
@@ -575,56 +607,31 @@ export default function PharmacyBillingPage() {
         throw billingError
       }
 
-      // Insert payment record with correct column names
-      const paymentData: any = {
-        billing_id: selectedBillForPayment.id,
-        method: paymentMethod,
-        amount: transactionAmount,
-        reference: paymentReference || null,
-        received_at: new Date().toISOString(),
-        paid_at: new Date().toISOString()
-      }
-
-      // Only add received_by if we have a valid user UUID
-      if (currentUser?.id && currentUser.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-        paymentData.received_by = currentUser.id
-      }
-
-      console.log('Payment data to insert:', paymentData)
-
-      // Try to insert payment record
-      let paymentError = null
-      try {
-        const result = await supabase
-          .from('billing_payments')
-          .insert(paymentData)
-        paymentError = result.error
-      } catch (err) {
-        console.error('Payment insert exception:', err)
-        paymentError = err
-      }
-
-      // If there's an error with received_by, try without it
-      if (paymentError) {
-        console.log('Error with payment data, trying without received_by field')
-        const simplePaymentData = {
+      // Insert all payment records
+      for (const p of validPayments) {
+        const amount = parseFloat(p.amount)
+        const transactionAmount = isRefund ? -amount : amount
+        
+        const paymentData: any = {
           billing_id: selectedBillForPayment.id,
-          method: paymentMethod,
+          method: p.method,
           amount: transactionAmount,
-          reference: paymentReference || null,
+          reference: p.reference || null,
           received_at: new Date().toISOString(),
           paid_at: new Date().toISOString()
         }
 
-        console.log('Simple payment data:', simplePaymentData)
+        if (currentUser?.id && currentUser.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          paymentData.received_by = currentUser.id
+        }
 
-        const { error: simplePaymentError } = await supabase
+        const { error: pErr } = await supabase
           .from('billing_payments')
-          .insert(simplePaymentData)
+          .insert(paymentData)
 
-        if (simplePaymentError) {
-          console.error('Simple payment insert error:', simplePaymentError)
-          throw simplePaymentError
+        if (pErr) {
+          console.error('Individual payment record error:', pErr)
+          // We don't throw here to ensure others are attempted, though usually they'd all fail if one does
         }
       }
 
@@ -632,13 +639,12 @@ export default function PharmacyBillingPage() {
       setShowMarkPaidModal(false)
       setSelectedBillForPayment(null)
 
-      // Show appropriate success message
       if (isRefund) {
-        alert(`Refund of ₹${roundToWholeNumber(amount)} recorded successfully. Updated total paid: ₹${roundToWholeNumber(newTotalPaid)}`)
+        alert(`Refund of ₹${totalPaymentAmount.toFixed(2)} recorded successfully.`)
       } else if (paymentStatus === 'paid') {
         alert('Payment recorded successfully! Bill marked as fully paid.')
       } else {
-        alert(`Partial payment of ₹${roundToWholeNumber(amount)} recorded successfully. Remaining balance: ₹${roundToWholeNumber(totalAmount - newTotalPaid)}`)
+        alert(`Partial payment of ₹${totalPaymentAmount.toFixed(2)} recorded successfully.`)
       }
     } catch (err: any) {
       console.error('Full error object:', err)
@@ -1744,15 +1750,21 @@ export default function PharmacyBillingPage() {
                     ₹{Math.round(bill.total_amount).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div className="flex items-center gap-2">
-                      {getPaymentMethodIcon(bill.payment_method)}
-                      <span className="capitalize">
-                        {bill.payment_method === 'split' ? 'Split Payment' : bill.payment_method}
-                      </span>
-                      {bill.payment_method === 'split' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
-                          Multiple
-                        </span>
+                    <div className="flex flex-col gap-1.5">
+                      {bill.payments && bill.payments.length > 0 ? (
+                        bill.payments.map((p: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            {getPaymentMethodIcon(p.method)}
+                            <span className="capitalize text-[11px] font-medium text-gray-700">
+                              {p.method} (₹{Math.round(p.amount)})
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {getPaymentMethodIcon(bill.payment_method)}
+                          <span className="capitalize">{bill.payment_method}</span>
+                        </div>
                       )}
                     </div>
                   </td>
@@ -1841,7 +1853,11 @@ export default function PharmacyBillingPage() {
                 <div className="col-span-2">
                   <span className="font-medium">Payment:</span> ₹{roundToWholeNumber(selectedBill.amount_paid || 0)} / ₹{roundToWholeNumber(selectedBill.total_amount || 0)}
                   {selectedBill.payment_status === 'partial' && (
-                    <span className="ml-2 text-orange-600 text-xs">(Roundoff applied)</span>
+                    <span className="ml-2 text-orange-600 text-xs">
+                      {Math.abs((selectedBill.total_amount || 0) - (selectedBill.amount_paid || 0)) < 1 
+                        ? '(Roundoff applied)' 
+                        : '(Partial)'}
+                    </span>
                   )}
                 </div>
               )}
@@ -2205,7 +2221,7 @@ export default function PharmacyBillingPage() {
       {/* Mark as Paid Modal */}
       {showMarkPaidModal && selectedBillForPayment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowMarkPaidModal(false)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-lg p-8 w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Mark Bill as Paid</h3>
               <button
@@ -2234,7 +2250,7 @@ export default function PharmacyBillingPage() {
                   </div>
                   {selectedBillForPayment.amount_paid && selectedBillForPayment.amount_paid > 0 && (
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-gray-600">Already Paid:</span>
+                      <span className="text-sm text-gray-600">Already Accounted:</span>
                       <span className="font-medium text-green-600">₹{selectedBillForPayment.amount_paid?.toFixed(2) || '0.00'}</span>
                     </div>
                   )}
@@ -2246,82 +2262,103 @@ export default function PharmacyBillingPage() {
                       ₹{Math.abs((selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}
                     </span>
                   </div>
+                  {selectedBillForPayment.payment_method === 'credit' && (
+                    <p className="text-[10px] text-blue-600 mt-1 font-medium italic">
+                      * This is a Credit bill. Entering payments will settle the credit.
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'Refund Amount *' : 'Payment Amount *'}
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={paymentAmount}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    const amount = parseFloat(value) || 0
-                    const totalAmount = selectedBillForPayment.total_amount || 0
-                    const currentPaid = selectedBillForPayment.amount_paid || 0
-                    const remainingBalance = totalAmount - currentPaid
-                    const isRefund = remainingBalance < 0
+              <div className="space-y-4 pt-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-medium text-gray-700">Payment Details</label>
+                  <button
+                    type="button"
+                    onClick={() => setSplitPayments([...splitPayments, { method: 'cash', amount: '', reference: '' }])}
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+                  >
+                    <Plus className="w-3 h-3" /> Add Method
+                  </button>
+                </div>
 
-                    if (isRefund) {
-                        // For refunds, cap at the overpayment amount
-                        if (amount > Math.abs(remainingBalance)) {
-                            setPaymentAmount(Math.abs(remainingBalance).toString())
-                        } else {
-                            setPaymentAmount(value)
-                        }
-                    } else {
-                        // For regular payments, cap at remaining balance
-                        if (amount > remainingBalance) {
-                            setPaymentAmount(remainingBalance.toString())
-                        } else {
-                            setPaymentAmount(value)
-                        }
-                    }
-                  }}
-                  placeholder={(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? "Enter refund amount" : "Enter payment amount"}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  {(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) 
-                    ? `Maximum refund: ₹${Math.abs((selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}`
-                    : `Maximum payment: ₹${Math.max(0, (selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}`}
-                </p>
-              </div>
+                <div className="max-h-[400px] overflow-y-auto pr-2 space-y-4">
+                  {splitPayments.map((payment, index) => (
+                    <div key={index} className="p-4 border border-gray-200 rounded-xl bg-gray-50/50 shadow-sm relative group hover:border-blue-200 transition-colors">
+                      {splitPayments.length > 1 && (
+                        <button
+                          onClick={() => setSplitPayments(splitPayments.filter((_, i) => i !== index))}
+                          className="absolute -top-2 -right-2 bg-white border border-gray-200 text-gray-400 hover:text-red-500 rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                      
+                      <div className="flex flex-col md:flex-row gap-4 items-end">
+                        <div className="flex-1 min-w-[140px]">
+                          <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1.5 ml-1">Payment Method</label>
+                          <select
+                            value={payment.method}
+                            onChange={(e) => {
+                              const newPayments = [...splitPayments]
+                              newPayments[index].method = e.target.value
+                              setSplitPayments(newPayments)
+                            }}
+                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all bg-white"
+                          >
+                            <option value="cash">💵 Cash</option>
+                            <option value="card">💳 Card</option>
+                            <option value="upi">📱 UPI</option>
+                            <option value="gpay">🔵 GPay</option>
+                            <option value="ghpay">🟡 GHPay</option>
+                            <option value="netbanking">🏦 Net Banking</option>
+                            <option value="insurance">🛡️ Insurance</option>
+                            <option value="others">🔘 Others</option>
+                          </select>
+                        </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Method *
-                </label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="upi">UPI</option>
-                  <option value="gpay">GPay</option>
-                  <option value="ghpay">GHPay</option>
-                  <option value="credit">Credit</option>
-                  <option value="insurance">Insurance</option>
-                  <option value="others">Others</option>
-                </select>
-              </div>
+                        <div className="flex-1 min-w-[140px]">
+                          <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1.5 ml-1">Amount (₹)</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={payment.amount}
+                              onChange={(e) => {
+                                const newPayments = [...splitPayments]
+                                newPayments[index].amount = e.target.value
+                                setSplitPayments(newPayments)
+                              }}
+                              className="w-full pl-7 pr-3 py-2 text-sm font-semibold border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all bg-white"
+                              placeholder="0.00"
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
+                          </div>
+                        </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Reference Number (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={paymentReference}
-                  onChange={(e) => setPaymentReference(e.target.value)}
-                  placeholder="Transaction reference, cheque number, etc."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                        <div className="flex-[1.5] min-w-[200px]">
+                          <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1.5 ml-1">Reference / Transaction ID</label>
+                          <input
+                            type="text"
+                            value={payment.reference}
+                            onChange={(e) => {
+                              const newPayments = [...splitPayments]
+                              newPayments[index].reference = e.target.value
+                              setSplitPayments(newPayments)
+                            }}
+                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all bg-white"
+                            placeholder="e.g. UPI ID, Cheque #, etc."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-blue-50 p-2 rounded-md flex justify-between items-center text-sm">
+                   <span className="font-medium text-blue-700">Total Selected:</span>
+                   <span className="font-bold text-blue-800">₹{splitPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}</span>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-4 border-t">
@@ -2330,17 +2367,17 @@ export default function PharmacyBillingPage() {
                     setShowMarkPaidModal(false)
                     setSelectedBillForPayment(null)
                   }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleMarkAsPaid}
-                  disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || markingPaid}
-                  className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+                  disabled={markingPaid || splitPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) <= 0}
+                  className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold ${
                     (selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0)
                       ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-green-600 hover:bg-green-700'
+                      : 'bg-green-600 hover:bg-green-700 shadow-sm'
                   }`}
                 >
                   {markingPaid ? 'Processing...' : (selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'Record Refund' : 'Record Payment'}

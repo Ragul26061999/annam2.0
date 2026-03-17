@@ -9,7 +9,8 @@ import {
     Search, X, Printer, Share2, ChevronDown, LayoutDashboard,
     Package, ShoppingCart, Receipt, Wallet, Activity,
     FileSpreadsheet, FileJson, ImageIcon,
-    SortAsc, SortDesc, Stethoscope, User
+    SortAsc, SortDesc, Stethoscope, User, RotateCcw,
+    CreditCard, Smartphone, History
 } from 'lucide-react'
 import {
     PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -39,10 +40,13 @@ export default function PharmacyBillingReportsPage() {
 
     // Dashboard Stats
     const [stats, setStats] = useState({
+        totalSales: 0,
         totalCollection: 0,
         totalBills: 0,
         paidBills: 0,
         pendingAmount: 0,
+        totalReturns: 0,
+        netRevenue: 0,
         avgBillValue: 0
     })
     const [isReportDropdownOpen, setIsReportDropdownOpen] = useState(false)
@@ -113,6 +117,38 @@ export default function PharmacyBillingReportsPage() {
 
             if (error) throw error
 
+            // Fetch returns for the same period
+            const { data: returnsData, error: returnsError } = await supabase
+                .from('sales_returns')
+                .select('bill_id, refund_amount, created_at')
+                .gte('created_at', from)
+            
+            if (returnsError) console.warn('Returns fetch error:', returnsError)
+            
+            const totalReturns = (returnsData || []).reduce((sum: number, r: any) => sum + (Number(r.refund_amount) || 0), 0)
+            const returnsByBillId = (returnsData || []).reduce((acc: any, curr: any) => {
+                acc[curr.bill_id] = (acc[curr.bill_id] || 0) + (Number(curr.refund_amount) || 0)
+                return acc
+            }, {})
+
+            // Fetch payments for split mode display
+            const billIds = bills.map((b: any) => b.id)
+            let paymentsMap: Record<string, any[]> = {}
+            if (billIds.length > 0) {
+                const { data: paymentsData } = await supabase
+                    .from('billing_payments')
+                    .select('billing_id, method, amount')
+                    .in('billing_id', billIds)
+                
+                if (paymentsData) {
+                    paymentsMap = paymentsData.reduce((acc: any, p: any) => {
+                        if (!acc[p.billing_id]) acc[p.billing_id] = []
+                        acc[p.billing_id].push(p)
+                        return acc
+                    }, {})
+                }
+            }
+
             // Resolve patient names if customer_name is missing or 'Anonymous Guest' but patient_id exists
             const patientIds = Array.from(new Set(bills
                 .filter((b: any) => (!b.customer_name || b.customer_name.trim() === '' || b.customer_name === 'Anonymous Guest') && b.patient_id)
@@ -143,12 +179,16 @@ export default function PharmacyBillingReportsPage() {
             const totalAmount = processedBills.reduce((sum: number, b: any) => sum + (Number(b.total) || 0), 0)
             const pendingAmount = totalAmount - totalCollection
             const paidBills = processedBills.filter((b: any) => b.payment_status === 'paid').length
+            const netRevenue = totalCollection - totalReturns
 
             setStats({
+                totalSales: totalAmount,
                 totalCollection,
                 totalBills: processedBills.length,
                 paidBills,
                 pendingAmount,
+                totalReturns,
+                netRevenue,
                 avgBillValue: processedBills.length > 0 ? totalAmount / processedBills.length : 0
             })
 
@@ -179,7 +219,12 @@ export default function PharmacyBillingReportsPage() {
                 value
             })))
 
-            setRecentTransactions(processedBills.slice(0, 10))
+            setRecentTransactions(processedBills.map((b: any) => ({
+                ...b,
+                refund_amount: returnsByBillId[b.id] || 0,
+                net_value: (Number(b.total) || 0) - (returnsByBillId[b.id] || 0),
+                payments: paymentsMap[b.id] || []
+            })).slice(0, 10))
         } catch (err) {
             console.error('Dashboard error:', err)
         } finally {
@@ -248,6 +293,16 @@ export default function PharmacyBillingReportsPage() {
 
                     const { data: sales, error: sErr } = await saleQuery.order('created_at', { ascending: false })
                     if (sErr) throw sErr
+
+                    // Fetch all returns to map them
+                    const { data: allReturns } = await supabase
+                        .from('sales_returns')
+                        .select('bill_id, refund_amount')
+                    
+                    const specReturnsMap = (allReturns || []).reduce((acc: any, curr: any) => {
+                        acc[curr.bill_id] = (acc[curr.bill_id] || 0) + (Number(curr.refund_amount) || 0)
+                        return acc
+                    }, {})
                     
                     // Resolve patient names if missing or 'Anonymous Guest'
                     const salePatientIds = Array.from(new Set((sales || [])
@@ -268,11 +323,31 @@ export default function PharmacyBillingReportsPage() {
                         }
                     }
 
+                    // Fetch payments for specific bills
+                    const specBillIds = sales.map((b: any) => b.id)
+                    let specPaymentsMap: Record<string, any[]> = {}
+                    if (specBillIds.length > 0) {
+                        const { data: pData } = await supabase
+                            .from('billing_payments')
+                            .select('billing_id, method, amount')
+                            .in('billing_id', specBillIds)
+                        if (pData) {
+                            specPaymentsMap = pData.reduce((acc: any, p: any) => {
+                                if (!acc[p.billing_id]) acc[p.billing_id] = []
+                                acc[p.billing_id].push(p)
+                                return acc
+                            }, {})
+                        }
+                    }
+
                     data = (sales || []).map((b: any) => ({
                         ...b,
                         customer_name: (b.customer_name && b.customer_name.trim() !== '' && b.customer_name !== 'Anonymous Guest')
                             ? b.customer_name
-                            : (salePatientsMap[b.patient_id] || b.customer_name || 'Anonymous Guest')
+                            : (salePatientsMap[b.patient_id] || b.customer_name || 'Anonymous Guest'),
+                        refund_amount: specReturnsMap[b.id] || 0,
+                        net_value: (Number(b.total) || 0) - (specReturnsMap[b.id] || 0),
+                        payments: specPaymentsMap[b.id] || []
                     }))
                     break
 
@@ -471,6 +546,9 @@ export default function PharmacyBillingReportsPage() {
     const calculateAccumulatedValuation = () => {
         return filteredAndSortedData.reduce((sum, item) => {
             // For billwise sales or purchases
+            if (item.net_value !== undefined) {
+                return sum + (Number(item.net_value) || 0);
+            }
             if (item.total_amount || item.total || item.amount) {
                 return sum + (Number(item.total_amount || item.total || item.amount) || 0);
             }
@@ -843,11 +921,13 @@ export default function PharmacyBillingReportsPage() {
                 {selectedReport === 'dashboard' ? (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
                         {/* Summary Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <SummaryCard icon={<TrendingUp />} label="Total Collection" value={formatCurrency(stats.totalCollection)} color="indigo" growth="+15%" />
-                            <SummaryCard icon={<Receipt />} label="Total Bills" value={stats.totalBills.toString()} color="emerald" growth="+22%" />
-                            <SummaryCard icon={<Wallet />} label="Pending Amount" value={formatCurrency(stats.pendingAmount)} color="amber" growth="-5%" />
-                            <SummaryCard icon={<Activity />} label="Avg. Ticket Size" value={formatCurrency(stats.avgBillValue)} color="rose" growth="+12%" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+                            <SummaryCard icon={<ShoppingCart className="h-4 w-4" />} label="Gross Sales" value={formatCurrency(stats.totalSales)} color="indigo" growth="" />
+                            <SummaryCard icon={<TrendingUp />} label="Collected" value={formatCurrency(stats.totalCollection)} color="emerald" growth="" />
+                            <SummaryCard icon={<RotateCcw className="h-4 w-4" />} label="Refunds" value={formatCurrency(stats.totalReturns)} color="rose" growth="" />
+                            <SummaryCard icon={<DollarSign />} label="Net Revenue" value={formatCurrency(stats.netRevenue)} color="indigo" growth="" />
+                            <SummaryCard icon={<Wallet />} label="Outstanding" value={formatCurrency(stats.pendingAmount)} color="amber" growth="" />
+                            <SummaryCard icon={<Receipt />} label="Bill Count" value={stats.totalBills.toString()} color="emerald" growth="" />
                         </div>
 
                         {/* Analytic Clusters */}
@@ -945,6 +1025,7 @@ export default function PharmacyBillingReportsPage() {
                                         <tr className="bg-gray-50/50">
                                             <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-48">Identifier</th>
                                             <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Medical Client</th>
+                                            <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Payment</th>
                                             <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Net Value</th>
                                             <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Status</th>
                                             <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Timestamp</th>
@@ -955,7 +1036,37 @@ export default function PharmacyBillingReportsPage() {
                                             <tr key={tx.id} className="group hover:bg-indigo-50/10 transition-all cursor-pointer">
                                                 <td className="px-10 py-6 font-black text-gray-900 tracking-tight group-hover:text-indigo-600 uppercase">{tx.bill_number}</td>
                                                 <td className="px-10 py-6 text-gray-500 font-bold group-hover:text-gray-900">{tx.customer_name}</td>
-                                                <td className="px-10 py-6 text-right font-black text-gray-900 text-lg">{formatCurrency(tx.total)}</td>
+                                                <td className="px-10 py-6 whitespace-nowrap text-sm text-gray-500">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {tx.payments && tx.payments.length > 0 ? (
+                                                            tx.payments.map((p: any, idx: number) => (
+                                                                <div key={idx} className="flex items-center gap-2">
+                                                                    {getPaymentMethodIcon(p.method)}
+                                                                    <span className="capitalize text-[11px] font-medium text-gray-700">
+                                                                        {p.method} (₹{Math.round(p.amount)})
+                                                                    </span>
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <div className="flex items-center gap-2">
+                                                                {getPaymentMethodIcon(tx.payment_method)}
+                                                                <span className="capitalize">{tx.payment_method}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-10 py-6 text-right">
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="font-black text-gray-900 text-lg">
+                                                            {formatCurrency(tx.net_value)}
+                                                        </span>
+                                                        {tx.refund_amount > 0 && (
+                                                            <span className="text-[10px] text-red-500 font-bold uppercase tracking-tighter">
+                                                                - {formatCurrency(tx.refund_amount)} Return
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="px-10 py-6 text-center">
                                                     <span className={`inline-flex items-center gap-2 px-5 py-2 rounded-[1.25rem] text-[10px] font-black tracking-widest border-2 ${tx.payment_status === 'paid'
                                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -1138,6 +1249,7 @@ export default function PharmacyBillingReportsPage() {
                                                     <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Core Reference #</th>
                                                     <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Legal Entity / Counterparty</th>
                                                     <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Base Value</th>
+                                                    <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment</th>
                                                     <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Outcome Status</th>
                                                     <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Log Date</th>
                                                 </tr>
@@ -1150,7 +1262,39 @@ export default function PharmacyBillingReportsPage() {
                                                             {p.purchase_number || p.bill_number}
                                                         </td>
                                                         <td className="px-10 py-6 text-gray-500 font-bold">{p.supplier?.name || p.customer_name || 'Generic Party'}</td>
-                                                        <td className="px-10 py-6 text-right font-black text-gray-900 text-xl">{formatCurrency(p.total_amount || p.total)}</td>
+                                                        <td className="px-10 py-6 text-right">
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="font-black text-gray-900 text-xl">
+                                                                    {formatCurrency(p.net_value !== undefined ? p.net_value : (p.total_amount || p.total))}
+                                                                </span>
+                                                                {(p.refund_amount > 0) && (
+                                                                    <span className="text-[10px] text-red-500 font-bold tracking-tighter uppercase">
+                                                                        - {formatCurrency(p.refund_amount)} Returned
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-10 py-6 whitespace-nowrap text-sm text-gray-500">
+                                                            <div className="flex flex-col gap-1">
+                                                                {p.payments && p.payments.length > 0 ? (
+                                                                    p.payments.map((pm: any, idx: number) => (
+                                                                        <div key={idx} className="flex items-center gap-2">
+                                                                            {getPaymentMethodIcon(pm.method)}
+                                                                            <span className="capitalize text-[10px] font-bold text-gray-600">
+                                                                                {pm.method} (₹{Math.round(pm.amount)})
+                                                                            </span>
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    <div className="flex items-center gap-2">
+                                                                        {getPaymentMethodIcon(p.payment_method)}
+                                                                        <span className="capitalize text-[10px] font-bold text-gray-600">
+                                                                            {p.payment_method || 'N/A'}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
                                                         <td className="px-10 py-6 text-center">
                                                             <span className="px-4 py-1.5 rounded-full bg-gray-100 text-gray-600 font-black text-[10px] uppercase ring-1 ring-gray-200">
                                                                 {p.status || p.payment_status}
@@ -1211,4 +1355,14 @@ function SummaryCard({ icon, label, value, color, growth }: { icon: React.ReactN
             </div>
         </div>
     )
+}
+
+const getPaymentMethodIcon = (method: string) => {
+    switch (method?.toLowerCase()) {
+        case 'cash': return <Wallet className="w-3.5 h-3.5 text-emerald-500" />;
+        case 'card': return <CreditCard className="w-3.5 h-3.5 text-blue-500" />;
+        case 'upi': return <Smartphone className="w-3.5 h-3.5 text-purple-500" />;
+        case 'credit': return <Clock className="w-3.5 h-3.5 text-amber-500" />;
+        default: return <History className="w-3.5 h-3.5 text-gray-500" />;
+    }
 }
