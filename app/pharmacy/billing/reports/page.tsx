@@ -199,14 +199,29 @@ export default function PharmacyBillingReportsPage() {
             })
             setSalesByDay(Array.from(dailyMap.entries()).map(([name, value]) => ({ name, value })).reverse().slice(-15))
 
-            const methodMap = new Map()
+            const methodMap = new Map<string, { count: number, amount: number }>()
             processedBills.forEach((b: any) => {
-                const method = b.payment_method || 'other'
-                methodMap.set(method, (methodMap.get(method) || 0) + 1)
+                const payments = paymentsMap[b.id]
+                if (payments && payments.length > 0) {
+                    payments.forEach((p: any) => {
+                        const method = p.method?.toLowerCase() || 'other'
+                        const existing = methodMap.get(method) || { count: 0, amount: 0 }
+                        existing.count += 1
+                        existing.amount += Number(p.amount) || 0
+                        methodMap.set(method, existing)
+                    })
+                } else {
+                    const method = b.payment_method?.toLowerCase() || 'other'
+                    const existing = methodMap.get(method) || { count: 0, amount: 0 }
+                    existing.count += 1
+                    existing.amount += Number(b.amount_paid) || 0
+                    methodMap.set(method, existing)
+                }
             })
-            setPaymentMethods(Array.from(methodMap.entries()).map(([name, value]) => ({
+            setPaymentMethods(Array.from(methodMap.entries()).map(([name, data]) => ({
                 name: name.charAt(0).toUpperCase() + name.slice(1),
-                value
+                value: data.count,
+                amount: data.amount
             })))
 
             const statusMap = new Map()
@@ -219,12 +234,15 @@ export default function PharmacyBillingReportsPage() {
                 value
             })))
 
-            setRecentTransactions(processedBills.map((b: any) => ({
+            const finalData = processedBills.map((b: any) => ({
                 ...b,
                 refund_amount: returnsByBillId[b.id] || 0,
                 net_value: (Number(b.total) || 0) - (returnsByBillId[b.id] || 0),
                 payments: paymentsMap[b.id] || []
-            })).slice(0, 10))
+            }))
+            
+            setReportData(finalData)
+            setRecentTransactions(finalData.slice(0, 10))
         } catch (err) {
             console.error('Dashboard error:', err)
         } finally {
@@ -723,7 +741,8 @@ export default function PharmacyBillingReportsPage() {
     }
 
     const exportWord = () => {
-        const content = document.getElementById('report-table-area')?.innerHTML || ''
+        const areaId = selectedReport === 'dashboard' ? 'dashboard-table-area' : 'report-table-area'
+        const content = document.getElementById(areaId)?.innerHTML || ''
         const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Report</title></head><body>`
         const footer = `</body></html>`
         const sourceHTML = header + content + footer
@@ -738,7 +757,11 @@ export default function PharmacyBillingReportsPage() {
 
     const exportImage = async () => {
         if (!reportRef.current) return
-        const canvas = await html2canvas(reportRef.current)
+        const canvas = await html2canvas(reportRef.current, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 2
+        })
         const url = canvas.toDataURL('image/png')
         const a = document.createElement('a')
         a.href = url
@@ -994,13 +1017,17 @@ export default function PharmacyBillingReportsPage() {
                                         <h4 className="text-3xl font-black text-gray-900 tracking-tighter leading-none">{formatCurrency(stats.totalCollection)}</h4>
                                     </div>
                                 </div>
-                                <div className="mt-10 grid grid-cols-2 gap-4 w-full">
+                                <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                                     {paymentMethods.map((m, i) => (
                                         <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50/50 border border-gray-100 transition-hover hover:border-indigo-200">
-                                            <div className="w-3.5 h-3.5 rounded-full ring-4 ring-white shadow-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                                            <div className="w-3.5 h-3.5 rounded-full ring-4 ring-white shadow-sm shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
                                             <div className="flex flex-col">
                                                 <span className="text-xs font-black text-gray-900 leading-none">{m.name}</span>
-                                                <span className="text-[10px] text-gray-400 font-bold">{m.value} Bills</span>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-[10px] text-gray-400 font-bold leading-none">{m.value} Bills</span>
+                                                    <span className="text-[10px] text-gray-300">•</span>
+                                                    <span className="text-[10px] text-indigo-600 font-black leading-none">{formatCurrency(m.amount || 0)}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1019,7 +1046,7 @@ export default function PharmacyBillingReportsPage() {
                                     FULL AUDIT LOG
                                 </button>
                             </div>
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto" id="dashboard-table-area">
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="bg-gray-50/50">
