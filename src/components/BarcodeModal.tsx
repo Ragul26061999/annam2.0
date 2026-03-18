@@ -74,8 +74,9 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
               }
 
               .label-container {
-                width: 5cm;
+                width: 4.8cm;
                 height: 3.5cm;
+                padding-left: 0.1cm;
                 position: relative;
                 overflow: hidden;
                 box-sizing: border-box;
@@ -90,7 +91,7 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
                 text-transform: uppercase;
                 letter-spacing: -0.02em;
                 width: 100%;
-                padding-top: 4px;
+                padding-top: 10px;
                 line-height: 1.1;
               }
 
@@ -100,19 +101,19 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
                 align-items: center;
                 justify-content: flex-start;
                 padding: 0 4px;
-                height: 65%;
+                height: 75%;
                 width: 100%;
                 box-sizing: border-box;
               }
 
               .qr-code {
                 flex-shrink: 0;
-                padding-top: 18px;
+                padding-top: 10px;
               }
 
               .qr-code img {
-                width: 26mm;
-                height: 26mm;
+                width: 24mm;
+                height: 24mm;
               }
 
               .details {
@@ -121,13 +122,14 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
                 flex-direction: column;
                 justify-content: center;
                 height: 100%;
-                padding-left: 8px;
-                gap: 4px;
+                padding-left: 10px;
+                gap: 3px;
               }
 
               .detail-item {
                 display: flex;
                 flex-direction: column;
+                max-width: 2.2cm;
               }
 
               .detail-label {
@@ -138,27 +140,19 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
               }
 
               .detail-value {
-                font-size: 10px;
+                font-size: 9px;
                 font-weight: bold;
                 color: #000;
-                line-height: 1;
-              }
-
-              .footer {
-                position: absolute;
-                bottom: 2px;
-                left: 4px;
-                right: 4px;
+                line-height: 1.1;
+                word-break: break-all;
               }
 
               .patient-name {
-                font-size: 8px;
+                font-size: 9px;
                 font-weight: bold;
                 text-transform: uppercase;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
                 line-height: 1.1;
+                word-break: break-all;
               }
             </style>
           </head>
@@ -180,6 +174,10 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
                       <span class="detail-value">${patient.patient_id}</span>
                     </div>
                     <div class="detail-item">
+                      <span class="detail-label">NAME:</span>
+                      <span class="patient-name">${patient.name}</span>
+                    </div>
+                    <div class="detail-item">
                       <span class="detail-label">DATE:</span>
                       <span class="detail-value">${currentDate}</span>
                     </div>
@@ -187,12 +185,6 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
                       <span class="detail-label">AGE:</span>
                       <span class="detail-value">${patient.age || 'N/A'}</span>
                     </div>
-                  </div>
-                </div>
-
-                <div class="footer">
-                  <div class="patient-name">
-                    NAME: ${patient.name}
                   </div>
                 </div>
               </div>
@@ -213,6 +205,10 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
                       <span class="detail-value">${patient.patient_id}</span>
                     </div>
                     <div class="detail-item">
+                      <span class="detail-label">NAME:</span>
+                      <span class="patient-name">${patient.name}</span>
+                    </div>
+                    <div class="detail-item">
                       <span class="detail-label">DATE:</span>
                       <span class="detail-value">${currentDate}</span>
                     </div>
@@ -220,12 +216,6 @@ export default function BarcodeModal({ patient, onClose }: BarcodeModalProps) {
                       <span class="detail-label">AGE:</span>
                       <span class="detail-value">${patient.age || 'N/A'}</span>
                     </div>
-                  </div>
-                </div>
-
-                <div class="footer">
-                  <div class="patient-name">
-                    NAME: ${patient.name}
                   </div>
                 </div>
               </div>

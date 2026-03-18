@@ -1338,7 +1338,12 @@ function OutpatientPageContent() {
               </tr>
               <tr>
                 <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${new Date(selectedBill.bill_date).toLocaleDateString()} ${new Date(selectedBill.bill_date).toLocaleTimeString()}</td>
+                <td class="bill-info-10cm bill-info-bold">${(() => {
+                  const raw = selectedBill.bill_date || (selectedBill as any).issued_at || (selectedBill as any).created_at || new Date().toISOString();
+                  const d = new Date(raw);
+                  if (isNaN(d.getTime())) return new Date().toLocaleDateString('en-IN') + ' ' + new Date().toLocaleTimeString('en-IN');
+                  return d.toLocaleDateString('en-IN') + ' ' + d.toLocaleTimeString('en-IN');
+                })()}</td>
               </tr>
               <tr>
                 <td class="header-10cm">Payment Type&nbsp;:&nbsp;&nbsp;</td>
@@ -3775,7 +3780,12 @@ function OutpatientPageContent() {
                 <div style={{ fontSize: '12pt', margin: '3px 0', whiteSpace: 'pre' }}>Bill No  :   {selectedBill.bill_id}</div>
                 <div style={{ fontSize: '12pt', margin: '3px 0', whiteSpace: 'pre' }}>UHID         :   {selectedBill.patient?.patient_id || 'N/A'}</div>
                 <div style={{ fontSize: '12pt', margin: '3px 0', whiteSpace: 'pre' }}>Patient Name :   {selectedBill.patient?.name || 'Unknown Patient'}</div>
-                <div style={{ fontSize: '12pt', margin: '3px 0', whiteSpace: 'pre' }}>Date           :   {new Date(selectedBill.bill_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} {new Date(selectedBill.bill_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</div>
+                <div style={{ fontSize: '12pt', margin: '3px 0', whiteSpace: 'pre' }}>Date           :   {(() => {
+                  const raw = selectedBill.bill_date || (selectedBill as any).issued_at || (selectedBill as any).created_at || new Date().toISOString();
+                  const d = new Date(raw);
+                  if (isNaN(d.getTime())) return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                })()}</div>
                 <div style={{ fontSize: '12pt', margin: '3px 0', whiteSpace: 'pre' }}>Sales Type :   {(selectedBill.payment_method || 'CASH').toUpperCase()}</div>
               </div>
 

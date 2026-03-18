@@ -227,6 +227,7 @@ function NewBillingPageInner() {
   });
   const [showBillSuccess, setShowBillSuccess] = useState(false);
   const [generatedBill, setGeneratedBill] = useState<any>(null);
+  const [showRufBillModal, setShowRufBillModal] = useState(false);
   const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
   const [selectedPatientIndex, setSelectedPatientIndex] = useState(0);
   const [selectedMedicineIndex, setSelectedMedicineIndex] = useState(0);
@@ -3585,7 +3586,7 @@ function NewBillingPageInner() {
                         </div>
                       </div>
 
-                      {/* Actions: Receive Payment / Print Receipt */}
+                      {/* Actions: Receive Payment / RUF Bill / Print Receipt */}
                       <div className="mt-2 flex items-center gap-2">
                         <button
                           type="button"
@@ -3595,6 +3596,15 @@ function NewBillingPageInner() {
                         >
                           <CheckCircle className="h-4 w-4" />
                           Receive Payment
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowRufBillModal(true)}
+                          disabled={billItems.length === 0}
+                          className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-600 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                        >
+                          <Printer className="h-4 w-4" />
+                          RUF Bill
                         </button>
                       </div>
                     </div>
@@ -4054,6 +4064,155 @@ function NewBillingPageInner() {
                   }}
 
                   className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RUF Bill Modal */}
+        {showRufBillModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 no-print">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setShowRufBillModal(false)}></div>
+            <div className="relative bg-white w-full max-w-lg mx-auto rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+              {/* Modal Header */}
+              <div className="bg-amber-500 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Printer className="w-5 h-5" />
+                  <h2 className="text-lg font-bold">RUF BILL</h2>
+                </div>
+                <button onClick={() => setShowRufBillModal(false)} className="text-white hover:text-amber-200">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* RUF Bill Preview */}
+              <div className="p-6 max-h-[70vh] overflow-y-auto">
+                <div id="ruf-bill-content" className="font-mono text-sm">
+                  {/* Header */}
+                  <div className="text-center mb-3 border-b-2 border-black pb-2">
+                    <p className="text-base font-bold uppercase">{hospitalDetails.name}</p>
+                    <p className="text-xs">{hospitalDetails.department}</p>
+                    <p className="text-xs">{hospitalDetails.address}</p>
+                    <p className="text-xs">{hospitalDetails.contactNumber}</p>
+                    <div className="mt-2 border border-black px-3 py-1 inline-block">
+                      <span className="text-sm font-bold tracking-widest">RUF BILL</span>
+                    </div>
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="border-b border-dashed border-gray-400 pb-2 mb-2 text-xs space-y-0.5">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Date:</span>
+                      <span>{formatISTDate(getISTDate())} {formatISTTime(getISTDate())}</span>
+                    </div>
+                    {customer.name && (
+                      <div className="flex justify-between">
+                        <span className="font-semibold">Name:</span>
+                        <span className="text-right">{customer.name}</span>
+                      </div>
+                    )}
+                    {customer.phone && (
+                      <div className="flex justify-between">
+                        <span className="font-semibold">Phone:</span>
+                        <span>{customer.phone}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Items Table */}
+                  <table className="w-full text-xs mb-3">
+                    <thead>
+                      <tr className="border-y border-black">
+                        <th className="text-left py-1">#</th>
+                        <th className="text-left py-1">Medicine</th>
+                        <th className="text-center py-1">Qty</th>
+                        <th className="text-right py-1">Rate</th>
+                        <th className="text-right py-1">Amt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billItems.map((item, idx) => (
+                        <tr key={idx} className="border-b border-dashed border-gray-300">
+                          <td className="py-1">{idx + 1}</td>
+                          <td className="py-1 font-medium">{item.medicine.name}</td>
+                          <td className="py-1 text-center">{item.quantity}</td>
+                          <td className="py-1 text-right">₹{item.unit_price.toFixed(2)}</td>
+                          <td className="py-1 text-right">₹{Math.round(item.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Totals */}
+                  <div className="border-t border-black pt-2 text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span>₹{Math.round(billTotals.subtotal)}</span>
+                    </div>
+                    {billTotals.discountAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span>Discount</span>
+                        <span>-₹{Math.round(billTotals.discountAmount)}</span>
+                      </div>
+                    )}
+                    {billTotals.taxAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span>GST</span>
+                        <span>₹{Math.round(billTotals.taxAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-sm border-t border-black pt-1">
+                      <span>TOTAL</span>
+                      <span>₹{Math.round(billTotals.totalAmount)}</span>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="mt-4 text-center text-xs text-gray-500 border-t border-dashed border-gray-400 pt-2">
+                    <p className="font-semibold text-gray-700 italic">** This is a Rough Bill only — Not a Tax Invoice **</p>
+                    <p>Thank you for visiting!</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="bg-gray-50 px-6 py-4 flex gap-3">
+                <button
+                  onClick={() => {
+                    // Print just the RUF bill content
+                    const printContent = document.getElementById('ruf-bill-content');
+                    if (!printContent) return;
+                    const printWindow = window.open('', '_blank', 'width=350,height=600');
+                    if (!printWindow) return;
+                    printWindow.document.write(`
+                      <html><head><title>RUF BILL</title>
+                      <style>
+                        @page { size: 77mm auto; margin: 4mm 3mm 6mm 3mm; }
+                        body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; max-width: 77mm; margin: 0 auto; font-weight: bold; }
+                        table { border-collapse: collapse; width: 100%; }
+                        th, td { padding: 2px 0; }
+                        .border-b { border-bottom: 1px solid #000; }
+                      </style>
+                      </head><body>
+                      ${printContent.innerHTML}
+                      </body></html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    printWindow.print();
+                    printWindow.close();
+                  }}
+                  className="flex-1 bg-amber-500 text-white py-2 px-4 rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 font-semibold"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print RUF Bill
+                </button>
+                <button
+                  onClick={() => setShowRufBillModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
                 >
                   Close
                 </button>

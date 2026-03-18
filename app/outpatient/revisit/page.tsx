@@ -390,7 +390,7 @@ export default function OutpatientRevisitPage() {
     const thermalContent = `
       <html>
         <head>
-          <title>Thermal Receipt - ${currentBill.bill_id}</title>
+          <title>Thermal Receipt - ${currentBill.bill_id || (currentBill as any).bill_no || (currentBill as any).bill_number || 'N/A'}</title>
           <style>
             @page { margin: 1mm; size: 77mm 297mm; }
             body { 
@@ -436,7 +436,7 @@ export default function OutpatientRevisitPage() {
             <table class="table">
               <tr>
                 <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${currentBill.bill_id}</td>
+                <td class="bill-info-10cm bill-info-bold">${currentBill.bill_id || (currentBill as any).bill_no || (currentBill as any).bill_number || 'N/A'}</td>
               </tr>
               <tr>
                 <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
@@ -448,7 +448,12 @@ export default function OutpatientRevisitPage() {
               </tr>
               <tr>
                 <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${new Date(currentBill.bill_date).toLocaleDateString()} ${new Date(currentBill.bill_date).toLocaleTimeString()}</td>
+                <td class="bill-info-10cm bill-info-bold">${(() => {
+                  const raw = currentBill.bill_date || (currentBill as any).issued_at || (currentBill as any).created_at || new Date().toISOString();
+                  const d = new Date(raw);
+                  if (isNaN(d.getTime())) return new Date().toLocaleDateString('en-IN') + ' ' + new Date().toLocaleTimeString('en-IN');
+                  return d.toLocaleDateString('en-IN') + ' ' + d.toLocaleTimeString('en-IN');
+                })()}</td>
               </tr>
               <tr>
                 <td class="header-10cm">Payment Type&nbsp;:&nbsp;&nbsp;</td>
@@ -469,7 +474,7 @@ export default function OutpatientRevisitPage() {
                 <td class="items-8cm">1.</td>
                 <td class="items-8cm">Consultation Fee</td>
                 <td class="items-8cm text-center">1</td>
-                <td class="items-8cm text-right">${Number(currentBill.total_amount || 0).toFixed(0)}</td>
+                <td class="items-8cm text-right">${(Number(currentBill.total_amount) || Number(currentBill.subtotal) || Number((currentBill as any).total) || 0).toFixed(0)}</td>
               </tr>
             </table>
           </div>
@@ -477,7 +482,7 @@ export default function OutpatientRevisitPage() {
           <div style="margin-top: 10px;">
             <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
               <span>Total Amount</span>
-              <span>${(currentBill.total_amount - (currentBill.discount_amount || 0)).toFixed(0)}</span>
+              <span>${((Number(currentBill.total_amount) || Number(currentBill.subtotal) || Number((currentBill as any).total) || 0) - (Number(currentBill.discount_amount) || Number((currentBill as any).discount) || 0)).toFixed(0)}</span>
             </div>
           </div>
 
@@ -750,7 +755,24 @@ export default function OutpatientRevisitPage() {
                 
                 if (updatedBill) {
                   console.log('Setting current bill to:', updatedBill);
-                  setCurrentBill(updatedBill as PaymentRecord);
+                  // Map DB columns to PaymentRecord fields
+                  const mappedBill: PaymentRecord = {
+                    ...updatedBill as any,
+                    bill_id: updatedBill.bill_no || updatedBill.bill_number || currentBill.bill_id,
+                    bill_date: updatedBill.issued_at
+                      ? String(updatedBill.issued_at).split('T')[0]
+                      : currentBill.bill_date || new Date().toISOString().split('T')[0],
+                    items: currentBill.items || [],
+                    subtotal: Number(updatedBill.subtotal) || currentBill.subtotal || 0,
+                    tax_amount: Number(updatedBill.tax) || currentBill.tax_amount || 0,
+                    discount_amount: Number(updatedBill.discount) || currentBill.discount_amount || 0,
+                    total_amount: Number(updatedBill.total) || currentBill.total_amount || 0,
+                    amount_paid: Number(updatedBill.amount_paid) || 0,
+                    balance_due: Number(updatedBill.balance_due) || 0,
+                    payment_status: updatedBill.payment_status || currentBill.payment_status,
+                    payment_method: updatedBill.payment_method || currentBill.payment_method,
+                  };
+                  setCurrentBill(mappedBill);
                 } else if (fetchError) {
                   console.error('Error fetching updated bill:', fetchError);
                 }

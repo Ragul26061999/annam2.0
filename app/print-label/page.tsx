@@ -16,8 +16,8 @@ function LabelContent() {
 
   // Fixed label size per requirement
   const isLandscape = orientation === 'landscape';
-  const labelWidthMm = isLandscape ? 50 : 35;
-  const labelHeightMm = isLandscape ? 35 : 50;
+  const labelWidthMm = isLandscape ? 48 : 35;
+  const labelHeightMm = isLandscape ? 35 : 48;
   const pageWidth = `${labelWidthMm}mm`;
   const pageHeight = `${labelHeightMm}mm`;
 
@@ -30,19 +30,19 @@ function LabelContent() {
 
   // Bigger QR code (px). 96 DPI is typical browser print; we scale from mm.
   const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
-  const qrSizePx = Math.max(110, Math.min(220, Math.round(mmToPx(labelHeightMm * 0.88))));
+  const qrSizePx = Math.max(100, Math.min(220, Math.round(mmToPx(labelHeightMm * 0.82))));
 
   const rotateDeg = flip === '180' ? '180deg' : '0deg';
 
   const Label = () => (
     <div className="print-area bg-white overflow-hidden font-sans text-black" style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div className="text-[6px] font-bold text-center uppercase tracking-tighter w-full pt-1 leading-tight" style={{ flex: '0 0 auto' }}>
+      <div className="text-[6px] font-bold text-center uppercase tracking-tighter w-full pt-2.5 leading-tight" style={{ flex: '0 0 auto' }}>
         ANNAM MULTISPECIALITY HOSPITAL
       </div>
 
       {/* Content Area */}
-      <div className="flex flex-row items-center justify-start px-1 w-full" style={{ flex: '1 1 auto' }}>
+      <div className="flex flex-row items-center justify-start px-1.5 w-full" style={{ flex: '1 1 auto' }}>
         {/* QR Code (Left) */}
         <div className="flex-shrink-0 pt-0.5">
           <QRCodeSVG
@@ -53,21 +53,20 @@ function LabelContent() {
         </div>
 
         {/* Details (Right) */}
-        <div className="flex-grow flex flex-col justify-center h-full pl-2 space-y-1.5">
+        <div className="flex-grow flex flex-col justify-center h-full pl-1.5 space-y-1">
           <div className="flex flex-col">
-            <span className="text-[6px] font-bold text-gray-600 leading-none">UHID:</span>
-            <span className="text-[8px] font-bold leading-none">{uhid}</span>
+            <span className="text-[5.5px] font-bold text-gray-600 leading-none">UHID:</span>
+            <span className="text-[7.5px] font-bold leading-none">{uhid}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[6px] font-bold text-gray-600 leading-none">DATE:</span>
-            <span className="text-[8px] font-bold leading-none">{date}</span>
+            <span className="text-[5.5px] font-bold text-gray-600 leading-none">DATE:</span>
+            <span className="text-[7.5px] font-bold leading-none">{date}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[5.5px] font-bold text-gray-600 leading-none">NAME:</span>
+            <span className="text-[7.5px] font-bold leading-none uppercase truncate max-w-[60px]">{name}</span>
           </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="px-1 pb-1" style={{ flex: '0 0 auto' }}>
-        <div className="text-[7px] font-bold uppercase truncate leading-tight">NAME: {name}</div>
       </div>
     </div>
   );
