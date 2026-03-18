@@ -1362,7 +1362,9 @@ export default function PharmacyBillingPage() {
 
     try {
       setUpdatingPayment(true)
-      const { error } = await supabase
+      
+      // 1. Update the bill header
+      const { error: billError } = await supabase
         .from('billing')
         .update({
           payment_method: newPaymentMethod,
@@ -1370,7 +1372,19 @@ export default function PharmacyBillingPage() {
         })
         .eq('id', selectedBill.id)
 
-      if (error) throw error
+      if (billError) throw billError
+
+      // 2. Also update associated payment records in billing_payments
+      // This ensures reports and receipts reflect the updated method
+      const { error: paymentsError } = await supabase
+        .from('billing_payments')
+        .update({ method: newPaymentMethod })
+        .eq('billing_id', selectedBill.id)
+
+      if (paymentsError) {
+        console.warn('Failed to update associated payment records:', paymentsError)
+        // We don't throw here as the main bill was updated, but we log it
+      }
 
       await loadBillingData()
       setShowPaymentEditModal(false)
@@ -1750,7 +1764,7 @@ export default function PharmacyBillingPage() {
                     ₹{Math.round(bill.total_amount).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-1.5 group/payment relative">
                       {bill.payments && bill.payments.length > 0 ? (
                         bill.payments.map((p: any, idx: number) => (
                           <div key={idx} className="flex items-center gap-2">
@@ -1765,6 +1779,17 @@ export default function PharmacyBillingPage() {
                           {getPaymentMethodIcon(bill.payment_method)}
                           <span className="capitalize">{bill.payment_method}</span>
                         </div>
+                      )}
+                      
+                      {/* Quick Edit Button */}
+                      {bill.payment_status !== 'cancelled' && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleEditPaymentMethod(bill) }}
+                          className="absolute -right-2 top-0 p-1 text-purple-600 hover:bg-purple-50 rounded-full opacity-0 group-hover/payment:opacity-100 transition-opacity"
+                          title="Change Payment Mode"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   </td>
@@ -1791,7 +1816,7 @@ export default function PharmacyBillingPage() {
                       >
                         <RotateCcw className="w-4 h-4" />
                       </button>
-                      {(bill.payment_method === 'split' || bill.payment_method === 'credit') && (
+                      {bill.payment_status !== 'cancelled' && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleEditPaymentMethod(bill) }}
                           className="text-purple-600 hover:text-purple-800"

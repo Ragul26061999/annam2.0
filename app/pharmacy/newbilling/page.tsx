@@ -187,7 +187,7 @@ function NewBillingPageInner() {
   // Payment/Staff State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([
-    { method: 'cash', amount: 0, reference: '' }
+    { method: 'credit', amount: 0, reference: '' }
   ]);
   const [paymentAmountInputs, setPaymentAmountInputs] = useState<string[]>([]);
   const [staffId, setStaffId] = useState('');
@@ -259,7 +259,7 @@ function NewBillingPageInner() {
     customer: { type: 'walk_in', name: '', phone: '' },
     billItems: [],
     billTotals: { subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 0, taxAmount: 0, totalAmount: 0 },
-    payments: [{ method: 'cash', amount: 0, reference: '' }],
+    payments: [{ method: 'credit', amount: 0, reference: '' }],
     searchTerm: '',
     patientSearch: '',
     intentType: '',
@@ -553,7 +553,7 @@ function NewBillingPageInner() {
       case 'credit':
         return m;
       default:
-        return 'cash';
+        return 'credit';
     }
   }
 
@@ -2210,7 +2210,7 @@ function NewBillingPageInner() {
       setBillItems([]);
       setCustomer({ type: 'walk_in', name: '', phone: '' });
       setIntentType('');
-      setPayments([{ method: 'cash', amount: 0, reference: '' }]);
+      setPayments([{ method: 'credit', amount: 0, reference: '' }]);
       setBillTotals({
         subtotal: 0,
         discountType: 'amount',
@@ -3778,7 +3778,7 @@ function NewBillingPageInner() {
                       <h4 className="text-lg font-semibold text-gray-900">Payment Methods</h4>
                       {payments.length < 3 && (
                         <button
-                          onClick={() => setPayments(prev => [...prev, { method: 'cash', amount: 0, reference: '' }])}
+                          onClick={() => setPayments(prev => [...prev, { method: 'credit', amount: 0, reference: '' }])}
                           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                           <Plus className="h-4 w-4" />
@@ -4050,7 +4050,7 @@ function NewBillingPageInner() {
                       setBillItems([]);
                       setCustomer({ type: 'walk_in', name: '', phone: '' });
                       setBillTotals({ subtotal: 0, discountType: 'amount', discountValue: 0, discountAmount: 0, taxPercent: 0, taxAmount: 0, totalAmount: 0 });
-                      setPayments([{ method: 'cash', amount: 0, reference: '' }]);
+                      setPayments([{ method: 'credit', amount: 0, reference: '' }]);
                       setSearchTerm('');
                       setPatientSearch('');
                       setIntentType('');
