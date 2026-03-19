@@ -37,14 +37,14 @@ function LabelContent() {
   const Label = () => (
     <div className="print-area bg-white overflow-hidden font-sans text-black" style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div className="text-[6px] font-bold text-center uppercase tracking-tighter w-full pt-2.5 leading-tight" style={{ flex: '0 0 auto' }}>
+      <div className="text-[7.5px] font-bold text-center uppercase tracking-tighter w-full pt-4 leading-tight" style={{ flex: '0 0 auto' }}>
         ANNAM MULTISPECIALITY HOSPITAL
       </div>
 
       {/* Content Area */}
-      <div className="flex flex-row items-center justify-start px-1.5 w-full" style={{ flex: '1 1 auto' }}>
+      <div className="flex flex-row items-center justify-start px-2.5 w-full" style={{ flex: '1 1 auto' }}>
         {/* QR Code (Left) */}
-        <div className="flex-shrink-0 pt-0.5">
+        <div className="flex-shrink-0 pt-1">
           <QRCodeSVG
             value={qrValue}
             size={qrSizePx}
@@ -53,18 +53,18 @@ function LabelContent() {
         </div>
 
         {/* Details (Right) */}
-        <div className="flex-grow flex flex-col justify-center h-full pl-1.5 space-y-1">
+        <div className="flex-grow flex flex-col justify-center h-full pl-2 space-y-1">
           <div className="flex flex-col">
-            <span className="text-[5.5px] font-bold text-gray-600 leading-none">UHID:</span>
-            <span className="text-[7.5px] font-bold leading-none">{uhid}</span>
+            <span className="text-[6.5px] font-bold text-gray-600 leading-none">UHID:</span>
+            <span className="text-[9px] font-bold leading-none">{uhid}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[5.5px] font-bold text-gray-600 leading-none">DATE:</span>
-            <span className="text-[7.5px] font-bold leading-none">{date}</span>
+            <span className="text-[6.5px] font-bold text-gray-600 leading-none">DATE:</span>
+            <span className="text-[9px] font-bold leading-none">{date}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[5.5px] font-bold text-gray-600 leading-none">NAME:</span>
-            <span className="text-[7.5px] font-bold leading-none uppercase truncate max-w-[60px]">{name}</span>
+            <span className="text-[6.5px] font-bold text-gray-600 leading-none">NAME:</span>
+            <span className="text-[9px] font-bold leading-none uppercase truncate max-w-[80px]">{name}</span>
           </div>
         </div>
       </div>
@@ -155,7 +155,7 @@ function LabelContent() {
           display: grid;
           grid-template-columns: repeat(${cols}, ${pageWidth});
           grid-template-rows: repeat(${rows}, ${pageHeight});
-          gap: 0;
+          gap: 2mm;
           box-sizing: border-box;
           background: transparent;
           transform: rotate(${rotateDeg});

@@ -75,7 +75,7 @@ interface BillItem {
 }
 
 interface Customer {
-  type: 'patient' | 'walk_in' | 'intent';
+  type: 'patient' | 'walk_in' | 'intent' | 'op';
   name: string;
   phone?: string;
   patient_uuid?: string;
@@ -139,6 +139,10 @@ interface BillTab {
   pendingExternalAdd: any;
   qrPreviewBatch: MedicineBatch | null;
   phoneError: string;
+  opSearch: string;
+  opResults: any[];
+  showOpDropdown: boolean;
+  selectedOpIndex: number;
 }
 
 
@@ -238,6 +242,10 @@ function NewBillingPageInner() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
   const [phoneError, setPhoneError] = useState<string>('');
+  const [opSearch, setOpSearch] = useState('');
+  const [opResults, setOpResults] = useState<any[]>([]);
+  const [showOpDropdown, setShowOpDropdown] = useState(false);
+  const [selectedOpIndex, setSelectedOpIndex] = useState(0);
   const medicineDropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -300,7 +308,11 @@ function NewBillingPageInner() {
     externalPriceInput: '',
     pendingExternalAdd: null,
     qrPreviewBatch: null,
-    phoneError: ''
+    phoneError: '',
+    opSearch: '',
+    opResults: [],
+    showOpDropdown: false,
+    selectedOpIndex: 0
   });
 
   // Persistent Storage Management: Load/Save tabs to localStorage
@@ -414,6 +426,10 @@ function NewBillingPageInner() {
     setPendingExternalAdd(tab.pendingExternalAdd);
     setQrPreviewBatch(tab.qrPreviewBatch);
     setPhoneError(tab.phoneError);
+    setOpSearch(tab.opSearch || '');
+    setOpResults(tab.opResults || []);
+    setShowOpDropdown(tab.showOpDropdown || false);
+    setSelectedOpIndex(tab.selectedOpIndex || 0);
 
     // Reset switching flag after states are updated
     setTimeout(() => {
@@ -464,7 +480,11 @@ function NewBillingPageInner() {
           externalPriceInput,
           pendingExternalAdd,
           qrPreviewBatch,
-          phoneError
+          phoneError,
+          opSearch,
+          opResults,
+          showOpDropdown,
+          selectedOpIndex
         };
         
         // Only update if something actually changed to avoid infinite loops
@@ -487,7 +507,8 @@ function NewBillingPageInner() {
     selectedMedicineIndex, selectedBatchIndex, prescribedSearchTerm,
     unlistedForm, showUnlistedModal, showExternalPriceModal,
     externalPriceInput, pendingExternalAdd, qrPreviewBatch, phoneError,
-    activeTabIndex, tabs.length
+    activeTabIndex, tabs.length,
+    opSearch, opResults, showOpDropdown, selectedOpIndex
   ]);
 
   // Load current user on component mount
@@ -601,7 +622,8 @@ function NewBillingPageInner() {
     billItems.length > 0 && (
       (customer.type === 'patient' && !!customer.patient_uuid && !!(customer.name || '').trim()) ||
       (customer.type === 'walk_in' && !!(customer.name || '').trim()) ||
-      (customer.type === 'intent' && !!(customer.name || '').trim() && !!intentType)
+      (customer.type === 'intent' && !!(customer.name || '').trim() && !!intentType) ||
+      (customer.type === 'op' && !!(customer.name || '').trim())
     )
   );
 
@@ -821,6 +843,38 @@ function NewBillingPageInner() {
         e.preventDefault();
         setShowPatientDropdown(false);
         setSelectedPatientIndex(0);
+        break;
+    }
+  };
+
+  const handleOpKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (opResults.length === 0) return;
+      e.preventDefault();
+      setShowOpDropdown(true);
+    }
+    if (!showOpDropdown || opResults.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        setSelectedOpIndex(prev => (prev + 1) % opResults.length);
+        break;
+      case 'ArrowUp':
+        setSelectedOpIndex(prev => (prev - 1 + opResults.length) % opResults.length);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (opResults[selectedOpIndex]) {
+          const op = opResults[selectedOpIndex];
+          setCustomer({ ...customer, name: op.name, phone: op.phone || '' });
+          setOpSearch(op.name);
+          setShowOpDropdown(false);
+          setSelectedOpIndex(0);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setShowOpDropdown(false);
         break;
     }
   };
@@ -1370,6 +1424,42 @@ function NewBillingPageInner() {
     };
     run();
   }, [patientSearch, customer.type]);
+
+  // Search for previously used OP names in billing table
+  useEffect(() => {
+    const run = async () => {
+      const term = opSearch.trim();
+      if (customer.type !== 'op' || term.length < 2) {
+        setOpResults([]);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('billing')
+          .select('customer_name, customer_phone')
+          .eq('customer_type', 'op')
+          .ilike('customer_name', `%${term}%`)
+          .limit(20);
+        
+        if (error) throw error;
+        
+        // Return unique names
+        const unique: any[] = [];
+        const seen = new Set();
+        (data || []).forEach((curr: any) => {
+          if (!seen.has(curr.customer_name)) {
+            unique.push({ name: curr.customer_name, phone: curr.customer_phone });
+            seen.add(curr.customer_name);
+          }
+        });
+        
+        setOpResults(unique);
+      } catch (e) {
+        console.error('OP search error:', e);
+      }
+    };
+    run();
+  }, [opSearch, customer.type]);
 
   // Fetch pending intent usage for selected patient
   useEffect(() => {
@@ -2245,7 +2335,7 @@ function NewBillingPageInner() {
 
     // Use generatedBill.customer as fallback since customer state may be reset after bill generation
     const billCustomer1 = generatedBill.customer || customer;
-    const patientUhid = billCustomer1.type === 'patient' ? (billCustomer1.patient_uhid || customer.patient_uhid || 'No UHID') : billCustomer1.type === 'intent' ? `INTENT-${intentType}` : 'WALK-IN';
+    const patientUhid = billCustomer1.type === 'patient' ? (billCustomer1.patient_uhid || customer.patient_uhid || 'No UHID') : billCustomer1.type === 'intent' ? `INTENT-${intentType}` : billCustomer1.type === 'op' ? 'OP' : 'WALK-IN';
     const patientName1 = billCustomer1.name || customer.name || generatedBill.customer_name || '';
 
     // Get sales type
@@ -2405,6 +2495,8 @@ function NewBillingPageInner() {
     let patientUhid = '';
     if (billCustomer.type === 'patient') {
       patientUhid = billCustomer.patient_uhid || customer.patient_uhid || 'No UHID';
+    } else if (billCustomer.type === 'op') {
+      patientUhid = 'OP';
     } else if (billCustomer.type === 'intent') {
       patientUhid = `INTENT-${intentType}`;
     } else {
@@ -2624,7 +2716,7 @@ function NewBillingPageInner() {
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 border border-emerald-100">
                   Entry Type:
                   <span className="ml-1 inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-                    {customer.type === 'patient' ? 'Registered' : customer.type === 'intent' ? 'Intent' : 'Walk-in'}
+                    {customer.type === 'patient' ? 'Registered' : customer.type === 'intent' ? 'Intent' : customer.type === 'op' ? 'OP' : 'Walk-in'}
                   </span>
                 </span>
               </div>
@@ -2693,7 +2785,7 @@ function NewBillingPageInner() {
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-semibold text-slate-900">Pharmacy Billing</h1>
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 border border-emerald-100">
-                  {customer.type === 'patient' ? 'Patient' : customer.type === 'intent' ? 'Intent' : 'Walk-in'}
+                  {customer.type === 'patient' ? 'Patient' : customer.type === 'intent' ? 'Intent' : customer.type === 'op' ? 'OP' : 'Walk-in'}
                 </span>
               </div>
               <div className="flex items-center gap-6 pr-2">
@@ -2743,7 +2835,7 @@ function NewBillingPageInner() {
                     <select
                       value={customer.type}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                        const newType = e.target.value as 'patient' | 'walk_in' | 'intent';
+                        const newType = e.target.value as 'patient' | 'walk_in' | 'intent' | 'op';
                         setCustomer({ ...customer, type: newType });
                         if (newType !== 'intent') {
                           setIntentType('');
@@ -2752,6 +2844,7 @@ function NewBillingPageInner() {
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="patient">Patient</option>
+                      <option value="op">OP</option>
                       <option value="walk_in">Walk-in</option>
                       <option value="intent">Intent</option>
                     </select>
@@ -2834,6 +2927,62 @@ function NewBillingPageInner() {
                           }}
                           placeholder="Enter phone number"
                           className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${phoneError ? 'border-red-300' : 'border-slate-200'}`}
+                        />
+                      </div>
+                    </>
+                  ) : customer.type === 'op' ? (
+                    <>
+                      <div className="col-span-4">
+                        <label className="block text-sm font-bold text-slate-700 mb-1">OP Name *</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={opSearch || customer.name}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              const val = e.target.value;
+                              setOpSearch(val);
+                              setCustomer({ ...customer, name: val });
+                              setShowOpDropdown(true);
+                              setSelectedOpIndex(0);
+                            }}
+                            onKeyDown={handleOpKeyDown}
+                            onFocus={() => setShowOpDropdown(true)}
+                            placeholder="Search or enter name..."
+                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          {showOpDropdown && opResults.length > 0 && (
+                            <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+                              {opResults.map((op, index) => (
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={() => {
+                                    setCustomer({ ...customer, name: op.name, phone: op.phone || '' });
+                                    setOpSearch(op.name);
+                                    setShowOpDropdown(false);
+                                    setSelectedOpIndex(0);
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-xs ${index === selectedOpIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
+                                    }`}
+                                >
+                                  <div className="font-medium text-slate-900">{op.name}</div>
+                                  {op.phone && <div className="text-slate-400">📱 {op.phone}</div>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Phone</label>
+                        <input
+                          type="text"
+                          value={customer.phone || ''}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            setCustomer({ ...customer, phone: e.target.value });
+                          }}
+                          placeholder="Enter phone number"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
                     </>
