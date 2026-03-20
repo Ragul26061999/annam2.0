@@ -1137,13 +1137,18 @@ export default function PharmacyBillingPage() {
             .text-left { text-align: left; }
             .text-center { text-align: center; }
             .logo { width: 250px; height: auto; margin-bottom: 5px; }
-            
             .invoice-box {
               border: 1px solid #000;
               margin: 5px 0;
             }
-            .invoice-box * {
-              font-weight: normal !important;
+
+            .invoice-info {
+              padding: 4px;
+              font-size: 9px;
+              color: #444;
+            }
+            .invoice-info td {
+              font-weight: normal;
             }
 
             .receipt-table {
@@ -1158,16 +1163,18 @@ export default function PharmacyBillingPage() {
               border-top: none;
               border-left: 1px solid #000;
               border-right: 1px solid #000;
-              padding: 3px 2px;
+              padding: 4px 2px;
               text-align: center;
               text-transform: uppercase;
-              font-size: 10px;
+              font-size: 12px;
+              font-weight: bold;
             }
             .receipt-table td {
               border-left: 1px solid #000;
               border-right: 1px solid #000;
-              padding: 2px 2px;
-              font-size: 10px;
+              padding: 3px 2px;
+              font-size: 12px;
+              font-weight: bold;
             }
             /* Remove outer vertical borders to avoid duplicate with invoice-box */
             .receipt-table th:first-child, .receipt-table td:first-child { border-left: none; }
@@ -1177,22 +1184,21 @@ export default function PharmacyBillingPage() {
               width: 100%;
               border-collapse: collapse;
               border: none;
-              font-size: 10px;
+              font-size: 11px;
             }
             .totals-box td {
-              border-top: 1px solid #000;
-              padding: 3px 4px;
-            }
-            .totals-box tr:last-child td {
-              border-bottom: none;
+              padding: 2px 4px;
+              border: none;
             }
             .totals-label {
               text-align: right;
               width: 70%;
+              font-weight: bold;
             }
             .totals-value {
               text-align: right;
               width: 30%;
+              font-weight: bold;
             }
             .font-bold { font-weight: bold; }
             .uppercase { text-transform: uppercase; }
@@ -1209,10 +1215,10 @@ export default function PharmacyBillingPage() {
 
           <div class="invoice-box">
             <div class="center" style="border-bottom: 1px solid #000; padding: 2px;">
-              <span style="font-size: 12px; letter-spacing: 2px;">INVOICE</span>
+              <span style="font-size: 12px; letter-spacing: 2px; font-weight: bold;">INVOICE</span>
             </div>
 
-            <div style="padding: 4px; font-size: 11px;">
+            <div class="invoice-info">
               <table style="width: 100%; border-collapse: collapse; border: none;">
                 <tr><td style="width: 30%; border: none;">UHID</td><td style="border: none;">: ${patientUhid}</td></tr>
                 <tr><td style="border: none;">Patient Name</td><td style="border: none;">: ${selectedBill.customer_name || 'WALK-IN CUSTOMER'}</td></tr>
@@ -1237,15 +1243,17 @@ export default function PharmacyBillingPage() {
               </tbody>
             </table>
 
-            <table class="totals-box">
-              <tbody>
-                <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxableAmount.toFixed(2)}</td></tr>
-                <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
-                <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst.toFixed(2)}</td></tr>
-                <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst.toFixed(2)}</td></tr>
-                <tr><td class="totals-label" style="font-size: 13px;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px;">₹${totalAmount.toFixed(2)}</td></tr>
-              </tbody>
-            </table>
+            <div style="border-top: 1px solid #000;">
+              <table class="totals-box">
+                <tbody>
+                  <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxableAmount.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label" style="font-size: 13px; border-top: 1px solid #000;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px; border-top: 1px solid #000;">₹${totalAmount.toFixed(2)}</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
