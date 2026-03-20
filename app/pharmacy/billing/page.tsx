@@ -1153,27 +1153,34 @@ export default function PharmacyBillingPage() {
               border-top: 1px solid #000;
               border-bottom: 1px solid #000;
             }
-            .receipt-table th, .receipt-table td {
-              border: 1px solid #000;
-              border-left: none;
-              border-right: none;
-              padding: 3px 2px;
-            }
             .receipt-table th {
+              border: 1px solid #000;
+              border-top: none;
+              border-left: 1px solid #000;
+              border-right: 1px solid #000;
+              padding: 3px 2px;
               text-align: center;
               text-transform: uppercase;
-              font-size: 11px;
+              font-size: 10px;
             }
+            .receipt-table td {
+              border-left: 1px solid #000;
+              border-right: 1px solid #000;
+              padding: 2px 2px;
+              font-size: 10px;
+            }
+            /* Remove outer vertical borders to avoid duplicate with invoice-box */
+            .receipt-table th:first-child, .receipt-table td:first-child { border-left: none; }
+            .receipt-table th:last-child, .receipt-table td:last-child { border-right: none; }
+
             .totals-box {
               width: 100%;
               border-collapse: collapse;
               border: none;
+              font-size: 10px;
             }
             .totals-box td {
-              border: 1px solid #000;
-              border-left: none;
-              border-right: none;
-              border-bottom: none;
+              border-top: 1px solid #000;
               padding: 3px 4px;
             }
             .totals-box tr:last-child td {
