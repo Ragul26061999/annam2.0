@@ -16,10 +16,7 @@ import {
     PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 import { supabase } from '@/src/lib/supabase'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as ExcelJS from 'exceljs'
-import html2canvas from 'html2canvas'
+// Client-side report exports moved to dynamic imports inside functions to prevent SSR/Turbopack fflate errors
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
@@ -242,7 +239,7 @@ export default function PharmacyBillingReportsPage() {
             }))
             
             setReportData(finalData)
-            setRecentTransactions(finalData.slice(0, 10))
+            setRecentTransactions(finalData)
         } catch (err) {
             console.error('Dashboard error:', err)
         } finally {
@@ -610,6 +607,7 @@ export default function PharmacyBillingReportsPage() {
 
     // Export Functions
     const exportExcel = async () => {
+        const ExcelJS = await import('exceljs')
         const workbook = new ExcelJS.Workbook()
         const worksheet = workbook.addWorksheet(selectedReport)
 
@@ -631,8 +629,11 @@ export default function PharmacyBillingReportsPage() {
         a.click()
     }
 
-    const exportPDF = () => {
+    const exportPDF = async () => {
         if (filteredAndSortedData.length === 0) return
+
+        const { default: jsPDF } = await import('jspdf')
+        const { default: autoTable } = await import('jspdf-autotable')
 
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
         const timestamp = new Date().toLocaleString()
@@ -757,6 +758,7 @@ export default function PharmacyBillingReportsPage() {
 
     const exportImage = async () => {
         if (!reportRef.current) return
+        const { default: html2canvas } = await import('html2canvas')
         const canvas = await html2canvas(reportRef.current, {
             useCORS: true,
             allowTaint: true,

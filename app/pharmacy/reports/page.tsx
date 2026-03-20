@@ -13,7 +13,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts'
 import { supabase } from '@/src/lib/supabase'
-import ExcelJS from 'exceljs'
+// exceljs moved to dynamic import inside exportToExcel to prevent SSR/Turbopack issues
 
 // Utility functions
 const formatCurrency = (amount: number) => {
@@ -441,6 +441,7 @@ export default function PharmacyReportsPage() {
 
   const exportToExcel = async () => {
     try {
+      const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
       workbook.creator = 'ANNAM Pharmacy'
       workbook.created = new Date()

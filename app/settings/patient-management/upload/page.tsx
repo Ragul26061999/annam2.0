@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload, FileSpreadsheet, Check, AlertCircle, Loader2 } from 'lucide-react';
-import ExcelJS from 'exceljs';
+// exceljs moved to dynamic imports inside functions to prevent SSR/Turbopack issues
 import { supabase } from '@/src/lib/supabase';
 import { uploadPatient } from './actions';
 
@@ -65,6 +65,7 @@ const PatientUploadPage = () => {
 
   const downloadTemplate = async () => {
     try {
+      const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Patients');
       
@@ -133,6 +134,7 @@ const PatientUploadPage = () => {
     console.log('Starting parseExcel for file:', file.name, file.size, file.type);
     setIsParsing(true);
     try {
+      const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook();
       const arrayBuffer = await file.arrayBuffer();
       console.log('ArrayBuffer loaded, length:', arrayBuffer.byteLength);
