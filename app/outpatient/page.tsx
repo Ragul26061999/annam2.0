@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -101,6 +101,7 @@ function OutpatientPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   // State for patient search
@@ -151,6 +152,15 @@ function OutpatientPageContent() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [placeFilter, setPlaceFilter] = useState('');
+  const lastSearchTermRef = useRef('');
+
+  // Add debounce effect for search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // Reduced from 500ms to 300ms for faster feedback
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Effect to update date inputs when date filter changes
   useEffect(() => {
@@ -219,13 +229,23 @@ function OutpatientPageContent() {
       return;
     }
 
-    loadOutpatientData();
-    loadQueueStats();
-    loadInjectionQueue();
-    loadUpdatedInjections();
-    loadOutpatientQueueEntries();
-    loadRecentPatients();
-    loadLabTestPrescriptions();
+    // Determine if this is primarily a search update
+    const isSearchUpdate = debouncedSearchTerm !== lastSearchTermRef.current;
+    lastSearchTermRef.current = debouncedSearchTerm;
+
+    if (isSearchUpdate && debouncedSearchTerm.trim() !== '') {
+      // For search updates, only fetch the core data and avoid heavy statistics
+      loadOutpatientData(true);
+    } else {
+      // For everything else (mount, filter changes, or empty search), refresh everything
+      loadOutpatientData(false);
+      loadQueueStats();
+      loadInjectionQueue();
+      loadUpdatedInjections();
+      loadOutpatientQueueEntries();
+      loadRecentPatients();
+      loadLabTestPrescriptions();
+    }
 
     // Auto-refresh every 30 seconds
     const intervalMs = 0;
@@ -243,7 +263,7 @@ function OutpatientPageContent() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [selectedDate, statusFilter, currentPage, searchTerm, startDate, endDate, placeFilter]);
+  }, [selectedDate, statusFilter, currentPage, debouncedSearchTerm, startDate, endDate, placeFilter]);
 
 
   const loadQueueStats = async () => {
@@ -766,19 +786,25 @@ function OutpatientPageContent() {
     }
   };
 
-  const loadOutpatientData = async () => {
+  const loadOutpatientData = async (skipStats = false) => {
     try {
-      setLoading(true);
+      // Only show full-screen loader if we don't have any patients yet
+      if (patients.length === 0) {
+        setLoading(true);
+      }
 
-      // Get general dashboard stats
-      const dashboardStats = await getDashboardStats();
+      // Get general dashboard stats only if needed
+      let dashboardStats = stats as any;
+      if (!skipStats) {
+        dashboardStats = await getDashboardStats();
+      }
 
       // Get patients - fetch with pagination and filters
       const response = await getAllPatients({
         page: currentPage,
         limit: 20,
         status: statusFilter === '' ? undefined : statusFilter,
-        searchTerm: searchTerm || undefined,
+        searchTerm: debouncedSearchTerm || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         place: placeFilter || undefined
