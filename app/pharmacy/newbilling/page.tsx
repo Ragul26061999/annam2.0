@@ -2385,7 +2385,7 @@ function NewBillingPageInner() {
     const itemsHtml = Object.values(groupedItems).map((item: any, index: number) => `
       <tr>
         <td class="text-center">${index + 1}</td>
-        <td class="text-left font-bold uppercase">${item.name}</td>
+        <td class="text-left uppercase">${item.name}</td>
         <td class="text-center">${item.totalQuantity}</td>
         <td class="text-right">₹${Number(item.totalAmount).toFixed(2)}</td>
       </tr>
@@ -2422,39 +2422,53 @@ function NewBillingPageInner() {
             .text-center { text-align: center; }
             .logo { width: 250px; height: auto; margin-bottom: 5px; }
             
+            .invoice-box {
+              border: 1px solid #000;
+              margin: 5px 0;
+            }
+            .invoice-box * {
+              font-weight: normal !important;
+            }
+
             .receipt-table {
               width: 100%;
               border-collapse: collapse;
-              border: 1px solid #000;
-              margin-top: 10px;
+              border: none;
+              border-top: 1px solid #000;
+              border-bottom: 1px solid #000;
             }
             .receipt-table th, .receipt-table td {
               border: 1px solid #000;
+              border-left: none;
+              border-right: none;
               padding: 3px 2px;
             }
             .receipt-table th {
               text-align: center;
               text-transform: uppercase;
-              font-weight: bold;
               font-size: 11px;
             }
             .totals-box {
               width: 100%;
               border-collapse: collapse;
-              border-top: none;
+              border: none;
             }
             .totals-box td {
               border: 1px solid #000;
+              border-left: none;
+              border-right: none;
+              border-bottom: none;
               padding: 3px 4px;
+            }
+            .totals-box tr:last-child td {
+              border-bottom: none;
             }
             .totals-label {
               text-align: right;
-              font-weight: bold;
               width: 70%;
             }
             .totals-value {
               text-align: right;
-              font-weight: bold;
               width: 30%;
             }
             .font-bold { font-weight: bold; }
@@ -2468,45 +2482,48 @@ function NewBillingPageInner() {
             <div style="font-size: 10px;">${address}</div>
             <div style="font-size: 10px;">${contactNumber}</div>
             <div style="font-size: 10px;">GST No: ${gstNumber}</div>
-            <div style="margin: 5px 0; border: 1px solid #000; padding: 2px; width: 100%; box-sizing: border-box; display: inline-block;">
-              <span style="font-size: 12px; letter-spacing: 2px; font-weight: bold;">INVOICE</span>
-            </div>
           </div>
 
-          <div style="margin-top: 5px; font-size: 11px;">
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="width: 30%; font-weight: bold;">UHID</td><td style="font-weight: bold;">: ${billCustomer.patient_uhid || 'WALK-IN'}</td></tr>
-              <tr><td style="font-weight: bold;">Patient Name</td><td style="font-weight: bold;">: ${billCustomer.name}</td></tr>
-              <tr style="height: 5px;"><td></td><td></td></tr>
-              <tr><td style="font-weight: bold;">Bill No</td><td style="font-weight: bold;">: ${generatedBill.bill_number}</td></tr>
-              <tr><td style="font-weight: bold;">Date</td><td style="font-weight: bold;">: ${printedDateTime}</td></tr>
-              <tr><td style="font-weight: bold;">Sales Type</td><td style="font-weight: bold;">: ${(generatedBill.payments?.[0]?.method || generatedBill.paymentMethod || 'CASH').toUpperCase()}</td></tr>
+          <div class="invoice-box">
+            <div class="center" style="border-bottom: 1px solid #000; padding: 2px;">
+              <span style="font-size: 12px; letter-spacing: 2px;">INVOICE</span>
+            </div>
+
+            <div style="padding: 4px; font-size: 11px;">
+              <table style="width: 100%; border-collapse: collapse; border: none;">
+                <tr><td style="width: 30%; border: none;">UHID</td><td style="border: none;">: ${billCustomer.patient_uhid || 'WALK-IN'}</td></tr>
+                <tr><td style="border: none;">Patient Name</td><td style="border: none;">: ${billCustomer.name}</td></tr>
+                <tr style="height: 5px;"><td style="border: none;"></td><td style="border: none;"></td></tr>
+                <tr><td style="border: none;">Bill No</td><td style="border: none;">: ${generatedBill.bill_number}</td></tr>
+                <tr><td style="border: none;">Date</td><td style="border: none;">: ${printedDateTime}</td></tr>
+                <tr><td style="border: none;">Sales Type</td><td style="border: none;">: ${(generatedBill.payments?.[0]?.method || generatedBill.paymentMethod || 'CASH').toUpperCase()}</td></tr>
+              </table>
+            </div>
+
+            <table class="receipt-table">
+              <thead>
+                <tr>
+                  <th style="width: 10%;">.No</th>
+                  <th style="width: 55%; text-align: left;">DRUG NAME</th>
+                  <th style="width: 15%;">Qty</th>
+                  <th style="width: 20%; text-align: right;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+
+            <table class="totals-box">
+              <tbody>
+                <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxable}</td></tr>
+                <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
+                <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst}</td></tr>
+                <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst}</td></tr>
+                <tr><td class="totals-label" style="font-size: 13px;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px;">₹${total}</td></tr>
+              </tbody>
             </table>
           </div>
-
-          <table class="receipt-table">
-            <thead>
-              <tr>
-                <th style="width: 10%;">.No</th>
-                <th style="width: 55%; text-align: left;">DRUG NAME</th>
-                <th style="width: 15%;">Qty</th>
-                <th style="width: 20%; text-align: right;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-
-          <table class="totals-box">
-            <tbody>
-              <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxable}</td></tr>
-              <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
-              <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst}</td></tr>
-              <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst}</td></tr>
-              <tr><td class="totals-label" style="font-size: 13px;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px;">₹${total}</td></tr>
-            </tbody>
-          </table>
 
           <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
             <div style="font-size: 9px; font-weight: bold;">
