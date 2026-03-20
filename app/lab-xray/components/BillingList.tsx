@@ -169,164 +169,184 @@ export default function BillingList({ items, onRefresh, searchTerm: globalSearch
     }
 
     const now = new Date();
+    const printedDate = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()}`;
+    const printedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    
     const billDate = selectedBill.created_at ? new Date(selectedBill.created_at) : now;
+    const billDateStr = formatBillDateTime(billDate);
 
     const billNumber = selectedBill.bill_number || selectedBill.invoice_number || String(selectedBill.id || '').slice(0, 8).toUpperCase();
-    const patientUhid = selectedBill.patient?.patient_id || selectedBill.patient?.uhid || selectedBill.patient_id || '';
-    const patientName = selectedBill.patient?.name || '';
+    const patientUhid = selectedBill.patient?.patient_id || selectedBill.patient?.uhid || selectedBill.patient_id || 'WALK-IN';
+    const patientName = selectedBill.patient?.name || 'Unknown Patient';
     const currentStatus = getBillingStatus(selectedBill);
     const displayPaymentMethod = selectedBill.payment_method;
     const salesType = currentStatus === 'paid' ? String(displayPaymentMethod || 'cash').toUpperCase() : 'CREDIT';
 
     const amount = Number(selectedBill.total ?? selectedBill.subtotal ?? 0);
-    const cgstAmount = 0;
-    const sgstAmount = 0;
     const discountAmount = Number(selectedBill.discount ?? 0);
     const taxableAmount = amount - discountAmount;
-    const totalAmount = amount;
+    const cgstAmount = 0; // Lab usually doesn't show GST split unless specified
+    const sgstAmount = 0;
 
     // Use viewItems if available, otherwise fall back to selectedBill.items
     const lineItems = viewItems.length > 0 ? viewItems : (Array.isArray(selectedBill.items) ? selectedBill.items : []);
-    const itemsHtml = lineItems
+    let itemsHtml = lineItems
       .map((it: any, idx: number) => {
         const qty = Number(it.qty) || 1;
         const total = Number(it.total_amount) || 0;
         return `
           <tr>
-            <td class="items-8cm">${idx + 1}.</td>
-            <td class="items-8cm">${escapeHtml(it.description || it.test_name || it.service_name || 'Service')}</td>
-            <td class="items-8cm text-center">${qty}</td>
-            <td class="items-8cm text-right">${total.toFixed(0)}</td>
+            <td class="text-center">${idx + 1}</td>
+            <td class="text-left font-bold uppercase">${escapeHtml(it.description || it.test_name || it.service_name || 'Service')}</td>
+            <td class="text-center">${qty}</td>
+            <td class="text-right">₹${total.toFixed(2)}</td>
           </tr>
         `;
       })
       .join('');
+    
+    itemsHtml += '<tr><td style="height: 10mm;"></td><td></td><td></td><td></td></tr>';
 
     const thermalContent = `
       <html>
         <head>
           <title>Thermal Receipt - ${escapeHtml(billNumber)}</title>
           <style>
-            @page { margin: 1mm; size: 77mm 297mm; }
+            @page { margin: 0; size: 72mm auto; }
             body { 
+              margin: 0; padding: 2mm; 
               font-family: 'Verdana', sans-serif; 
-              font-weight: bold;
+              width: 72mm; 
               color: #000;
+              background: #fff;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
-              margin: 0; 
-              padding: 2px;
-              font-size: 14px;
-              line-height: 1.2;
-              width: 77mm;
             }
-            html, body { background: #fff; }
-            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-10cm { font-size: 12pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .right { text-align: right; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table { width: 100%; border-collapse: collapse; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table td { padding: 1px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .totals-line { display: flex; justify-content: space-between; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .footer { margin-top: 15px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .signature-area { margin-top: 25px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .logo { width: 350px; height: auto; margin-bottom: 5px; }
+            .container { border: 1px solid #000; padding: 1mm; }
+            .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+            .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
+            .hospital-name { font-size: 15px; font-weight: bold; display: block; }
+            .hospital-addr { font-size: 10px; display: block; }
+            .hospital-contact { font-size: 10px; display: block; }
+            .gst-no { font-size: 10px; font-weight: bold; margin-top: 1mm; display: block; }
+            
+            .invoice-title { 
+                text-align: center; 
+                font-size: 12px; 
+                font-weight: bold; 
+                border-top: 1px solid #000;
+                border-bottom: 1px solid #000;
+                padding: 1mm 0;
+                margin-bottom: 1mm;
+                letter-spacing: 2px;
+            }
+            
+            .info-table { width: 100%; font-size: 8px; border-collapse: collapse; margin-bottom: 2mm; }
+            .info-table td { padding: 0.5mm 0; vertical-align: top; }
+            .label { font-weight: bold; width: 25mm; }
+            .value { font-weight: normal; }
+            
+            .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
+            .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
+            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            
+            .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; }
+            .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
+            .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
+            .total-value { width: 20mm; text-align: right; font-weight: bold; }
+            .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
+            
+            .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; font-weight: bold; }
+            .footer-left { text-align: left; }
+            .footer-right { text-align: right; }
+            .sig-space { margin-top: 8mm; border-top: 1px solid #000; width: 35mm; display: inline-block; }
           </style>
         </head>
         <body>
-          <div class="center">
-            <img src="/logo/annamHospital-bk.png" alt="ANNAM LOGO" class="logo" />
-            <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
-            <div class="header-9cm">Phone- 04639 252592</div>
-            <div style="margin-top: 5px; font-weight: bold;">LAB & RADIOLOGY BILL</div>
+          <div class="container">
+            <div class="header">
+              <img src="/logo/annamHospital-bk.png" class="logo" />
+              <span class="hospital-name">ANNAM HOSPITAL</span>
+              <span class="hospital-addr">2/301, Raj Kanna Nagar, Veerapandian Patanam</span>
+              <span class="hospital-addr">Tiruchendur – 628216</span>
+              <span class="hospital-contact">Phone: 04639 252592, 94420 25259</span>
+              <span class="gst-no">GST No: 33AAFCA5252P1Z5</span>
+            </div>
+            
+            <div class="invoice-title">LAB & RADIOLOGY BILL</div>
+            
+            <table class="info-table">
+              <tr>
+                <td class="label">UHID</td><td class="value">: ${escapeHtml(patientUhid)}</td>
+              </tr>
+              <tr>
+                <td class="label">Patient Name</td><td class="value">: ${escapeHtml(patientName)}</td>
+              </tr>
+              <tr>
+                <td class="label">Bill No</td><td class="value">: ${escapeHtml(billNumber)}</td>
+              </tr>
+              <tr>
+                <td class="label">Date</td><td class="value">: ${escapeHtml(billDateStr)}</td>
+              </tr>
+              <tr>
+                <td class="label">Sales Type</td><td class="value">: ${escapeHtml(salesType)}</td>
+              </tr>
+            </table>
+            
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th width="10%" class="text-center">.No</th>
+                  <th width="50%">SERVICE NAME</th>
+                  <th width="15%" class="text-center">Qty</th>
+                  <th width="25%" class="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+            
+            <div class="totals-section">
+              <div class="total-row">
+                <span class="total-label">Taxable Amount :</span>
+                <span class="total-value">₹${taxableAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">Disc Amt :</span>
+                <span class="total-value">₹${discountAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row grand-total">
+                <span class="total-label">Tot.Net.Amt :</span>
+                <span class="total-value">₹${amount.toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <div class="footer-left">
+                PRINTED ON: ${printedDate}<br/>
+                TIME: ${printedTime}
+              </div>
+              <div class="footer-right">
+                <div class="sig-space"></div><br/>
+                BILLING SIGNATURE
+              </div>
+            </div>
           </div>
           
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${escapeHtml(billNumber)}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${escapeHtml(patientUhid)}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${escapeHtml(patientName)}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${escapeHtml(formatBillDateTime(billDate))}</td>
-              </tr>
-              <tr>
-                <td class="header-10cm">Payment Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${escapeHtml(salesType)}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr style="border-bottom: 1px dashed #000;">
-                <td width="30%" class="items-8cm">S.No</td>
-                <td width="40%" class="items-8cm">Service</td>
-                <td width="15%" class="items-8cm text-center">Qty</td>
-                <td width="15%" class="items-8cm text-right">Amt</td>
-              </tr>
-              ${itemsHtml}
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
-              <span>Total Amount</span>
-              <span>${totalAmount.toFixed(0)}</span>
-            </div>
-          </div>
-
-          <div class="footer">
-            <div class="totals-line footer-7cm">
-              <span>Printed on ${escapeHtml(formatPrintedDateTime(now))}</span>
-              <span>Authorized Sign</span>
-            </div>
-          </div>
-
           <script>
-            (function() {
-              function triggerPrint() {
-                try {
-                  window.focus();
-                } catch (e) {}
-                setTimeout(function() {
-                  window.print();
-                }, 250);
-              }
-
-              window.onafterprint = function() {
-                try {
-                  window.close();
-                } catch (e) {}
-              };
-
-              if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                triggerPrint();
-              } else {
-                document.addEventListener('DOMContentLoaded', triggerPrint);
-              }
-            })();
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
           </script>
         </body>
       </html>
     `;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printWindow = window.open('', '_blank', 'width=450,height=650');
     if (!printWindow) return;
     printWindow.document.write(thermalContent);
     printWindow.document.close();

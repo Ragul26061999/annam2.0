@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Eye, Trash2, CreditCard, FileText, Filter } from 'lucide-react';
+import { Eye, Trash2, CreditCard, FileText, Filter, Printer } from 'lucide-react';
 import { 
   type OtherBillWithPatient,
   type ChargeCategory,
@@ -16,10 +16,11 @@ import OtherBillsPaymentModal from './OtherBillsPaymentModal';
 interface OtherBillsListProps {
   bills: OtherBillWithPatient[];
   onBillClick?: (bill: OtherBillWithPatient) => void;
+  onRoughBill?: (bill: OtherBillWithPatient) => void;
   onRefresh?: () => void;
 }
 
-export default function OtherBillsList({ bills, onBillClick, onRefresh }: OtherBillsListProps) {
+export default function OtherBillsList({ bills, onBillClick, onRoughBill, onRefresh }: OtherBillsListProps) {
   const [filterPatientType, setFilterPatientType] = useState<PatientType | 'all'>('all');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<PaymentStatus | 'all'>('all');
   const [filterCategory, setFilterCategory] = useState<ChargeCategory | 'all'>('all');
@@ -219,36 +220,36 @@ export default function OtherBillsList({ bills, onBillClick, onRefresh }: OtherB
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="border border-gray-100 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Bill Number
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Patient
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Category
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Amount
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Balance
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -256,40 +257,40 @@ export default function OtherBillsList({ bills, onBillClick, onRefresh }: OtherB
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredBills.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     No bills found
                   </td>
                 </tr>
               ) : (
                 filteredBills.map((bill) => (
                   <tr key={bill.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-blue-600">{bill.bill_number}</div>
                       {bill.reference_number && (
                         <div className="text-xs text-gray-500">Ref: {bill.reference_number}</div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{formatDate(bill.bill_date)}</div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="text-sm font-medium text-gray-900">{bill.patient_name}</div>
                       {bill.patient_phone && (
                         <div className="text-xs text-gray-500">{bill.patient_phone}</div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
                         {bill.patient_type}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="text-sm text-gray-900">{getCategoryLabel(bill.charge_category)}</div>
                       <div className="text-xs text-gray-500 truncate max-w-xs">
                         {bill.charge_description}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                       <div className="text-sm font-semibold text-gray-900">
                         ₹{bill.total_amount.toLocaleString('en-IN')}
                       </div>
@@ -299,16 +300,23 @@ export default function OtherBillsList({ bills, onBillClick, onRefresh }: OtherB
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         ₹{bill.balance_amount.toLocaleString('en-IN')}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                       {getStatusBadge(bill.payment_status)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => onRoughBill?.(bill)}
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="RUF BILL"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => onBillClick?.(bill)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

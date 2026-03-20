@@ -2407,156 +2407,142 @@ function NewBillingPageInner() {
         <head>
           <title>Thermal Receipt - ${generatedBill.bill_number}</title>
           <style>
-            @page { margin: 3mm; size: 80mm auto; }
+            @page { margin: 0; size: 72mm auto; }
             body { 
+              margin: 0; padding: 2mm; 
               font-family: 'Verdana', sans-serif; 
-              font-weight: bold;
-              margin: 0; 
-              padding: 0px;
-              font-size: 11px;
-              width: 77mm;
+              width: 72mm; 
+              color: #000;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
-            .center { text-align: center; }
-            .text-right { text-align: right; }
-            .text-left { text-align: left; }
-            .text-center { text-align: center; }
-            .logo { width: 250px; height: auto; margin-bottom: 5px; }
+            .container { border: 1px solid #000; padding: 1mm; }
+            .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+            .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
+            .hospital-name { font-size: 15px; font-weight: bold; display: block; }
+            .hospital-addr { font-size: 10px; display: block; }
+            .hospital-contact { font-size: 10px; display: block; }
+            .gst-no { font-size: 10px; font-weight: bold; margin-top: 1mm; display: block; }
             
-            .invoice-box {
-              border: 1px solid #000;
-              margin: 5px 0;
+            .invoice-title { 
+                text-align: center; 
+                font-size: 12px; 
+                font-weight: bold; 
+                border-top: 1px solid #000;
+                border-bottom: 1px solid #000;
+                padding: 1mm 0;
+                margin-bottom: 1mm;
+                letter-spacing: 2px;
             }
-
-            .invoice-info {
-              padding: 4px;
-              font-size: 7px;
-              color: #444;
-            }
-            .invoice-info td:first-child {
-              font-weight: bold;
-              width: 30%;
-            }
-            .invoice-info td:last-child {
-              font-weight: normal;
-            }
-
-            .receipt-table {
-              width: 100%;
-              border-collapse: collapse;
-              border: none;
-              border-top: 1px solid #000;
-              border-bottom: 1px solid #000;
-            }
-            .receipt-table th {
-              border: 1px solid #000;
-              border-top: none;
-              border-left: 1px solid #000;
-              border-right: 1px solid #000;
-              padding: 4px 2px;
-              text-align: center;
-              text-transform: uppercase;
-              font-size: 12px;
-              font-weight: bold;
-            }
-            .receipt-table td {
-              border-left: 1px solid #000;
-              border-right: 1px solid #000;
-              padding: 3px 2px;
-              font-size: 12px;
-              font-weight: bold;
-            }
-            /* Remove outer vertical borders to avoid duplicate with invoice-box */
-            .receipt-table th:first-child, .receipt-table td:first-child { border-left: none; }
-            .receipt-table th:last-child, .receipt-table td:last-child { border-right: none; }
-
-            .totals-box {
-              width: 100%;
-              border-collapse: collapse;
-              border: none;
-              font-size: 11px;
-            }
-            .totals-box td {
-              padding: 2px 4px;
-              border: none;
-            }
-            .totals-label {
-              text-align: right;
-              width: 70%;
-              font-weight: bold;
-            }
-            .totals-value {
-              text-align: right;
-              width: 30%;
-              font-weight: bold;
-            }
-            .font-bold { font-weight: bold; }
-            .uppercase { text-transform: uppercase; }
+            
+            .info-table { width: 100%; font-size: 8px; border-collapse: collapse; margin-bottom: 2mm; }
+            .info-table td { padding: 0.5mm 0; vertical-align: top; }
+            .label { font-weight: bold; width: 25mm; }
+            .value { font-weight: normal; }
+            
+            .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
+            .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
+            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            
+            .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; }
+            .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
+            .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
+            .total-value { width: 20mm; text-align: right; font-weight: bold; }
+            .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
+            
+            .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; font-weight: bold; }
+            .footer-left { text-align: left; }
+            .footer-right { text-align: right; }
+            .sig-space { margin-top: 8mm; border-top: 1px solid #000; width: 35mm; display: inline-block; }
           </style>
         </head>
         <body>
-          <div class="center">
-            <img src="/logo/annamPharmacy.png" alt="ANNAM LOGO" class="logo" />
-            <div style="font-size: 15px; font-weight: bold;">${name}</div>
-            <div style="font-size: 10px;">${address}</div>
-            <div style="font-size: 10px;">${contactNumber}</div>
-            <div style="font-size: 10px;">GST No: ${gstNumber}</div>
-          </div>
-
-          <div class="invoice-box">
-            <div class="center" style="border-bottom: 1px solid #000; padding: 2px;">
-              <span style="font-size: 12px; letter-spacing: 2px; font-weight: bold;">INVOICE</span>
+          <div class="container">
+            <div class="header">
+              <img src="/logo/annamPharmacy.png" class="logo" />
+              <span class="hospital-name">${name}</span>
+              <span class="hospital-addr">${address}</span>
+              <span class="hospital-contact">${contactNumber}</span>
+              <span class="gst-no">GST No: ${gstNumber}</span>
             </div>
-
-            <div class="invoice-info">
-              <table style="width: 100%; border-collapse: collapse; border: none;">
-                <tr><td style="width: 30%; border: none;">UHID</td><td style="border: none;">: ${billCustomer.patient_uhid || 'WALK-IN'}</td></tr>
-                <tr><td style="border: none;">Patient Name</td><td style="border: none;">: ${billCustomer.name}</td></tr>
-                <tr style="height: 5px;"><td style="border: none;"></td><td style="border: none;"></td></tr>
-                <tr><td style="border: none;">Bill No</td><td style="border: none;">: ${generatedBill.bill_number}</td></tr>
-                <tr><td style="border: none;">Date</td><td style="border: none;">: ${printedDateTime}</td></tr>
-                <tr><td style="border: none;">Sales Type</td><td style="border: none;">: ${(generatedBill.payments?.[0]?.method || generatedBill.paymentMethod || 'CASH').toUpperCase()}</td></tr>
-              </table>
-            </div>
-
-            <table class="receipt-table">
+            
+            <div class="invoice-title">INVOICE</div>
+            
+            <table class="info-table">
+              <tr>
+                <td class="label">UHID</td><td class="value">: ${billCustomer.patient_uhid || 'WALK-IN'}</td>
+              </tr>
+              <tr>
+                <td class="label">Patient Name</td><td class="value">: ${billCustomer.name}</td>
+              </tr>
+              <tr>
+                <td class="label">Bill No</td><td class="value">: ${generatedBill.bill_number}</td>
+              </tr>
+              <tr>
+                <td class="label">Date</td><td class="value">: ${printedDateTime}</td>
+              </tr>
+              <tr>
+                <td class="label">Sales Type</td><td class="value">: ${(generatedBill.payments?.[0]?.method || generatedBill.paymentMethod || 'CASH').toUpperCase()}</td>
+              </tr>
+            </table>
+            
+            <table class="items-table">
               <thead>
                 <tr>
-                  <th style="width: 10%;">.No</th>
-                  <th style="width: 55%; text-align: left;">DRUG NAME</th>
-                  <th style="width: 15%;">Qty</th>
-                  <th style="width: 20%; text-align: right;">Amount</th>
+                  <th width="10%" class="text-center">.No</th>
+                  <th width="50%">DRUG NAME</th>
+                  <th width="15%" class="text-center">Qty</th>
+                  <th width="25%" class="text-right">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 ${itemsHtml}
               </tbody>
             </table>
-
-            <div style="border-top: 1px solid #000;">
-              <table class="totals-box">
-                <tbody>
-                  <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxable}</td></tr>
-                  <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
-                  <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst}</td></tr>
-                  <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst}</td></tr>
-                  <tr><td class="totals-label" style="font-size: 13px; border-top: 1px solid #000;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px; border-top: 1px solid #000;">₹${total}</td></tr>
-                </tbody>
-              </table>
+            
+            <div class="totals-section">
+              <div class="total-row">
+                <span class="total-label">Taxable Amount :</span>
+                <span class="total-value">₹${taxable}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">Disc Amt :</span>
+                <span class="total-value">₹${discount.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">CGST Amt :</span>
+                <span class="total-value">₹${cgst}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">SGST Amt :</span>
+                <span class="total-value">₹${sgst}</span>
+              </div>
+              <div class="total-row grand-total">
+                <span class="total-label">Tot.Net.Amt :</span>
+                <span class="total-value">₹${total}</span>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <div class="footer-left">
+                PRINTED ON: ${formatISTDate(getISTDate())}<br/>
+                TIME: ${formatISTTime(getISTDate())}
+              </div>
+              <div class="footer-right">
+                <div class="sig-space"></div><br/>
+                PHARMACIST SIGNATURE
+              </div>
             </div>
           </div>
-
-          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
-            <div style="font-size: 9px; font-weight: bold;">
-              <p>PRINTED ON ${formatISTDate(getISTDate())}</p>
-              <p>${formatISTTime(getISTDate())}</p>
-            </div>
-            <div style="text-align: right; font-size: 9px; font-weight: bold;">
-              <p style="margin-bottom: 25px;">PHARMACIST SIGNATURE</p>
-            </div>
-          </div>
-
+          
           <script>
-            window.onload = function() { window.print(); }
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
           </script>
         </body>
       </html>

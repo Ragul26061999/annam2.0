@@ -13,7 +13,8 @@ import {
     Clock,
     TrendingUp,
     Users,
-    Activity
+    Activity,
+    Printer
 } from 'lucide-react';
 import { getRecentRevisits, getRevisitStats } from '../../src/lib/revisitService';
 
@@ -66,6 +67,171 @@ export default function RevisitDashboard() {
             month: 'short',
             year: 'numeric'
         });
+    };
+
+    const showThermalPreviewWithLogo = (revisit: any) => {
+        if (!revisit) return;
+
+        const now = new Date();
+        const printedDate = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()}`;
+        const printedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+        const patientUhid = revisit.uhid || revisit.patient?.patient_id || 'WALK-IN';
+        const patientName = revisit.patient?.name || 'Unknown Patient';
+        const billNumber = (revisit.id || '').toUpperCase().substring(0, 8);
+        const paymentType = (revisit.payment_mode || 'CASH').toUpperCase();
+
+        const bDate = new Date(revisit.visit_date);
+        const billDateStr = bDate.toLocaleDateString('en-IN') + ' ' + (revisit.visit_time || '');
+
+        const fee = Number(revisit.consultation_fee || 0);
+
+        const itemsHtml = `
+          <tr>
+            <td class="text-center">1</td>
+            <td class="text-left font-bold uppercase">REVISIT CONSULTATION<br/><small>${revisit.reason_for_visit || ''}</small></td>
+            <td class="text-center">1</td>
+            <td class="text-right">₹${fee.toFixed(2)}</td>
+          </tr>
+          <tr><td style="height: 10mm;"></td><td></td><td></td><td></td></tr>
+        `;
+
+        const thermalContent = `
+          <html>
+            <head>
+              <title>Thermal Receipt - ${billNumber}</title>
+              <style>
+                @page { margin: 0; size: 72mm auto; }
+                body { 
+                  margin: 0; padding: 2mm; 
+                  font-family: 'Verdana', sans-serif; 
+                  width: 72mm; 
+                  color: #000;
+                  background: #fff;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                .container { border: 1px solid #000; padding: 1mm; }
+                .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+                .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
+                .hospital-name { font-size: 15px; font-weight: bold; display: block; }
+                .hospital-addr { font-size: 10px; display: block; }
+                .hospital-contact { font-size: 10px; display: block; }
+                .gst-no { font-size: 10px; font-weight: bold; margin-top: 1mm; display: block; }
+                
+                .invoice-title { 
+                    text-align: center; 
+                    font-size: 12px; 
+                    font-weight: bold; 
+                    border-top: 1px solid #000;
+                    border-bottom: 1px solid #000;
+                    padding: 1mm 0;
+                    margin-bottom: 1mm;
+                    letter-spacing: 2px;
+                }
+                
+                .info-table { width: 100%; font-size: 8px; border-collapse: collapse; margin-bottom: 2mm; }
+                .info-table td { padding: 0.5mm 0; vertical-align: top; }
+                .label { font-weight: bold; width: 25mm; }
+                .value { font-weight: normal; }
+                
+                .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
+                .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
+                .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                
+                .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; }
+                .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
+                .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
+                .total-value { width: 20mm; text-align: right; font-weight: bold; }
+                .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
+                
+                .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; font-weight: bold; }
+                .footer-left { text-align: left; }
+                .footer-right { text-align: right; }
+                .sig-space { margin-top: 8mm; border-top: 1px solid #000; width: 35mm; display: inline-block; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <img src="/logo/annamHospital-bk.png" class="logo" />
+                  <span class="hospital-name">ANNAM HOSPITAL</span>
+                  <span class="hospital-addr">2/301, Raj Kanna Nagar, Veerapandian Patanam</span>
+                  <span class="hospital-addr">Tiruchendur – 628216</span>
+                  <span class="hospital-contact">Phone: 04639 252592, 94420 25259</span>
+                  <span class="gst-no">GST No: 33AAFCA5252P1Z5</span>
+                </div>
+                
+                <div class="invoice-title">REVISIT BILL</div>
+                
+                <table class="info-table">
+                  <tr>
+                    <td class="label">UHID</td><td class="value">: ${patientUhid}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">Patient Name</td><td class="value">: ${patientName}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">Bill No</td><td class="value">: ${billNumber}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">Date</td><td class="value">: ${billDateStr}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">Sales Type</td><td class="value">: ${paymentType}</td>
+                  </tr>
+                </table>
+                
+                <table class="items-table">
+                  <thead>
+                    <tr>
+                      <th width="10%" class="text-center">.No</th>
+                      <th width="50%">CHARGE NAME</th>
+                      <th width="15%" class="text-center">Qty</th>
+                      <th width="25%" class="text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${itemsHtml}
+                  </tbody>
+                </table>
+                
+                <div class="totals-section">
+                  <div class="total-row grand-total">
+                    <span class="total-label">Tot.Net.Amt :</span>
+                    <span class="total-value">₹${fee.toFixed(2)}</span>
+                  </div>
+                </div>
+                
+                <div class="footer">
+                  <div class="footer-left">
+                    PRINTED ON: ${printedDate}<br/>
+                    TIME: ${printedTime}
+                  </div>
+                  <div class="footer-right">
+                    <div class="sig-space"></div><br/>
+                    BILLING SIGNATURE
+                  </div>
+                </div>
+              </div>
+              
+              <script>
+                window.onload = function() {
+                  window.print();
+                  setTimeout(function() { window.close(); }, 500);
+                };
+              </script>
+            </body>
+          </html>
+        `;
+
+        const printWindow = window.open('', '_blank', 'width=450,height=650');
+        if (printWindow) {
+            printWindow.document.write(thermalContent);
+            printWindow.document.close();
+        }
     };
 
     return (
@@ -183,6 +349,9 @@ export default function RevisitDashboard() {
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                             Fee
                                         </th>
+                                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                            Action
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -223,6 +392,15 @@ export default function RevisitDashboard() {
                                                 <span className="font-semibold text-green-600">
                                                     ₹{revisit.consultation_fee || 0}
                                                 </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                <button
+                                                    onClick={() => showThermalPreviewWithLogo(revisit)}
+                                                    className="p-2 text-gray-600 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-all"
+                                                    title="Print Bill"
+                                                >
+                                                    <Printer size={18} />
+                                                </button>
                                             </td>
                                         </tr>
                                     ))}

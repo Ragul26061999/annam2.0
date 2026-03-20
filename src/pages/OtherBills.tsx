@@ -91,7 +91,6 @@ export default function OtherBills() {
         console.warn('Failed to load other bill charge categories:', err);
       }
     })();
-
     return () => {
       mounted = false;
     };
@@ -126,14 +125,242 @@ export default function OtherBills() {
     return cat?.label || category;
   };
 
-  const showThermalPreviewWithLogo = () => {
+  
+  const showRoughBill = (billToPrint: any = null) => {
+    const bill = billToPrint || selectedBill;
+    if (!bill) return;
+
+    const now = new Date();
+    const printedDate = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()}`;
+    const printedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+    // Get patient UHID
+    const patientUhid = bill.patient?.patient_id || 'WALK-IN';
+    const patientName = bill.patient?.name || 'Unknown Patient';
+    const billNumber = bill.bill_number || 'N/A';
+
+    // Get payment status
+    let paymentType = bill.payment_status?.toUpperCase() || 'CASH';
+    if (bill.payment_status === 'paid') {
+      paymentType = 'PAID';
+    } else if (bill.payment_status === 'pending') {
+      paymentType = 'PENDING';
+    }
+
+    const billDateRaw = bill.created_at || new Date().toISOString();
+    const bDate = new Date(billDateRaw);
+    const billDateStr = bDate.toLocaleDateString('en-IN') + ' ' + bDate.toLocaleTimeString('en-IN');
+
+    const amount = Number(bill.total_amount || 0);
+    const subtotal = Number(bill.subtotal || amount);
+    const discountAmount = Number(bill.discount_amount || 0);
+    const taxAmount = Number(bill.tax_amount || 0);
+    const cgstAmount = taxAmount / 2;
+    const sgstAmount = taxAmount / 2;
+    
+    // items
+    let itemsHtml = '';
+    if (bill.items && bill.items.length > 0) {
+      itemsHtml = bill.items.map((item: any, idx: number) => `
+        <tr>
+          <td class="text-center">${idx + 1}</td>
+          <td class="text-left font-bold uppercase">${getCategoryLabel(item.charge_category)}<br/><small>${item.charge_description || ''}</small></td>
+          <td class="text-center">${item.quantity || 1}</td>
+          <td class="text-right">₹${Number((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)}</td>
+        </tr>
+      `).join('');
+    } else {
+      itemsHtml = `
+        <tr>
+          <td class="text-center">1</td>
+          <td class="text-left font-bold uppercase">${getCategoryLabel(bill.charge_category)}<br/><small>${bill.charge_description || ''}</small></td>
+          <td class="text-center">${bill.quantity || 1}</td>
+          <td class="text-right">₹${amount.toFixed(2)}</td>
+        </tr>
+      `;
+    }
+    itemsHtml += '<tr><td style="height: 10mm;"></td><td></td><td></td><td></td></tr>';
+
+    const thermalContent = `
+      <html>
+        <head>
+          <title>RUF BILL - ${billNumber}</title>
+          <style>
+            @page { margin: 0; size: 72mm auto; }
+            body { 
+              margin: 0; padding: 2mm; 
+              font-family: 'Verdana', sans-serif; 
+              width: 72mm; 
+              color: #000;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .container { border: 1px solid #000; padding: 1mm; position: relative; overflow: hidden; }
+            .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+            .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
+            .hospital-name { font-size: 15px; font-weight: bold; display: block; }
+            .hospital-addr { font-size: 10px; display: block; }
+            .hospital-contact { font-size: 10px; display: block; }
+            .gst-no { font-size: 10px; font-weight: bold; margin-top: 1mm; display: block; }
+            
+            .invoice-title { 
+                text-align: center; 
+                font-size: 14px; 
+                font-weight: bold; 
+                border-top: 1px solid #000;
+                border-bottom: 1px solid #000;
+                padding: 1mm 0;
+                margin-bottom: 1mm;
+                letter-spacing: 2px;
+                background: #eee;
+            }
+            
+            .ruf-watermark {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(-45deg);
+                font-size: 40px;
+                color: rgba(0, 0, 0, 0.1);
+                font-weight: bold;
+                z-index: 0;
+                pointer-events: none;
+                white-space: nowrap;
+            }
+
+            .info-table { width: 100%; font-size: 8px; border-collapse: collapse; margin-bottom: 2mm; position: relative; z-index: 1; }
+            .info-table td { padding: 0.5mm 0; vertical-align: top; }
+            .label { font-weight: bold; width: 25mm; }
+            .value { font-weight: normal; }
+            
+            .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; position: relative; z-index: 1; }
+            .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
+            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            
+            .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; position: relative; z-index: 1; }
+            .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
+            .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
+            .total-value { width: 20mm; text-align: right; font-weight: bold; }
+            .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
+            
+            .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; font-weight: bold; position: relative; z-index: 1; }
+            .footer-left { text-align: left; }
+            .footer-right { text-align: right; }
+            .sig-space { margin-top: 8mm; border-top: 1px solid #000; width: 35mm; display: inline-block; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="ruf-watermark">RUF BILL</div>
+            <div class="header">
+              <img src="/logo/annamHospital-bk.png" class="logo" />
+              <span class="hospital-name">ANNAM HOSPITAL</span>
+              <span class="hospital-addr">2/301, Raj Kanna Nagar, Veerapandian Patanam</span>
+              <span class="hospital-addr">Tiruchendur – 628216</span>
+              <span class="hospital-contact">Phone: 04639 252592, 94420 25259</span>
+              <span class="gst-no">GST No: 33AAFCA5252P1Z5</span>
+            </div>
+            
+            <div class="invoice-title">RUF BILL</div>
+            
+            <table class="info-table">
+              <tr>
+                <td class="label">UHID</td><td class="value">: ${patientUhid}</td>
+              </tr>
+              <tr>
+                <td class="label">Patient Name</td><td class="value">: ${patientName}</td>
+              </tr>
+              <tr>
+                <td class="label">Bill No</td><td class="value">: ${billNumber}</td>
+              </tr>
+              <tr>
+                <td class="label">Date</td><td class="value">: ${billDateStr}</td>
+              </tr>
+              <tr>
+                <td class="label">Sales Type</td><td class="value">: ${paymentType}</td>
+              </tr>
+            </table>
+            
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th width="10%" class="text-center">.No</th>
+                  <th width="50%">CHARGE NAME</th>
+                  <th width="15%" class="text-center">Qty</th>
+                  <th width="25%" class="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+            
+            <div class="totals-section">
+              <div class="total-row">
+                <span class="total-label">Taxable Amount :</span>
+                <span class="total-value">₹${subtotal.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">Disc Amt :</span>
+                <span class="total-value">₹${discountAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">CGST Amt :</span>
+                <span class="total-value">₹${cgstAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">SGST Amt :</span>
+                <span class="total-value">₹${sgstAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row grand-total">
+                <span class="total-label">Tot.Net.Amt :</span>
+                <span class="total-value">₹${amount.toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <div class="footer-left">
+                PRINTED ON: ${printedDate}<br/>
+                TIME: ${printedTime}
+              </div>
+              <div class="footer-right">
+                <div class="sig-space"></div><br/>
+                BILLING SIGNATURE
+              </div>
+            </div>
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=450,height=650');
+    if (printWindow) {
+      printWindow.document.write(thermalContent);
+      printWindow.document.close();
+    }
+  };
+
+const showThermalPreviewWithLogo = () => {
     if (!selectedBill) return;
 
     const now = new Date();
-    const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    const printedDate = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()}`;
+    const printedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
     // Get patient UHID
     const patientUhid = selectedBill.patient?.patient_id || 'WALK-IN';
+    const patientName = selectedBill.patient?.name || 'Unknown Patient';
+    const billNumber = selectedBill.bill_number || 'N/A';
 
     // Get payment status
     let paymentType = selectedBill.payment_status?.toUpperCase() || 'CASH';
@@ -143,113 +370,188 @@ export default function OtherBills() {
       paymentType = 'PENDING';
     }
 
+    const billDateRaw = selectedBill.created_at || new Date().toISOString();
+    const bDate = new Date(billDateRaw);
+    const billDateStr = bDate.toLocaleDateString('en-IN') + ' ' + bDate.toLocaleTimeString('en-IN');
+
+    const amount = Number(selectedBill.total_amount || 0);
+    const subtotal = Number(selectedBill.subtotal || amount);
+    const discountAmount = Number(selectedBill.discount_amount || 0);
+    const taxAmount = Number(selectedBill.tax_amount || 0);
+    const cgstAmount = taxAmount / 2;
+    const sgstAmount = taxAmount / 2;
+    
+    // items
+    let itemsHtml = '';
+    if (selectedBill.items && selectedBill.items.length > 0) {
+      itemsHtml = selectedBill.items.map((item: any, idx: number) => `
+        <tr>
+          <td class="text-center">${idx + 1}</td>
+          <td class="text-left font-bold uppercase">${getCategoryLabel(item.charge_category)}<br/><small>${item.charge_description || ''}</small></td>
+          <td class="text-center">${item.quantity || 1}</td>
+          <td class="text-right">₹${Number((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)}</td>
+        </tr>
+      `).join('');
+    } else {
+      itemsHtml = `
+        <tr>
+          <td class="text-center">1</td>
+          <td class="text-left font-bold uppercase">${getCategoryLabel(selectedBill.charge_category)}<br/><small>${selectedBill.charge_description || ''}</small></td>
+          <td class="text-center">${selectedBill.quantity || 1}</td>
+          <td class="text-right">₹${amount.toFixed(2)}</td>
+        </tr>
+      `;
+    }
+    itemsHtml += '<tr><td style="height: 10mm;"></td><td></td><td></td><td></td></tr>';
+
     const thermalContent = `
       <html>
         <head>
-          <title>Thermal Receipt - ${selectedBill.bill_number}</title>
+          <title>Thermal Receipt - ${billNumber}</title>
           <style>
-            @page { margin: 1mm; size: 77mm 297mm; }
+            @page { margin: 0; size: 72mm auto; }
             body { 
+              margin: 0; padding: 2mm; 
               font-family: 'Verdana', sans-serif; 
-              font-weight: bold;
-              margin: 0; 
-              padding: 2px;
-              font-size: 14px;
-              line-height: 1.2;
-              width: 77mm;
+              width: 72mm; 
+              color: #000;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
-            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-10cm { font-size: 12pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .right { text-align: right; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table { width: 100%; border-collapse: collapse; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table td { padding: 1px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .totals-line { display: flex; justify-content: space-between; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .footer { margin-top: 15px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .signature-area { margin-top: 25px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .logo { width: 350px; height: auto; margin-bottom: 5px; }
+            .container { border: 1px solid #000; padding: 1mm; }
+            .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+            .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
+            .hospital-name { font-size: 15px; font-weight: bold; display: block; }
+            .hospital-addr { font-size: 10px; display: block; }
+            .hospital-contact { font-size: 10px; display: block; }
+            .gst-no { font-size: 10px; font-weight: bold; margin-top: 1mm; display: block; }
+            
+            .invoice-title { 
+                text-align: center; 
+                font-size: 12px; 
+                font-weight: bold; 
+                border-top: 1px solid #000;
+                border-bottom: 1px solid #000;
+                padding: 1mm 0;
+                margin-bottom: 1mm;
+                letter-spacing: 2px;
+            }
+            
+            .info-table { width: 100%; font-size: 8px; border-collapse: collapse; margin-bottom: 2mm; }
+            .info-table td { padding: 0.5mm 0; vertical-align: top; }
+            .label { font-weight: bold; width: 25mm; }
+            .value { font-weight: normal; }
+            
+            .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
+            .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
+            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            
+            .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; }
+            .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
+            .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
+            .total-value { width: 20mm; text-align: right; font-weight: bold; }
+            .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
+            
+            .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; font-weight: bold; }
+            .footer-left { text-align: left; }
+            .footer-right { text-align: right; }
+            .sig-space { margin-top: 8mm; border-top: 1px solid #000; width: 35mm; display: inline-block; }
           </style>
         </head>
         <body>
-          <div class="center">
-            <img src="/logo/annamHospital-bk.png" alt="ANNAM LOGO" class="logo" />
-            <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
-            <div class="header-9cm">Phone- 04639 252592</div>
-            <div style="margin-top: 5px; font-weight: bold;">OTHER SERVICES BILL</div>
+          <div class="container">
+            <div class="header">
+              <img src="/logo/annamHospital-bk.png" class="logo" />
+              <span class="hospital-name">ANNAM HOSPITAL</span>
+              <span class="hospital-addr">2/301, Raj Kanna Nagar, Veerapandian Patanam</span>
+              <span class="hospital-addr">Tiruchendur – 628216</span>
+              <span class="hospital-contact">Phone: 04639 252592, 94420 25259</span>
+              <span class="gst-no">GST No: 33AAFCA5252P1Z5</span>
+            </div>
+            
+            <div class="invoice-title">INVOICE</div>
+            
+            <table class="info-table">
+              <tr>
+                <td class="label">UHID</td><td class="value">: ${patientUhid}</td>
+              </tr>
+              <tr>
+                <td class="label">Patient Name</td><td class="value">: ${patientName}</td>
+              </tr>
+              <tr>
+                <td class="label">Bill No</td><td class="value">: ${billNumber}</td>
+              </tr>
+              <tr>
+                <td class="label">Date</td><td class="value">: ${billDateStr}</td>
+              </tr>
+              <tr>
+                <td class="label">Sales Type</td><td class="value">: ${paymentType}</td>
+              </tr>
+            </table>
+            
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th width="10%" class="text-center">.No</th>
+                  <th width="50%">CHARGE NAME</th>
+                  <th width="15%" class="text-center">Qty</th>
+                  <th width="25%" class="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+            
+            <div class="totals-section">
+              <div class="total-row">
+                <span class="total-label">Taxable Amount :</span>
+                <span class="total-value">₹${subtotal.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">Disc Amt :</span>
+                <span class="total-value">₹${discountAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">CGST Amt :</span>
+                <span class="total-value">₹${cgstAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span class="total-label">SGST Amt :</span>
+                <span class="total-value">₹${sgstAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row grand-total">
+                <span class="total-label">Tot.Net.Amt :</span>
+                <span class="total-value">₹${amount.toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <div class="footer-left">
+                PRINTED ON: ${printedDate}<br/>
+                TIME: ${printedTime}
+              </div>
+              <div class="footer-right">
+                <div class="sig-space"></div><br/>
+                BILLING SIGNATURE
+              </div>
+            </div>
           </div>
           
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${selectedBill.bill_number}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${selectedBill.patient?.name || 'Unknown Patient'}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${new Date(selectedBill.created_at).toLocaleDateString()} ${new Date(selectedBill.created_at).toLocaleTimeString()}</td>
-              </tr>
-              <tr>
-                <td class="header-10cm">Payment Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${paymentType}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr style="border-bottom: 1px dashed #000;">
-                <td width="30%" class="items-8cm">S.No</td>
-                <td width="40%" class="items-8cm">Service</td>
-                <td width="15%" class="items-8cm text-center">Qty</td>
-                <td width="15%" class="items-8cm text-right">Amt</td>
-              </tr>
-              <tr>
-                <td class="items-8cm">1.</td>
-                <td class="items-8cm">${selectedBill.charge_category || 'Service Charge'}</td>
-                <td class="items-8cm text-center">1</td>
-                <td class="items-8cm text-right">${Number(selectedBill.total_amount || 0).toFixed(0)}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
-              <span>Total Amount</span>
-              <span>${Number(selectedBill.total_amount || 0).toFixed(0)}</span>
-            </div>
-          </div>
-
-          <div class="footer">
-            <div class="totals-line footer-7cm">
-              <span>Printed on ${printedDateTime}</span>
-              <span>Authorized Sign</span>
-            </div>
-          </div>
-
           <script>
             window.onload = function() {
               window.print();
-            }
+              setTimeout(function() { window.close(); }, 500);
+            };
           </script>
         </body>
       </html>
     `;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printWindow = window.open('', '_blank', 'width=450,height=650');
     if (printWindow) {
       printWindow.document.write(thermalContent);
       printWindow.document.close();
@@ -342,10 +644,10 @@ export default function OtherBills() {
         </div>
 
         <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
+          <div className="p-4 border-b border-gray-200">
             <h2 className="text-xl font-semibold text-gray-900">Bills List</h2>
           </div>
-          <div className="p-6">
+          <div className="p-4 overflow-hidden">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
@@ -354,6 +656,10 @@ export default function OtherBills() {
               <OtherBillsList 
                 bills={bills} 
                 onBillClick={handleBillClick}
+                onRoughBill={(bill) => {
+                  setSelectedBill(bill);
+                  showRoughBill(bill);
+                }}
                 onRefresh={handleRefresh}
               />
             )}
@@ -555,6 +861,16 @@ export default function OtherBills() {
                           >
                             <Printer className="w-4 h-4 text-blue-600" />
                             <span>Thermal Print</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowPrintDropdown(false);
+                              showRoughBill();
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2 transition-colors"
+                          >
+                            <Printer className="w-4 h-4 text-orange-600" />
+                            <span>RUF BILL</span>
                           </button>
                           <button
                             onClick={() => {
