@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, Plus, Edit, Trash2, Package, Calendar, AlertTriangle, Filter, History, Layers, Clock, Eye, Printer, Info, RefreshCw, X, Truck, ArrowLeft } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Package, Calendar, AlertTriangle, Filter, History, Layers, Clock, Eye, Printer, Info, RefreshCw, X, Truck, ArrowLeft, Barcode } from 'lucide-react'
 import StatCard from '@/src/components/StatCard'
 import { getBatchPurchaseHistory, getBatchStockStats, editStockTransaction, adjustExpiredStock, getBatchStockRobust, getMedicationStockRobust, getStockTruth, getMedicineStockSummary, reconcileStock, getComprehensiveMedicineData, getBatchReceivedTotal } from '@/src/lib/pharmacyService'
 import { supabase } from '@/src/lib/supabase'
 import type { BatchPurchaseHistoryEntry, StockTransaction, StockTruthRecord, MedicineStockSummary, ComprehensiveMedicineData } from '@/src/lib/pharmacyService'
 import MedicineEntryForm from '@/src/components/MedicineEntryForm'
+import MedicineBarcodeModal, { PrintableLabelItem } from '@/src/components/MedicineBarcodeModal';
 import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect'
 import { ManufacturerSelect } from '@/src/components/ui/ManufacturerSelect'
 import { CategorySelect } from '@/src/components/ui/CategorySelect'
@@ -89,6 +90,11 @@ export default function InventoryPage() {
   const [salesHistoryEntries, setSalesHistoryEntries] = useState<any[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyTab, setHistoryTab] = useState<'purchases' | 'sales'>('purchases')
+
+  // Barcode Printing States
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const [barcodeItems, setBarcodeItems] = useState<PrintableLabelItem[]>([]);
+
   const [historyFilter, setHistoryFilter] = useState<'all' | 'this_month' | 'last_3_months'>('all')
   const [showMedicineDetail, setShowMedicineDetail] = useState(false)
   const [selectedMedicineDetail, setSelectedMedicineDetail] = useState<Medicine | null>(null)
@@ -1459,189 +1465,7 @@ export default function InventoryPage() {
     }
   }
 
-  const printStandardLabel = async (batch: MedicineBatch, medicineName: string) => {
-    try {
-      // Fetch the actual batch barcode from database
-      const { data: batchData, error } = await supabase
-        .from('medicine_batches')
-        .select('batch_barcode')
-        .eq('id', batch.id)
-        .single()
 
-      const barcode = batchData?.batch_barcode || batch.batch_number
-
-      // Get definitive stock data from the stock truth system
-      const stockTruth = await getStockTruth(undefined, batch.batch_number)
-      const quantity = stockTruth && stockTruth.length > 0 ? stockTruth[0].current_quantity : batch.quantity
-
-      // Prepare safe medicine name so label always shows something readable
-      const safeMedicineName = (medicineName || '').trim() || 'Unknown Medicine'
-      const shortMedicineName = safeMedicineName.length > 20
-        ? safeMedicineName.substring(0, 20) + '...'
-        : safeMedicineName
-
-      // Format dates outside template literal to avoid parsing issues
-      const expiryDate = new Date(batch.expiry_date).toLocaleDateString('en-GB')
-      const printDate = new Date().toLocaleDateString('en-GB')
-      const printTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
-
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) return
-
-      const labelContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Standard Medicine Label</title>
-            <style>
-              @page { 
-                size: 50mm 25mm; 
-                margin: 1mm; 
-              }
-              * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-              }
-              body { 
-                font-family: 'Arial', sans-serif;
-                width: 48mm;
-                height: 23mm;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                padding: 1mm;
-                font-size: 8px;
-                line-height: 1.1;
-                background: white;
-              }
-              .header {
-                text-align: center;
-                font-size: 10px;
-                font-weight: bold;
-                color: #000;
-                margin-bottom: 1mm;
-              }
-              .medicine-name {
-                text-align: center;
-                font-size: 10px;
-                font-weight: bold;
-                color: #000;
-                margin-bottom: 1mm;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-              }
-              .medicine-name-full {
-                text-align: center;
-                font-size: 7px;
-                color: #333;
-                margin-top: -0.5mm;
-                margin-bottom: 0.5mm;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-              }
-              .batch-info {
-                display: flex;
-                justify-content: space-between;
-                font-size: 6px; /* reduced per request */
-                color: #000;
-                margin-bottom: 0.8mm;
-              }
-              .barcode-section {
-                text-align: center;
-                margin: 1mm 0;
-                height: 10mm; /* fixed height per spec */
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                border: 0.5px solid #ddd;
-                background: #f9f9f9;
-              }
-              #barcode {
-                width: 30mm;   /* exact width per spec */
-                height: 10mm;  /* exact height per spec */
-                display: block;
-              }
-              .footer {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 6px;
-                color: #000; /* black per request */
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">ANNAM HOSPITAL</div>
-            
-            <div class="medicine-name" title="${safeMedicineName}">
-              ${shortMedicineName}
-            </div>
-            <div class="medicine-name-full">${safeMedicineName}</div>
-            
-            <div class="batch-info">
-              <span>Med: ${shortMedicineName}</span>
-              <span>Batch: ${batch.batch_number}</span>
-              <span>Qty: ${quantity}</span>
-            </div>
-            
-            <div class="barcode-section">
-              <svg id="barcode"></svg>
-            </div>
-            
-            <div class="footer">
-              <span>Exp: ${expiryDate}</span>
-              <span>Printed: ${printDate} ${printTime}</span>
-            </div>
-
-            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-            <script>
-              (function() {
-                function render() {
-                  try {
-                    var value = ${JSON.stringify(barcode)};
-                    // Use CODE128 for alphanumeric; EAN-13 if numeric length 13
-                    var isNumeric = /^\d+$/.test(value);
-                    var fmt = (isNumeric && value.length === 13) ? 'EAN13' : 'CODE128';
-                    JsBarcode('#barcode', value, {
-                      format: fmt,
-                      displayValue: true,
-                      fontSize: 8,
-                      textMargin: 1,
-                      margin: 2,      // quiet zone
-                      lineColor: '#000',
-                      background: '#f9f9f9'
-                    });
-                    // Wait a tick for layout, then print
-                    setTimeout(function(){ window.print(); window.close(); }, 200);
-                  } catch (e) {
-                    console.error('Barcode render error', e);
-                    setTimeout(function(){ window.print(); window.close(); }, 200);
-                  }
-                }
-                if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                  render();
-                } else {
-                  window.addEventListener('load', render);
-                }
-              })();
-            </script>
-          </body>
-        </html>
-      `
-
-      printWindow.document.write(labelContent)
-      printWindow.document.close()
-      printWindow.focus()
-      // Printing is triggered inside the popup after the barcode renders
-    } catch (error) {
-      console.error('Error printing standard label:', error)
-      alert('Failed to print label. Please try again.')
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
@@ -2868,17 +2692,37 @@ export default function InventoryPage() {
                   </div>
 
                   {/* Actions on right: Close */}
-                  <button
-                    onClick={() => {
-                      setShowMedicineDetail(false)
-                      setSelectedMedicineDetail(null)
-                      setMedicineStockSummary(null)
-                      setBatchStockTruth([])
-                    }}
-                    className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors ml-4"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
+                  <div className="flex items-center gap-2 ml-4">
+                    <button
+                      onClick={() => {
+                        const batches = comprehensiveMedicineData?.batches || selectedMedicineDetail.batches || [];
+                        setBarcodeItems(batches.map((b: any) => ({
+                          medication_id: selectedMedicineDetail.id,
+                          medication_name: selectedMedicineDetail.name,
+                          batch_number: b.batch_number,
+                          expiry_date: b.expiry_date,
+                          quantity: b.current_stock ?? b.quantity ?? 0
+                        })));
+                        setShowBarcodeModal(true);
+                      }}
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg hover:shadow-purple-500/20"
+                      title="Print Labels for All Batches"
+                    >
+                      <Barcode className="w-4 h-4" />
+                      <span className="hidden sm:inline font-semibold">Bulk Labels</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMedicineDetail(false)
+                        setSelectedMedicineDetail(null)
+                        setMedicineStockSummary(null)
+                        setBatchStockTruth([])
+                      }}
+                      className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -3027,11 +2871,20 @@ export default function InventoryPage() {
                               {!isExpired && (
                                 <>
                                   <button
-                                    onClick={() => printStandardLabel(batch as any, selectedMedicineDetail.name)}
+                                    onClick={() => {
+                                      setBarcodeItems([{
+                                        medication_id: selectedMedicineDetail.id,
+                                        medication_name: selectedMedicineDetail.name,
+                                        batch_number: batch.batch_number,
+                                        expiry_date: batch.expiry_date,
+                                        quantity: remaining
+                                      }]);
+                                      setShowBarcodeModal(true);
+                                    }}
                                     className="flex-1 bg-blue-600 text-white px-2 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-                                    title="Print Standard Label"
+                                    title="Print Barcode Label"
                                   >
-                                    <Printer className="w-3 h-3" />
+                                    <Barcode className="w-3 h-3" />
                                     Print Label
                                   </button>
                                   <button
@@ -3057,6 +2910,15 @@ export default function InventoryPage() {
             </div>
           </div>
         )}
+
+        {/* Reusable Barcode Printing Modal */}
+        <MedicineBarcodeModal
+          isOpen={showBarcodeModal}
+          onClose={() => setShowBarcodeModal(false)}
+          items={barcodeItems}
+          title="Print Medicine Labels"
+          subtitle={barcodeItems.length === 1 ? `Medicine: ${barcodeItems[0].medication_name}` : undefined}
+        />
 
 
         {/* Delete Confirmation Modal */}

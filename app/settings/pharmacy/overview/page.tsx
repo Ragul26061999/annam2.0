@@ -24,8 +24,10 @@ import {
   CheckCircle2,
   XCircle,
   Info,
-  Printer
+  Printer,
+  Barcode
 } from 'lucide-react';
+import MedicineBarcodeModal, { PrintableLabelItem } from '@/src/components/MedicineBarcodeModal';
 import { DosageFormSelect } from '@/src/components/ui/DosageFormSelect';
 import { ManufacturerSelect } from '@/src/components/ui/ManufacturerSelect';
 import { CategorySelect } from '@/src/components/ui/CategorySelect';
@@ -135,6 +137,10 @@ export default function PharmacyOverviewPage() {
   const [search, setSearch] = useState('');
   const [editingMedicationId, setEditingMedicationId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<Medication> | null>(null);
+
+  // Barcode Printing States
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const [barcodeItems, setBarcodeItems] = useState<PrintableLabelItem[]>([]);
 
   const filteredMedications = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -353,162 +359,7 @@ export default function PharmacyOverviewPage() {
     return result;
   }, [batchesByMedicationId]);
 
-  // ─── Print Barcode for Batch ────────────────────────────────────────────────────
-
-  const printBatchBarcode = async (batch: MedicineBatch, medicineName: string) => {
-    try {
-      // Helper function to format expiry date safely
-      const formatExpiryDate = (dateStr: string | null) => {
-        if (!dateStr) return 'N/A'
-        try {
-          // Handle DD-MM-YYYY format
-          if (dateStr.includes('-') && dateStr.split('-').length === 3) {
-            const [day, month, year] = dateStr.split('-')
-            const date = new Date(`${year}-${month}-${day}`)
-            if (isNaN(date.getTime())) return dateStr
-            return date.toLocaleDateString('en-GB')
-          }
-          // Handle ISO format or other formats
-          const date = new Date(dateStr)
-          if (isNaN(date.getTime())) return dateStr
-          return date.toLocaleDateString('en-GB')
-        } catch {
-          return dateStr
-        }
-      }
-
-      const expiryDate = formatExpiryDate(batch.expiry_date)
-      const printDate = new Date().toLocaleDateString('en-GB')
-      const printTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
-      
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) return
-
-      const labelContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Medicine Batch Label</title>
-            <style>
-              @page { 
-                size: 50mm 25mm; 
-                margin: 1mm; 
-              }
-              * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-              }
-              body { 
-                font-family: 'Arial', sans-serif;
-                width: 48mm;
-                height: 23mm;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                padding: 1mm;
-                font-size: 8px;
-                line-height: 1.1;
-                background: white;
-              }
-              .header {
-                text-align: center;
-                font-size: 10px;
-                font-weight: bold;
-                color: #000;
-                margin-bottom: 1mm;
-              }
-              .batch-info {
-                display: flex;
-                justify-content: space-between;
-                font-size: 6px;
-                color: #000;
-                margin-bottom: 0.8mm;
-              }
-              .barcode-section {
-                text-align: center;
-                margin: 1mm 0;
-                height: 10mm;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                border: 0.5px solid #ddd;
-                background: #f9f9f9;
-              }
-              #barcode {
-                width: 30mm;
-                height: 10mm;
-                display: block;
-              }
-              .footer {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 6px;
-                color: #000;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">ANNAM HOSPITAL</div>
-            
-            <div class="batch-info">
-              <span>Batch: ${batch.batch_number}</span>
-              <span>Qty: ${batch.current_quantity}</span>
-            </div>
-            
-            <div class="barcode-section">
-              <svg id="barcode"></svg>
-            </div>
-            
-            <div class="footer">
-              <span>Exp: ${expiryDate}</span>
-              <span>Printed: ${printDate} ${printTime}</span>
-            </div>
-
-            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-            <script>
-              (function() {
-                function render() {
-                  try {
-                    var value = ${JSON.stringify(batch.batch_number)};
-                    var isNumeric = /^\\d+$/.test(value);
-                    var fmt = (isNumeric && value.length === 13) ? 'EAN13' : 'CODE128';
-                    JsBarcode('#barcode', value, {
-                      format: fmt,
-                      displayValue: true,
-                      fontSize: 8,
-                      textMargin: 1,
-                      margin: 2,
-                      lineColor: '#000',
-                      background: '#f9f9f9'
-                    });
-                    setTimeout(function(){ window.print(); window.close(); }, 200);
-                  } catch (e) {
-                    console.error('Barcode render error', e);
-                    setTimeout(function(){ window.print(); window.close(); }, 200);
-                  }
-                }
-                if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                  render();
-                } else {
-                  window.addEventListener('load', render);
-                }
-              })();
-            </script>
-          </body>
-        </html>
-      `
-
-      printWindow.document.write(labelContent)
-      printWindow.document.close()
-      printWindow.focus()
-    } catch (error) {
-      console.error('Error printing batch barcode:', error)
-      alert('Failed to print barcode. Please try again.')
-    }
-  }
+  // ─── Print Barcode for Batch removed and replaced by MedicineBarcodeModal ─────────────────
 
   return (
     <div className="min-h-screen bg-[#f8f8fb] p-4 md:p-8">
@@ -784,9 +635,27 @@ export default function PharmacyOverviewPage() {
                         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" /> Batch Details
                         </span>
-                        {!loadingBatchesFor && batches.length > 0 && (
-                          <span className="text-xs text-gray-400">{batches.length} batch{batches.length !== 1 ? 'es' : ''}</span>
-                        )}
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => {
+                              setBarcodeItems(batches.map((b: any) => ({
+                                medication_id: m.id,
+                                medication_name: m.name,
+                                batch_number: b.batch_number,
+                                expiry_date: b.expiry_date || '',
+                                quantity: b.current_quantity
+                              })));
+                              setShowBarcodeModal(true);
+                            }}
+                            className="text-[10px] font-bold text-fuchsia-600 hover:text-fuchsia-700 flex items-center gap-1 bg-fuchsia-50 px-2 py-1 rounded-md border border-fuchsia-100 transition-colors uppercase tracking-wider"
+                          >
+                            <Barcode className="w-3 h-3" />
+                            Print Bulk Labels
+                          </button>
+                          {!loadingBatchesFor && batches.length > 0 && (
+                            <span className="text-xs text-gray-400">{batches.length} batch{batches.length !== 1 ? 'es' : ''}</span>
+                          )}
+                        </div>
                       </div>
 
                       {loadingBatchesFor === m.id ? (
@@ -997,18 +866,28 @@ export default function PharmacyOverviewPage() {
                                       ) : (
                                         <div className="flex items-center gap-2">
                                           <button
-                                            onClick={() => beginBatchEdit(m.id, b)}
-                                            disabled={hasAnyBatchEditing}
-                                            className="h-7 px-2.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 inline-flex items-center gap-1.5 disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:border-gray-200"
+                                            onClick={() => {
+                                              setBarcodeItems([{
+                                                medication_id: m.id,
+                                                medication_name: m.name,
+                                                batch_number: b.batch_number,
+                                                expiry_date: b.expiry_date || '',
+                                                quantity: b.current_quantity
+                                              }]);
+                                              setShowBarcodeModal(true);
+                                            }}
+                                            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-fuchsia-600 hover:bg-fuchsia-50 transition-colors"
+                                            title="Print Barcode Labels"
                                           >
-                                            <Edit className="w-3.5 h-3.5" /> Edit
+                                            <Barcode className="w-4 h-4" />
                                           </button>
                                           <button
-                                            onClick={() => printBatchBarcode(b, m.name)}
-                                            className="h-7 px-2.5 text-xs rounded-md bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-1.5"
-                                            title="Print barcode label"
+                                            onClick={() => beginBatchEdit(m.id, b)}
+                                            disabled={hasAnyBatchEditing}
+                                            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-fuchsia-600 hover:bg-fuchsia-50 transition-colors"
+                                            title="Edit Batch"
                                           >
-                                            <Printer className="w-3.5 h-3.5" /> Print
+                                            <Edit className="w-4 h-4" />
                                           </button>
                                         </div>
                                       )}
@@ -1028,6 +907,14 @@ export default function PharmacyOverviewPage() {
           </div>
         )}
       </div>
+
+      {/* Barcode Printing Modal */}
+      <MedicineBarcodeModal
+        isOpen={showBarcodeModal}
+        onClose={() => setShowBarcodeModal(false)}
+        items={barcodeItems}
+        title="Print Medicine Labels"
+      />
     </div>
   );
 }

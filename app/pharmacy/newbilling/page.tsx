@@ -759,43 +759,48 @@ function NewBillingPageInner() {
       word-break: break-all;
     }
 
-    table {
+    .receipt-table {
+      width: 100%;
       border-collapse: collapse;
-    }
-
-    thead tr {
-      border-top: 1px solid #000;
-      border-bottom: 1px solid #000;
-    }
-
-    tbody tr:last-child {
-      border-bottom: 1px solid #000;
-    }
-
-    th,
-    td {
-      padding: 2px 0;
-    }
-
-    .amount-cell {
-      text-align: right;
-      padding-right: 2mm;
-    }
-
-    .label {
-      font-weight: 400;
-      color: #000;
-    }
-
-    .value {
-      font-weight: 600;
-    }
-
-    .totals-section {
-      page-break-inside: avoid;
-      margin: 2px 0 4mm 0;
       border: 1px solid #000;
-      padding: 2px 2mm;
+    }
+
+    .receipt-table th, .receipt-table td {
+      border: 1px solid #000;
+      padding: 2px 1px;
+    }
+
+    .receipt-table th {
+      text-align: center;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .text-left { text-align: left; }
+
+    .totals-box {
+      width: 100%;
+      border-collapse: collapse;
+      border-top: none;
+    }
+
+    .totals-box td {
+      border: 1px solid #000;
+      padding: 2px 4px;
+    }
+
+    .totals-label {
+      text-align: right;
+      font-weight: bold;
+      width: 70%;
+    }
+
+    .totals-value {
+      text-align: right;
+      font-weight: bold;
+      width: 30%;
     }
 
     .invoice-footer {
@@ -2350,365 +2355,171 @@ function NewBillingPageInner() {
   };
 
   // Thermal printer preview function
+  // Thermal printer preview function
   const showThermalPreview = () => {
-    if (!generatedBill) return;
-
-    const now = new Date();
-    const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-
-    // Use generatedBill.customer as fallback since customer state may be reset after bill generation
-    const billCustomer1 = generatedBill.customer || customer;
-    const patientUhid = billCustomer1.type === 'patient' ? (billCustomer1.patient_uhid || customer.patient_uhid || 'No UHID') : billCustomer1.type === 'intent' ? `INTENT-${intentType}` : billCustomer1.type === 'op' ? 'OP' : 'WALK-IN';
-    const patientName1 = billCustomer1.name || customer.name || generatedBill.customer_name || '';
-
-    // Get sales type
-    const billPayments1 = Array.isArray(generatedBill.payments) && generatedBill.payments.length > 0 ? generatedBill.payments : payments;
-    let salesType = billPayments1.length > 1 ? 'SPLIT' : (billPayments1[0]?.method?.toUpperCase() || 'CASH');
-    if (salesType === 'CREDIT') {
-      salesType = 'CREDIT';
-    }
-
-    // Generate items HTML
-    const itemsHtml = generatedBill.items.map((item: any, index: number) => `
-      <tr>
-        <td class="items-8cm">${index + 1}.</td>
-        <td class="items-8cm">${item.medicine?.name || item.name}</td>
-        <td class="items-8cm text-center">${item.quantity}</td>
-        <td class="items-8cm text-right">${Math.round(Number(item.total || item.total_amount || item.amount || 0))}</td>
-      </tr>
-    `).join('');
-
-    const subtotal = Math.round(Number(generatedBill.totals?.subtotal || generatedBill.items?.reduce((s: number, i: any) => s + Number(i.total || i.total_amount || i.amount || 0), 0) || 0));
-    const discount = Math.round(Number(generatedBill.totals?.discountAmount || generatedBill.totals?.discount || 0));
-    const tax = Math.round(Number(generatedBill.totals?.taxAmount || generatedBill.totals?.tax || 0));
-    const totalAmount = Math.round(Number(generatedBill.totals?.totalAmount || generatedBill.totals?.total || generatedBill.total || 0));
-
-    const thermalContent = `
-      <html>
-        <head>
-          <title>Thermal Receipt - ${generatedBill.bill_number}</title>
-          <style>
-            @page { margin: 5mm; size: 77mm 297mm; }
-            body { 
-              font-family: 'Times New Roman', Times, serif; 
-              margin: 0; 
-              padding: 10px;
-              font-size: 12px;
-              line-height: 1.2;
-              width: 77mm;
-            }
-            .header-14cm { font-size: 14pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .header-9cm { font-size: 9pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .header-10cm { font-size: 10pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .header-8cm { font-size: 8pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .items-8cm { font-size: 8pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .bill-info-10cm { font-size: 10pt; font-family: 'Times New Roman', Times, serif; }
-            .bill-info-bold { font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .footer-7cm { font-size: 7pt; font-family: 'Times New Roman', Times, serif; }
-            .center { text-align: center; font-family: 'Times New Roman', Times, serif; }
-            .right { text-align: right; font-family: 'Times New Roman', Times, serif; }
-            .table { width: 100%; border-collapse: collapse; font-family: 'Times New Roman', Times, serif; }
-            .table td { padding: 2px; font-family: 'Times New Roman', Times, serif; }
-            .totals-line { display: flex; justify-content: space-between; font-family: 'Times New Roman', Times, serif; }
-            .footer { margin-top: 20px; font-family: 'Times New Roman', Times, serif; }
-            .signature-area { margin-top: 30px; font-family: 'Times New Roman', Times, serif; }
-          </style>
-        </head>
-        <body>
-          <div class="center">
-            <div class="header-14cm">ANNAM PHARMACY</div>
-            <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
-            <div class="header-9cm">Phone- 04639 252592</div>
-            <div class="header-10cm">Gst No: 33AJWPR2713G2ZZ</div>
-            <div style="margin-top: 5px; font-weight: bold;">INVOICE</div>
-          </div>
-          
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${generatedBill.bill_number}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientName1}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${formatISTDate(getISTDate())} ${formatISTTime(getISTDate())}</td>
-              </tr>
-              <tr>
-                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${salesType}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr style="border-bottom: 1px dashed #000;">
-                <td width="30%" class="items-8cm">S.No</td>
-                <td width="40%" class="items-8cm">Drug Name</td>
-                <td width="15%" class="items-8cm text-center">Qty</td>
-                <td width="15%" class="items-8cm text-right">Amt</td>
-              </tr>
-              ${itemsHtml}
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <div class="totals-line items-8cm">
-              <span>Taxable Amount</span>
-              <span>${subtotal - discount}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;Dist Amt</span>
-              <span>${discount}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;CGST Amt</span>
-              <span>${Math.round(tax / 2)}</span>
-            </div>
-            <div class="totals-line header-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;SGST Amt</span>
-              <span>${Math.round(tax / 2)}</span>
-            </div>
-            <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
-              <span>Total Amount</span>
-              <span>${totalAmount}</span>
-            </div>
-          </div>
-
-          <div class="footer">
-            <div class="totals-line footer-7cm">
-              <span>Printed on ${printedDateTime}</span>
-              <span>Pharmacist Sign</span>
-            </div>
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(thermalContent);
-      printWindow.document.close();
-    }
+    showThermalPreviewWithLogo();
   };
 
+  // Thermal printer preview function (Thermal 2)
   const showThermalPreviewWithLogo = () => {
     if (!generatedBill) return;
 
-    const now = new Date();
-    const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    // Use hospitalDetails for consistency
+    const { name, address, contactNumber, gstNumber } = hospitalDetails;
 
-    // Use generatedBill.customer as fallback since customer state may be reset after bill generation
-    const billCustomer = generatedBill.customer || customer;
-    // For thermal print, try to get proper UHID from various sources
-    let patientUhid = '';
-    if (billCustomer.type === 'patient') {
-      patientUhid = billCustomer.patient_uhid || customer.patient_uhid || 'No UHID';
-    } else if (billCustomer.type === 'op') {
-      patientUhid = 'OP';
-    } else if (billCustomer.type === 'intent') {
-      patientUhid = `INTENT-${intentType}`;
-    } else {
-      patientUhid = 'WALK-IN';
-    }
-    const patientName = billCustomer.name || customer.name || generatedBill.customer_name || '';
-
-    const billPayments = Array.isArray(generatedBill.payments) && generatedBill.payments.length > 0 ? generatedBill.payments : payments;
-    let salesType = billPayments.length > 1 ? 'SPLIT' : (billPayments[0]?.method?.toUpperCase() || 'CASH');
-    if (salesType === 'CREDIT') {
-      salesType = 'CREDIT';
-    }
-
-    const roundToTrim = (value: number, maxDecimals: number) => {
-      const factor = Math.pow(10, maxDecimals);
-      const rounded = Math.round(value * factor) / factor;
-      const str = rounded.toString();
-      if (str.includes('.')) {
-        // Trim trailing zeros, but keep at most maxDecimals
-        const parts = str.split('.');
-        let trimmed = parts[1].replace(/0+$/, '');
-        // If after trimming we have fewer decimals, show that; otherwise show up to maxDecimals
-        const decimalsToShow = trimmed.length > 0 ? Math.min(trimmed.length, maxDecimals) : 0;
-        if (decimalsToShow === 0) {
-          return parts[0];
-        }
-        return `${parts[0]}.${parts[1].substring(0, decimalsToShow)}`;
+    // Group items like in the main print
+    const groupedItems = generatedBill.items.reduce((acc: any, item: any) => {
+      const medicineName = item.medicine.name;
+      if (!acc[medicineName]) {
+        acc[medicineName] = {
+          name: medicineName,
+          totalQuantity: 0,
+          totalAmount: 0
+        };
       }
-      return str;
-    };
+      acc[medicineName].totalQuantity += item.quantity;
+      acc[medicineName].totalAmount += item.total;
+      return acc;
+    }, {});
 
-    const gstPercent = Number(generatedBill.totals?.taxPercent ?? billTotals.taxPercent ?? 0) || 0;
-    const cgstRate = gstPercent / 2;
-    const sgstRate = gstPercent / 2;
-
-    const itemsForPrint = (generatedBill.items || []).map((item: any) => {
-      const qty = Number(item.quantity) || 0;
-      const unitMrp = Number(item.batch?.selling_price ?? item.medicine?.mrp ?? item.unit_price ?? 0) || 0;
-      const gross = qty * unitMrp;
-      const gstAmount = gross * (gstPercent / 100);
-      const taxable = gross - gstAmount;
-      const cgstAmount = gstAmount / 2;
-      const sgstAmount = gstAmount / 2;
-      return {
-        name: item.medicine?.name || item.name,
-        qty,
-        unitMrp,
-        gross,
-        taxable,
-        gstAmount,
-        cgstAmount,
-        sgstAmount
-      };
-    });
-
-    const itemsHtml = itemsForPrint.map((row: any, index: number) => `
+    const itemsHtml = Object.values(groupedItems).map((item: any, index: number) => `
       <tr>
-        <td class="items-8cm">${index + 1}.</td>
-        <td class="items-8cm">${row.name}</td>
-        <td class="items-8cm text-center">${row.qty}</td>
-        <td class="items-8cm text-right">${row.gross.toFixed(2)}</td>
+        <td class="text-center">${index + 1}</td>
+        <td class="text-left font-bold uppercase">${item.name}</td>
+        <td class="text-center">${item.totalQuantity}</td>
+        <td class="text-right">₹${Number(item.totalAmount).toFixed(2)}</td>
       </tr>
     `).join('');
 
+    // Values for totals
+    const taxable = Number(generatedBill.totals?.subtotal || 0).toFixed(2);
     const discount = Number(generatedBill.totals?.discountAmount || 0);
-    const grossTotal = itemsForPrint.reduce((s: number, r: any) => s + (Number(r.gross) || 0), 0);
-    const grossAfterDiscount = Math.max(grossTotal - discount, 0);
-    const gstAmount = grossAfterDiscount * (gstPercent / 100);
-    const taxableAfterDiscount = grossAfterDiscount - gstAmount;
-    const cgstAmount = gstAmount / 2;
-    const sgstAmount = gstAmount / 2;
-    const totalAmount = grossAfterDiscount;
+    const cgst = Number(generatedBill.totals?.taxAmount / 2 || 0).toFixed(2);
+    const sgst = Number(generatedBill.totals?.taxAmount / 2 || 0).toFixed(2);
+    const total = Number(generatedBill.totals?.totalAmount || 0).toFixed(2);
 
-    const subtotal = grossTotal;
-    const tax = gstAmount;
-
+    const now = new Date();
+    const printedDateTime = formatISTDate(now) + ' ' + formatISTTime(now);
+    const billCustomer = generatedBill.customer || customer;
+    
     const thermalContent = `
       <html>
         <head>
           <title>Thermal Receipt - ${generatedBill.bill_number}</title>
           <style>
-            @page { margin: 3mm 8mm 3mm 3mm; size: 85mm 297mm; }
+            @page { margin: 3mm; size: 80mm auto; }
             body { 
               font-family: 'Verdana', sans-serif; 
               font-weight: bold;
               margin: 0; 
-              padding: 2px;
-              font-size: 14px;
-              line-height: 1.2;
-              width: 85mm;
+              padding: 0px;
+              font-size: 11px;
+              width: 77mm;
             }
-            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-10cm { font-size: 12pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .right { text-align: right; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table { width: 100%; border-collapse: collapse; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table td { padding: 1px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .totals-line { display: flex; justify-content: space-between; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .footer { margin-top: 15px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .signature-area { margin-top: 25px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .logo { width: 300px; height: auto; margin-bottom: 5px; }
+            .center { text-align: center; }
+            .text-right { text-align: right; }
+            .text-left { text-align: left; }
+            .text-center { text-align: center; }
+            .logo { width: 250px; height: auto; margin-bottom: 5px; }
+            
+            .receipt-table {
+              width: 100%;
+              border-collapse: collapse;
+              border: 1px solid #000;
+              margin-top: 10px;
+            }
+            .receipt-table th, .receipt-table td {
+              border: 1px solid #000;
+              padding: 3px 2px;
+            }
+            .receipt-table th {
+              text-align: center;
+              text-transform: uppercase;
+              font-weight: bold;
+              font-size: 11px;
+            }
+            .totals-box {
+              width: 100%;
+              border-collapse: collapse;
+              border-top: none;
+            }
+            .totals-box td {
+              border: 1px solid #000;
+              padding: 3px 4px;
+            }
+            .totals-label {
+              text-align: right;
+              font-weight: bold;
+              width: 70%;
+            }
+            .totals-value {
+              text-align: right;
+              font-weight: bold;
+              width: 30%;
+            }
+            .font-bold { font-weight: bold; }
+            .uppercase { text-transform: uppercase; }
           </style>
         </head>
         <body>
           <div class="center">
             <img src="/logo/annamPharmacy.png" alt="ANNAM LOGO" class="logo" />
-            <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
-            <div class="header-9cm">Phone- 04639 252592</div>
-            <div class="footer-7cm">Gst No: 33AJWPR2713G2ZZ</div>
-            <div style="margin-top: 5px; font-weight: bold;">INVOICE</div>
+            <div style="font-size: 15px; font-weight: bold;">${name}</div>
+            <div style="font-size: 10px;">${address}</div>
+            <div style="font-size: 10px;">${contactNumber}</div>
+            <div style="font-size: 10px;">GST No: ${gstNumber}</div>
+            <div style="margin: 5px 0; border: 1px solid #000; padding: 2px; width: 100%; box-sizing: border-box; display: inline-block;">
+              <span style="font-size: 12px; letter-spacing: 2px; font-weight: bold;">INVOICE</span>
+            </div>
           </div>
-          
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${generatedBill.bill_number}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientName}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${formatISTDate(getISTDate())} ${formatISTTime(getISTDate())}</td>
-              </tr>
-              <tr>
-                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${salesType}</td>
-              </tr>
+
+          <div style="margin-top: 5px; font-size: 11px;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="width: 30%; font-weight: bold;">UHID</td><td style="font-weight: bold;">: ${billCustomer.patient_uhid || 'WALK-IN'}</td></tr>
+              <tr><td style="font-weight: bold;">Patient Name</td><td style="font-weight: bold;">: ${billCustomer.name}</td></tr>
+              <tr style="height: 5px;"><td></td><td></td></tr>
+              <tr><td style="font-weight: bold;">Bill No</td><td style="font-weight: bold;">: ${generatedBill.bill_number}</td></tr>
+              <tr><td style="font-weight: bold;">Date</td><td style="font-weight: bold;">: ${printedDateTime}</td></tr>
+              <tr><td style="font-weight: bold;">Sales Type</td><td style="font-weight: bold;">: ${(generatedBill.payments?.[0]?.method || generatedBill.paymentMethod || 'CASH').toUpperCase()}</td></tr>
             </table>
           </div>
 
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr style="border-bottom: 1px dashed #000;">
-                <td width="30%" class="items-8cm">S.No</td>
-                <td width="40%" class="items-8cm">Drug Name</td>
-                <td width="15%" class="items-8cm text-center">Qty</td>
-                <td width="15%" class="items-8cm text-right">Amt</td>
+          <table class="receipt-table">
+            <thead>
+              <tr>
+                <th style="width: 10%;">.No</th>
+                <th style="width: 55%; text-align: left;">DRUG NAME</th>
+                <th style="width: 15%;">Qty</th>
+                <th style="width: 20%; text-align: right;">Amount</th>
               </tr>
+            </thead>
+            <tbody>
               ${itemsHtml}
-            </table>
-          </div>
+            </tbody>
+          </table>
 
-          <div style="margin-top: 10px;">
-            <div class="totals-line items-8cm">
-              <span>Taxable Amount</span>
-              <span>${roundToTrim(taxableAfterDiscount, 3)}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;Dist Amt</span>
-              <span>${discount.toFixed(2)}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;CGST (${cgstRate.toFixed(2)}%)</span>
-              <span>${roundToTrim(cgstAmount, 3)}</span>
-            </div>
-            <div class="totals-line header-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;SGST (${sgstRate.toFixed(2)}%)</span>
-              <span>${roundToTrim(sgstAmount, 3)}</span>
-            </div>
-            <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
-              <span>Total Amount</span>
-              <span>${totalAmount.toFixed(2)}</span>
-            </div>
-          </div>
+          <table class="totals-box">
+            <tbody>
+              <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxable}</td></tr>
+              <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
+              <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst}</td></tr>
+              <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst}</td></tr>
+              <tr><td class="totals-label" style="font-size: 13px;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px;">₹${total}</td></tr>
+            </tbody>
+          </table>
 
-          <div class="footer">
-            <div class="totals-line footer-7cm">
-              <span>Printed on ${printedDateTime}</span>
-              <span>Pharmacist Sign</span>
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
+            <div style="font-size: 9px; font-weight: bold;">
+              <p>PRINTED ON ${formatISTDate(getISTDate())}</p>
+              <p>${formatISTTime(getISTDate())}</p>
+            </div>
+            <div style="text-align: right; font-size: 9px; font-weight: bold;">
+              <p style="margin-bottom: 25px;">PHARMACIST SIGNATURE</p>
             </div>
           </div>
 
           <script>
-            window.onload = function() {
-              window.print();
-            }
+            window.onload = function() { window.print(); }
           </script>
         </body>
       </html>
@@ -2720,6 +2531,7 @@ function NewBillingPageInner() {
       printWindow.document.close();
     }
   };
+
 
   return (
     <div className={embedded ? '' : 'min-h-screen bg-slate-100 px-6 py-4'}>
@@ -4421,52 +4233,51 @@ function NewBillingPageInner() {
             <div id="receipt-content" className="receipt">
               <style dangerouslySetInnerHTML={{ __html: printCss }} />
               {/* Header */}
-              <div className="text-center mb-2 invoice-header">
-                <h1 className="text-lg font-bold text-gray-900">{hospitalDetails.name || 'ANNAM PHARMACY'}</h1>
-                <p className="text-gray-700 text-[10px]">{hospitalDetails.department}</p>
-                <p className="text-[10px] text-gray-600">{hospitalDetails.address}</p>
-                <p className="text-[10px] text-gray-600">{hospitalDetails.contactNumber}</p>
-                <p className="text-[10px] text-gray-500">GST No: {hospitalDetails.gstNumber}</p>
-                <p className="mt-1 text-xs font-bold border-y border-black py-1">INVOICE</p>
+              <div className="text-center mb-1 invoice-header">
+                <h1 className="text-lg font-bold">{hospitalDetails.name || 'ANNAM PHARMACY'}</h1>
+                <p className="text-[10px] font-bold">{hospitalDetails.address}</p>
+                <p className="text-[10px] font-bold">{hospitalDetails.contactNumber}</p>
+                <div className="border border-black my-1 py-1">
+                  <p className="text-sm font-bold tracking-widest">INVOICE</p>
+                </div>
               </div>
 
               {/* Bill Info */}
-              <div className="grid grid-cols-2 gap-4 mb-4 text-sm bill-info">
-                <div className="space-y-1">
-                  <p><strong>Bill No:</strong> {generatedBill.bill_number}</p>
-                  <p><strong>Date:</strong> {formatISTDate(getISTDate())} {formatISTTime(getISTDate())}</p>
-                  <p>
-                    <strong>Sales Type:</strong>{' '}
-                    {(() => {
-                      const pays = (Array.isArray(generatedBill.payments) && generatedBill.payments.length > 0)
-                        ? generatedBill.payments
-                        : payments;
-                      if (Array.isArray(pays) && pays.length > 0) {
-                        return pays
-                          .filter((p: any) => Number(p.amount) > 0 || pays.length === 1)
-                          .map((p: any) => `${(p.method || '').toUpperCase()} ₹${Math.round(Number(p.amount || 0))}`)
-                          .join(' + ');
-                      }
-                      return (generatedBill.paymentMethod === 'credit'
-                        ? 'CREDIT'
-                        : (generatedBill.paymentMethod || 'cash').toUpperCase());
-                    })()}
-                  </p>
+              <div className="mb-2 text-sm space-y-1">
+                <div className="flex">
+                  <span className="w-24 font-bold">UHID</span>
+                  <span className="font-bold">: {generatedBill.customer.patient_uhid || 'WALK-IN'}</span>
                 </div>
-                <div className="space-y-1">
-                  <p><strong>To:</strong> {generatedBill.customer.name}</p>
-                  {generatedBill.customer.address && <p><strong>Address:</strong> {generatedBill.customer.address}</p>}
+                <div className="flex">
+                  <span className="w-24 font-bold">Patient Name</span>
+                  <span className="font-bold">: {generatedBill.customer.name}</span>
+                </div>
+                <div className="flex mt-2">
+                  <span className="w-24 font-bold">Bill No</span>
+                  <span className="font-bold">: {generatedBill.bill_number}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-24 font-bold">Date</span>
+                  <span className="font-bold">: {formatISTDate(getISTDate())} {formatISTTime(getISTDate())}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-24 font-bold">Sales Type</span>
+                  <span className="font-bold">: {
+                    (Array.isArray(generatedBill.payments) && generatedBill.payments.length > 0)
+                      ? generatedBill.payments[0].method.toUpperCase()
+                      : (generatedBill.paymentMethod || 'CASH').toUpperCase()
+                  }</span>
                 </div>
               </div>
 
               {/* Items Table */}
-              <table className="w-full mb-4 text-sm">
+              <table className="receipt-table mb-0">
                 <thead>
-                  <tr className="border-b-2 border-gray-300">
-                    <th className="text-left py-2 w-12">S.No</th>
-                    <th className="text-left py-2">Drug Name</th>
-                    <th className="text-center py-2">Qty</th>
-                    <th className="text-right py-2">Amount</th>
+                  <tr>
+                    <th className="w-8">.No</th>
+                    <th className="text-left">DRUG NAME</th>
+                    <th className="w-10">Qty</th>
+                    <th className="w-20">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4484,88 +4295,63 @@ function NewBillingPageInner() {
                       }
                       acc[medicineName].totalQuantity += item.quantity;
                       acc[medicineName].totalAmount += item.total;
-                      acc[medicineName].batches.push(item.batch.batch_number.slice(-4));
                       return acc;
                     }, {});
 
                     return Object.values(groupedItems).map((groupedItem: any, index: number) => (
-                      <tr key={index} className="border-b border-gray-200">
-                        <td className="py-2">{index + 1}</td>
-                        <td className="py-2">
-                          <div>
-                            <p className="font-bold truncate">{groupedItem.medicine.name}</p>
-                          </div>
-                        </td>
-                        <td className="text-center py-2">{groupedItem.totalQuantity}</td>
-                        <td className="py-2 amount-cell">₹{Math.round(groupedItem.totalAmount)}</td>
+                      <tr key={index}>
+                        <td className="text-center">{index + 1}</td>
+                        <td className="text-left font-bold uppercase">{groupedItem.medicine.name}</td>
+                        <td className="text-center">{groupedItem.totalQuantity}</td>
+                        <td className="text-right">₹{Number(groupedItem.totalAmount).toFixed(2)}</td>
                       </tr>
                     ));
                   })()}
                 </tbody>
               </table>
 
-              {/* Payment Details (supports split payments) */}
-              {(() => {
-                const pays = (Array.isArray(generatedBill.payments) && generatedBill.payments.length > 0)
-                  ? generatedBill.payments
-                  : payments;
-                return Array.isArray(pays) && pays.length > 0 ? (
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Payment Details</h4>
-                    <div className="space-y-1">
-                      {pays.map((payment: any, idx: number) => (
-                        <div key={idx} className="flex justify-between text-sm">
-                          <span className="capitalize">{payment.method}</span>
-                          <span className="font-medium">₹{Math.round(Number(payment.amount || 0))}</span>
-                        </div>
-                      ))}
-                      <div className="border-t pt-1 mt-2 flex justify-between font-semibold">
-                        <span>Total Paid</span>
-                        <span>
-                          ₹{Math.round(pays.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0))}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : null;
-              })()}
-
-              {/* Totals */}
-              <div className="border-t border-black pt-2 space-y-1 text-xs totals-section">
-                <div className="flex justify-between">
-                  <span className="label">Taxable Amt</span>
-                  <span className="value">₹{Math.round(generatedBill.totals.subtotal)}</span>
-                </div>
-                {generatedBill.totals.discountAmount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="label">Disc Amt</span>
-                    <span className="value">-₹{Math.round(generatedBill.totals.discountAmount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="label">CGST Amt</span>
-                  <span className="value">₹{Math.round(generatedBill.totals.taxAmount / 2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="label">SGST Amt</span>
-                  <span className="value">₹{Math.round(generatedBill.totals.taxAmount / 2)}</span>
-                </div>
-                <div className="flex justify-between font-semibold text-base border-t pt-2">
-                  <span>Total Net Amt</span>
-                  <span>₹{Math.round(generatedBill.totals.totalAmount)}</span>
-                </div>
-              </div>
+              {/* Totals Boxed Structure */}
+              <table className="totals-box">
+                <tbody>
+                  <tr>
+                    <td className="totals-label">Taxable Amount</td>
+                    <td className="totals-value">₹{Number(generatedBill.totals.subtotal).toFixed(2)}</td>
+                  </tr>
+                  {generatedBill.totals.discountAmount > 0 ? (
+                    <tr>
+                      <td className="totals-label">Disc Amt:</td>
+                      <td className="totals-value">₹{Number(generatedBill.totals.discountAmount).toFixed(2)}</td>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <td className="totals-label">Disc Amt:</td>
+                      <td className="totals-value">0.00</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td className="totals-label">CGST Amt:</td>
+                    <td className="totals-value">₹{Number(generatedBill.totals.taxAmount / 2).toFixed(2)}</td>
+                  </tr>
+                  <tr>
+                    <td className="totals-label">SGST Amt:</td>
+                    <td className="totals-value">₹{Number(generatedBill.totals.taxAmount / 2).toFixed(2)}</td>
+                  </tr>
+                  <tr>
+                    <td className="totals-label" style={{ fontSize: '13px' }}>Tot.Net.Amt:</td>
+                    <td className="totals-value" style={{ fontSize: '13px' }}>₹{Number(generatedBill.totals.totalAmount).toFixed(2)}</td>
+                  </tr>
+                </tbody>
+              </table>
 
               {/* Footer */}
-              <div className="px-6 invoice-footer text-xs text-gray-600">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p>Printed Date: {formatISTDate(getISTDate())}</p>
-                    <p>Printed Time: {formatISTTime(getISTDate())}</p>
+              <div className="mt-4 invoice-footer">
+                <div className="flex justify-between items-end mb-4">
+                  <div className="text-left">
+                    <p className="font-bold">PRINTED ON {formatISTDate(getISTDate())}</p>
+                    <p className="font-bold">{formatISTTime(getISTDate())}</p>
                   </div>
                   <div className="text-right">
-                    <div className="h-10"></div>
-                    <p className="border-t border-gray-300 pt-1">Pharmacist Signature</p>
+                    <p className="mb-6 font-bold uppercase text-xs">PHARMACIST SIGNATURE</p>
                   </div>
                 </div>
               </div>

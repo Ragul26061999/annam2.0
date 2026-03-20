@@ -42,6 +42,9 @@ interface PharmacyBill {
   subtotal: number
   discount: number
   tax: number
+  tax_percent?: number
+  cgst_amount?: number
+  sgst_amount?: number
   total_amount: number
   amount_paid: number
   payment_method: string
@@ -232,6 +235,9 @@ export default function PharmacyBillingPage() {
           subtotal,
           discount,
           tax,
+          tax_percent,
+          cgst_amount,
+          sgst_amount,
           total,
           amount_paid,
           payment_method,
@@ -355,10 +361,13 @@ export default function PharmacyBillingPage() {
             ? (patientsMap[bill.patient_id]?.patient_id || 'No UHID')
             : '',
           customer_type: bill.customer_type || 'patient',
-          subtotal: bill.subtotal || 0,
-          discount: bill.discount || 0,
-          tax: bill.tax || 0,
-          total_amount: totalAmount,
+          subtotal: Number(bill.subtotal || 0),
+          discount: Number(bill.discount || bill.discount_amount || 0),
+          tax: Number(bill.tax || bill.tax_amount || 0),
+          tax_percent: Number(bill.tax_percent || 0),
+          cgst_amount: Number(bill.cgst_amount || 0),
+          sgst_amount: Number(bill.sgst_amount || 0),
+          total_amount: Number(totalAmount),
           amount_paid: amountPaid,
           payment_method: paymentMethod,
           payment_status: correctedStatus,
@@ -956,9 +965,15 @@ export default function PharmacyBillingPage() {
       </tr>
     `).join('')
 
-    const subtotal = selectedBill.subtotal ?? viewItems.reduce((s: number, it: any) => s + Number(it.total_amount || 0), 0)
-    const discount = selectedBill.discount || 0
-    const tax = selectedBill.tax ?? Math.max(selectedBill.total_amount - (subtotal - discount), 0)
+    const totalAmount = Number(selectedBill.total_amount || 0)
+    let discount = Number(selectedBill.discount || 0)
+    let tax = Number(selectedBill.tax || 0)
+    
+    // If subtotal is missing, derive it from total, tax, and discount
+    let subtotal = Number(selectedBill.subtotal || 0)
+    if (!subtotal) {
+      subtotal = totalAmount - tax + discount
+    }
 
     const w = window.open('', 'printwin')
     if (!w) return
@@ -1019,10 +1034,10 @@ export default function PharmacyBillingPage() {
 
           <div class="totals" style="font-size:14px">
             <div style="display:flex;justify-content:space-between"><span class="label">Taxable Amt</span><span class="value">₹${roundToWholeNumber(subtotal)}</span></div>
-            ${discount > 0 ? `<div style="display:flex;justify-content:space-between"><span class="label">Disc Amt</span><span class="value">-₹${roundToWholeNumber(discount)}</span></div>` : ''}
-            <div style="display:flex;justify-content:space-between"><span class="label">CGST Amt</span><span class="value">₹${roundToWholeNumber(tax / 2)}</span></div>
-            <div style="display:flex;justify-content:space-between"><span class="label">SGST Amt</span><span class="value">₹${roundToWholeNumber(tax / 2)}</span></div>
-            <div style="display:flex;justify-content:space-between;font-weight:600;border-top:1px solid #e5e7eb;padding-top:6px"><span>Total Net Amt</span><span>₹${roundToWholeNumber(selectedBill.total_amount)}</span></div>
+            <div style="display:flex;justify-content:space-between"><span class="label">Dist Amt</span><span class="value">${discount > 0 ? `-₹${roundToWholeNumber(discount)}` : '₹0'}</span></div>
+            <div style="display:flex;justify-content:space-between"><span class="label">CGST Amt</span><span class="value">₹${(tax / 2).toFixed(2)}</span></div>
+            <div style="display:flex;justify-content:space-between"><span class="label">SGST Amt</span><span class="value">₹${(tax / 2).toFixed(2)}</span></div>
+            <div style="display:flex;justify-content:space-between;font-weight:600;border-top:1px solid #e5e7eb;padding-top:6px"><span>Total Amount</span><span>₹${roundToWholeNumber(totalAmount)}</span></div>
           </div>
 
           <div class="invoice-footer">
@@ -1045,164 +1060,54 @@ export default function PharmacyBillingPage() {
   }
 
   const showThermalPreview = () => {
-    if (!selectedBill || !viewItems.length) return;
-
-    const now = new Date();
-    const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-
-    // Get patient UHID
-    const patientUhid = selectedBill.patient_uhid || 'WALK-IN';
-
-    // Get sales type
-    let salesType = selectedBill.payment_method?.toUpperCase() || 'CASH';
-    if (salesType === 'CREDIT') {
-      salesType = 'CREDIT';
-    }
-
-    // Generate items HTML
-    const itemsHtml = viewItems.map((item: any, index: number) => `
-      <tr>
-        <td class="items-8cm">${index + 1}.</td>
-        <td class="items-8cm">${item.description || item.name || 'Unknown'}</td>
-        <td class="items-8cm text-center">${item.qty || 1}</td>
-        <td class="items-8cm text-right">${roundToWholeNumber(Number(item.total_amount || 0))}</td>
-      </tr>
-    `).join('');
-
-    // Calculate totals
-    const subtotal = selectedBill.subtotal ?? viewItems.reduce((s: number, it: any) => s + Number(it.total_amount || 0), 0);
-    const discount = selectedBill.discount || 0;
-    const tax = selectedBill.tax ?? Math.max(selectedBill.total_amount - (subtotal - discount), 0);
-
-    const thermalContent = `
-      <html>
-        <head>
-          <title>Thermal Receipt - ${selectedBill.bill_number}</title>
-          <style>
-            @page { margin: 5mm 8mm 5mm 5mm; size: 85mm 297mm; }
-            body { 
-              font-family: 'Verdana', sans-serif; 
-              font-weight: bold;
-              margin: 0; 
-              padding: 5px;
-              font-size: 14px;
-              line-height: 1.2;
-              width: 85mm;
-            }
-            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-10cm { font-size: 12pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .right { text-align: right; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table { width: 100%; border-collapse: collapse; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table td { padding: 1px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .totals-line { display: flex; justify-content: space-between; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .footer { margin-top: 15px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .signature-area { margin-top: 25px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="center">
-            <div class="header-14cm">ANNAM PHARMACY</div>
-            <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
-            <div class="header-9cm">Phone- 04639 252592</div>
-            <div class="footer-7cm">Gst No: 33AJWPR2713G2ZZ</div>
-            <div style="margin-top: 5px; font-weight: bold;">INVOICE</div>
-          </div>
-          
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${selectedBill.bill_number}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${selectedBill.customer_name || 'WALK-IN CUSTOMER'}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${new Date(selectedBill.created_at).toLocaleDateString()} ${new Date(selectedBill.created_at).toLocaleTimeString()}</td>
-              </tr>
-              <tr>
-                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${salesType}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr style="border-bottom: 1px dashed #000;">
-                <td width="30%" class="items-8cm">S.No</td>
-                <td width="40%" class="items-8cm">Drug Name</td>
-                <td width="15%" class="items-8cm text-center">Qty</td>
-                <td width="15%" class="items-8cm text-right">Amt</td>
-              </tr>
-              ${itemsHtml}
-            </table>
-          </div>
-
-          <div style="margin-top: 10px;">
-            <div class="totals-line items-8cm">
-              <span>Taxable Amount</span>
-              <span>${subtotal.toFixed(2)}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;Dist Amt</span>
-              <span>${discount.toFixed(2)}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;CGST Amt</span>
-              <span>${(tax / 2).toFixed(2)}</span>
-            </div>
-            <div class="totals-line header-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;SGST Amt</span>
-              <span>${(tax / 2).toFixed(2)}</span>
-            </div>
-            <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
-              <span>Total Amount</span>
-              <span>${Math.round(selectedBill.total_amount)}</span>
-            </div>
-          </div>
-
-          <div class="footer">
-            <div class="totals-line footer-7cm">
-              <span>Printed on ${printedDateTime}</span>
-              <span>Pharmacist Sign</span>
-            </div>
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(thermalContent);
-      printWindow.document.close();
-    }
+    showThermalPreviewWithLogo();
   };
 
   const showThermalPreviewWithLogo = () => {
     if (!selectedBill || !viewItems.length) return;
 
+    const { name, address, contact_number, gst_number } = hospital;
+
+    const itemsHtml = viewItems.map((item: any, index: number) => `
+      <tr>
+        <td class="text-center">${index + 1}</td>
+        <td class="text-left font-bold uppercase">${item.description || item.name || 'Unknown'}</td>
+        <td class="text-center">${item.qty || 1}</td>
+        <td class="text-right">₹${Number(item.total_amount || 0).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    // Calculate totals
+    const totalAmount = Number(selectedBill.total_amount || 0);
+    const discount = Number(selectedBill.discount || 0);
+    
+    // Determine tax components
+    // If cgst/sgst are stored, use them. Otherwise, if total tax is stored, split it.
+    // If no tax is stored, calculate it as 12% inclusive GST.
+    let cgst = Number(selectedBill.cgst_amount || 0);
+    let sgst = Number(selectedBill.sgst_amount || 0);
+    let tax = Number(selectedBill.tax || 0);
+
+    if (cgst <= 0 && sgst <= 0) {
+      if (tax > 0) {
+        cgst = tax / 2;
+        sgst = tax / 2;
+      } else if (totalAmount > 0) {
+        // Fallback: use stored tax_percent or default to 12% GST inclusive
+        const percent = selectedBill.tax_percent || 12;
+        const taxable = totalAmount / (1 + (percent / 100));
+        tax = totalAmount - taxable;
+        cgst = tax / 2;
+        sgst = tax / 2;
+      }
+    }
+
+    // Taxable Amount is the total net amount minus tax
+    const taxableAmount = totalAmount - (cgst + sgst);
+
     const now = new Date();
-    const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    const printedDate = now.toLocaleDateString('en-GB').replace(/\//g, '-');
+    const printedTime = now.toLocaleTimeString('en-GB');
 
     // Get patient UHID
     const patientUhid = selectedBill.patient_uhid || 'WALK-IN';
@@ -1213,140 +1118,130 @@ export default function PharmacyBillingPage() {
       salesType = 'CREDIT';
     }
 
-    // Generate items HTML
-    const itemsHtml = viewItems.map((item: any, index: number) => `
-      <tr>
-        <td class="items-8cm">${index + 1}.</td>
-        <td class="items-8cm">${item.description || item.name || 'Unknown'}</td>
-        <td class="items-8cm text-center">${item.qty || 1}</td>
-        <td class="items-8cm text-right">${roundToWholeNumber(Number(item.total_amount || 0))}</td>
-      </tr>
-    `).join('');
-
-    // Calculate totals
-    const subtotal = selectedBill.subtotal ?? viewItems.reduce((s: number, it: any) => s + Number(it.total_amount || 0), 0);
-    const discount = selectedBill.discount || 0;
-    const tax = selectedBill.tax ?? Math.max(selectedBill.total_amount - (subtotal - discount), 0);
-
     const thermalContent = `
       <html>
         <head>
           <title>Thermal Receipt - ${selectedBill.bill_number}</title>
           <style>
-            @page { margin: 3mm 8mm 3mm 3mm; size: 85mm 297mm; }
+            @page { margin: 3mm; size: 80mm auto; }
             body { 
               font-family: 'Verdana', sans-serif; 
               font-weight: bold;
               margin: 0; 
-              padding: 2px;
-              font-size: 14px;
-              line-height: 1.2;
-              width: 85mm;
+              padding: 0px;
+              font-size: 11px;
+              width: 77mm;
             }
-            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-10cm { font-size: 12pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .right { text-align: right; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table { width: 100%; border-collapse: collapse; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .table td { padding: 1px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .totals-line { display: flex; justify-content: space-between; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .footer { margin-top: 15px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .signature-area { margin-top: 25px; font-family: 'Verdana', sans-serif; font-weight: bold; }
-            .logo { width: 300px; height: auto; margin-bottom: 5px; }
+            .center { text-align: center; }
+            .text-right { text-align: right; }
+            .text-left { text-align: left; }
+            .text-center { text-align: center; }
+            .logo { width: 250px; height: auto; margin-bottom: 5px; }
+            
+            .receipt-table {
+              width: 100%;
+              border-collapse: collapse;
+              border: 1px solid #000;
+              margin-top: 10px;
+            }
+            .receipt-table th, .receipt-table td {
+              border: 1px solid #000;
+              padding: 3px 2px;
+            }
+            .receipt-table th {
+              text-align: center;
+              text-transform: uppercase;
+              font-weight: bold;
+              font-size: 11px;
+            }
+            .totals-box {
+              width: 100%;
+              border-collapse: collapse;
+              border-top: none;
+            }
+            .totals-box td {
+              border: 1px solid #000;
+              padding: 3px 4px;
+            }
+            .totals-label {
+              text-align: right;
+              font-weight: bold;
+              width: 70%;
+            }
+            .totals-value {
+              text-align: right;
+              font-weight: bold;
+              width: 30%;
+            }
+            .font-bold { font-weight: bold; }
+            .uppercase { text-transform: uppercase; }
           </style>
         </head>
         <body>
           <div class="center">
             <img src="/logo/annamPharmacy.png" alt="ANNAM LOGO" class="logo" />
-            <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
-            <div class="header-9cm">Phone- 04639 252592</div>
-            <div class="footer-7cm">Gst No: 33AJWPR2713G2ZZ</div>
-            <div style="margin-top: 5px; font-weight: bold;">INVOICE</div>
+            <div style="font-size: 15px; font-weight: bold;">${name}</div>
+            <div style="font-size: 10px;">${address}</div>
+            <div style="font-size: 10px;">${contact_number}</div>
+            <div style="font-size: 10px;">GST No: ${gst_number}</div>
+            <div style="margin: 5px 0; border: 1px solid #000; padding: 2px; width: 100%; box-sizing: border-box; display: inline-block;">
+              <span style="font-size: 12px; letter-spacing: 2px; font-weight: bold;">INVOICE</span>
+            </div>
           </div>
-          
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${selectedBill.bill_number}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${selectedBill.customer_name || 'WALK-IN CUSTOMER'}</td>
-              </tr>
-              <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${new Date(selectedBill.created_at).toLocaleDateString()} ${new Date(selectedBill.created_at).toLocaleTimeString()}</td>
-              </tr>
-              <tr>
-                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${salesType}</td>
-              </tr>
+
+          <div style="margin-top: 5px; font-size: 11px;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="width: 30%; font-weight: bold;">UHID</td><td style="font-weight: bold;">: ${patientUhid}</td></tr>
+              <tr><td style="font-weight: bold;">Patient Name</td><td style="font-weight: bold;">: ${selectedBill.customer_name || 'WALK-IN CUSTOMER'}</td></tr>
+              <tr style="height: 5px;"><td></td><td></td></tr>
+              <tr><td style="font-weight: bold;">Bill No</td><td style="font-weight: bold;">: ${selectedBill.bill_number}</td></tr>
+              <tr><td style="font-weight: bold;">Date</td><td style="font-weight: bold;">: ${new Date(selectedBill.created_at).toLocaleString()}</td></tr>
+              <tr><td style="font-weight: bold;">Sales Type</td><td style="font-weight: bold;">: ${salesType}</td></tr>
             </table>
           </div>
 
-          <div style="margin-top: 10px;">
-            <table class="table">
-              <tr style="border-bottom: 1px dashed #000;">
-                <td width="30%" class="items-8cm">S.No</td>
-                <td width="40%" class="items-8cm">Drug Name</td>
-                <td width="15%" class="items-8cm text-center">Qty</td>
-                <td width="15%" class="items-8cm text-right">Amt</td>
+          <table class="receipt-table">
+            <thead>
+              <tr>
+                <th style="width: 10%;">.No</th>
+                <th style="width: 55%; text-align: left;">DRUG NAME</th>
+                <th style="width: 15%;">Qty</th>
+                <th style="width: 20%; text-align: right;">Amount</th>
               </tr>
+            </thead>
+            <tbody>
               ${itemsHtml}
-            </table>
-          </div>
+            </tbody>
+          </table>
 
-          <div style="margin-top: 10px;">
-            <div class="totals-line items-8cm">
-              <span>Taxable Amount</span>
-              <span>${roundToWholeNumber(subtotal - discount)}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;Dist Amt</span>
-              <span>${roundToWholeNumber(discount)}</span>
-            </div>
-            <div class="totals-line items-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;CGST Amt</span>
-              <span>${roundToWholeNumber(tax / 2)}</span>
-            </div>
-            <div class="totals-line header-8cm">
-              <span>&nbsp;&nbsp;&nbsp;&nbsp;SGST Amt</span>
-              <span>${roundToWholeNumber(tax / 2)}</span>
-            </div>
-            <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
-              <span>Total Amount</span>
-              <span>${roundToWholeNumber(selectedBill.total_amount)}</span>
-            </div>
-          </div>
+          <table class="totals-box">
+            <tbody>
+              <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxableAmount.toFixed(2)}</td></tr>
+              <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
+              <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst.toFixed(2)}</td></tr>
+              <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst.toFixed(2)}</td></tr>
+              <tr><td class="totals-label" style="font-size: 13px;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px; font-weight: bold;">₹${totalAmount.toFixed(2)}</td></tr>
+            </tbody>
+          </table>
 
-          <div class="footer">
-            <div class="totals-line footer-7cm">
-              <span>Printed on ${printedDateTime}</span>
-              <span>Pharmacist Sign</span>
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
+            <div style="font-size: 9px; font-weight: bold;">
+              <p>PRINTED ON ${printedDate}</p>
+              <p>${printedTime}</p>
+            </div>
+            <div style="text-align: right; font-size: 9px; font-weight: bold;">
+              <p style="margin-bottom: 25px;">PHARMACIST SIGNATURE</p>
             </div>
           </div>
 
           <script>
-            window.onload = function() {
-              window.print();
-            }
+            window.onload = function() { window.print(); }
           </script>
         </body>
       </html>
     `;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printWindow = window.open('', '_blank', 'width=450,height=650');
     if (printWindow) {
       printWindow.document.write(thermalContent);
       printWindow.document.close();
