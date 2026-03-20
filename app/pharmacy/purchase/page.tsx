@@ -80,7 +80,10 @@ export default function DrugPurchasePage() {
   const [isPreparingLabels, setIsPreparingLabels] = useState(false)
 
   useEffect(() => {
-    loadData()
+    const timer = setTimeout(() => {
+      loadData()
+    }, 400);
+    return () => clearTimeout(timer);
   }, [filterStatus, filterSupplier, filterBatch, filterFromDate, filterToDate])
 
   useEffect(() => {
@@ -348,21 +351,60 @@ export default function DrugPurchasePage() {
       return;
     }
 
-    // Create a flat list of items to print, repeating based on counts
-    const itemsToPrint: DrugPurchaseItem[] = []
-    selectedItemIndices.forEach(idx => {
-      const count = labelPrintCounts[idx] || 1
-      const item = labelModalItems[idx]
-      for (let c = 0; c < count; c++) {
-        itemsToPrint.push(item)
-      }
-    })
+    setIsPreparingLabels(true);
 
     try {
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) return
+      // 1. Pre-fetch batch information for each unique medicine/batch combo to avoid redundant DB calls
+      const batchDataMap: Record<string, { barcode: string, expiry: string }> = {};
+      
+      const uniqueCombos = selectedItemIndices.map(idx => {
+        const item = labelModalItems[idx];
+        return { medId: item.medication_id, batch: item.batch_number };
+      });
 
-      let labelsRowsHtml = ''
+      // Fetch all required batch data in parallel (or sequential but only once per unique combo)
+      for (const combo of uniqueCombos) {
+        const key = `${combo.medId}_${combo.batch}`;
+        if (!batchDataMap[key]) {
+          const { data: batchData } = await supabase
+            .from('medicine_batches')
+            .select('batch_barcode, expiry_date')
+            .eq('batch_number', combo.batch)
+            .eq('medicine_id', combo.medId)
+            .maybeSingle();
+            
+          batchDataMap[key] = {
+            barcode: batchData?.batch_barcode || combo.batch,
+            expiry: batchData?.expiry_date || ''
+          };
+        }
+      }
+
+      // 2. Build the flattened list of items to print
+      const itemsToPrint: { name: string, barcode: string }[] = [];
+      selectedItemIndices.forEach(idx => {
+        const count = labelPrintCounts[idx] || 1;
+        const item = labelModalItems[idx];
+        const info = batchDataMap[`${item.medication_id}_${item.batch_number}`];
+        
+        const safeMedicineName = (item.medication_name || '').trim() || 'Unknown Medicine';
+        const shortMedicineName = safeMedicineName.length > 25 ? safeMedicineName.substring(0, 25) + '...' : safeMedicineName;
+        
+        for (let c = 0; c < count; c++) {
+          itemsToPrint.push({
+            name: shortMedicineName,
+            barcode: info.barcode
+          });
+        }
+      });
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        setIsPreparingLabels(false);
+        return;
+      }
+
+      let labelsRowsHtml = '';
       
       // Group items into rows of 3
       for (let i = 0; i < itemsToPrint.length; i += 3) {
@@ -370,27 +412,15 @@ export default function DrugPurchasePage() {
         labelsRowsHtml += '<div class="label-row">';
         
         for (const item of rowItems) {
-          const { data: batchData } = await supabase
-            .from('medicine_batches')
-            .select('batch_barcode, expiry_date')
-            .eq('batch_number', item.batch_number)
-            .eq('medicine_id', item.medication_id)
-            .maybeSingle()
-
-          const barcode = batchData?.batch_barcode || item.batch_number
-          const safeMedicineName = (item.medication_name || '').trim() || 'Unknown Medicine'
-          const shortMedicineName = safeMedicineName.length > 25 ? safeMedicineName.substring(0, 25) + '...' : safeMedicineName
-          const expiryDate = item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('en-GB') : (batchData?.expiry_date ? new Date(batchData.expiry_date).toLocaleDateString('en-GB') : 'N/A')
-
           labelsRowsHtml += `
             <div class="label-item">
               <div class="header">ANNAM HOSPITAL</div>
-              <div class="medicine-name">${shortMedicineName}</div>
+              <div class="medicine-name">${item.name}</div>
               <div class="barcode-section">
-                <svg class="barcode" data-value="${barcode}"></svg>
+                <svg class="barcode" data-value="${item.barcode}"></svg>
               </div>
             </div>
-          `
+          `;
         }
         
         // Fill empty spots for the last row if needed
@@ -461,6 +491,8 @@ export default function DrugPurchasePage() {
       setShowLabelModal(false)
     } catch (err) {
       alert('Error printing labels')
+    } finally {
+      setIsPreparingLabels(false)
     }
   }
 
@@ -472,14 +504,6 @@ export default function DrugPurchasePage() {
   );
 
   const totalPurchaseAmount = filteredPurchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading...</div>
-      </div>
-    )
-  }
 
   return (
     <div className="max-w-[1800px] mx-auto p-6 space-y-6">
@@ -612,7 +636,13 @@ export default function DrugPurchasePage() {
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-hidden relative min-h-[400px]">
+        {loading && (
+          <div className="absolute inset-0 bg-white bg-opacity-60 z-10 flex flex-col items-center justify-center gap-2">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm font-medium text-gray-600">Loading records...</p>
+          </div>
+        )}
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -694,7 +724,14 @@ export default function DrugPurchasePage() {
                 </td>
               </tr>
             ))}
-            {purchases.length === 0 && (
+            {!loading && filteredPurchases.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  No purchases found matches your search.
+                </td>
+              </tr>
+            )}
+            {!loading && purchases.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   No purchases found. Click "New Purchase" to create one.
@@ -1271,7 +1308,7 @@ export default function DrugPurchasePage() {
                           <input
                             type="number"
                             min="1"
-                            max="100"
+                            max="1000"
                             value={labelPrintCounts[idx] || 1}
                             onChange={(e) => {
                               const val = parseInt(e.target.value) || 1

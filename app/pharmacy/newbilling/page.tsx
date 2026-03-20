@@ -1789,6 +1789,29 @@ function NewBillingPageInner() {
     setBillItems(updatedItems);
   };
 
+  // Update bill item GST
+  const updateBillItemGst = (index: number, newGst: number) => {
+    if (newGst < 0) return;
+
+    const updatedItems = [...billItems];
+    const item = updatedItems[index];
+    if (!item) return;
+
+    // Recalculate total, GST, and subtotal (MRP is inclusive of GST)
+    const total = item.quantity * item.unit_price;
+    const gstAmount = total * (newGst / (100 + newGst));
+    const subtotal = total - gstAmount;
+    
+    updatedItems[index] = {
+      ...item,
+      gst_percentage: newGst,
+      subtotal,
+      gst_amount: gstAmount,
+      total
+    };
+    setBillItems(updatedItems);
+  };
+
   // Remove bill item
   const removeBillItem = (index: number) => {
     setBillItems(billItems.filter((_, i) => i !== index));
@@ -3585,7 +3608,18 @@ function NewBillingPageInner() {
                             ) : (
                               <span className="text-right font-medium">₹{item.unit_price.toFixed(2)}</span>
                             )}
-                            <span className="text-right text-blue-600 font-medium">{item.gst_percentage}%</span>
+                            <div className="flex justify-end">
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.1"
+                                value={item.gst_percentage}
+                                onChange={(e) => updateBillItemGst(index, parseFloat(e.target.value) || 0)}
+                                className="w-12 rounded border border-slate-200 bg-white text-right text-[11px] py-1 px-1 focus:ring-2 focus:ring-blue-500 outline-none text-blue-600 font-medium"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <span className="ml-0.5 mt-1 text-blue-600">%</span>
+                            </div>
                             <div className="flex items-center justify-center">
                               <input
                                 type="number"
@@ -3810,7 +3844,18 @@ function NewBillingPageInner() {
                               )}
                             </div>
                             <span className="text-right">₹{item.unit_price.toFixed(2)}</span>
-                            <span className="text-right text-blue-600 font-medium">{item.gst_percentage}%</span>
+                            <div className="flex justify-end">
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.1"
+                                value={item.gst_percentage}
+                                onChange={(e) => updateBillItemGst(index, parseFloat(e.target.value) || 0)}
+                                className="w-12 rounded border border-slate-200 bg-white text-right text-[11px] py-1 px-1 focus:ring-2 focus:ring-blue-500 outline-none text-blue-600 font-medium"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <span className="ml-0.5 mt-1 text-blue-600">%</span>
+                            </div>
                             <span className="text-center">{item.quantity}</span>
                             <span className="text-right font-medium">₹{(item.quantity * item.unit_price).toFixed(2)}</span>
                             <button

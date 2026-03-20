@@ -435,10 +435,10 @@ export interface Database {
           bill_number: string
           bill_date: string
           patient_id: string | null
-          patient_type: 'IP' | 'OP' | 'Emergency' | 'General'
+          patient_type: string
           patient_name: string
           patient_phone: string | null
-          charge_category: 'nursing_charges' | 'attendant_charges' | 'medical_equipment' | 'ambulance_service' | 'special_procedures' | 'dietary_charges' | 'laundry_service' | 'accommodation_extra' | 'mortuary_charges' | 'certificate_charges' | 'photocopying' | 'misc_supplies' | 'other'
+          charge_category: string
           charge_description: string
           quantity: number
           unit_price: number
