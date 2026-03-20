@@ -2436,7 +2436,7 @@ function NewBillingPageInner() {
                 letter-spacing: 2px;
             }
             
-            .info-table { width: 100%; font-size: 8px; border-collapse: collapse; margin-bottom: 2mm; }
+            .info-table { width: 100%; font-size: 10px; border-collapse: collapse; margin-bottom: 2mm; }
             .info-table td { padding: 0.5mm 0; vertical-align: top; }
             .label { font-weight: bold; width: 25mm; }
             .value { font-weight: normal; }

@@ -1144,15 +1144,15 @@ export default function PharmacyBillingPage() {
 
             .invoice-info {
               padding: 4px;
-              font-size: 7px;
-              color: #444;
+              font-size: 10px;
+              color: #000;
+            }
+            .invoice-info td {
+              font-weight: normal;
             }
             .invoice-info td:first-child {
               font-weight: bold;
               width: 30%;
-            }
-            .invoice-info td {
-              font-weight: normal;
             }
 
             .receipt-table {

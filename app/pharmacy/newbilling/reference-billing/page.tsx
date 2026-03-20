@@ -1978,7 +1978,7 @@ function NewBillingPageInner() {
             .header-10cm { font-size: 10pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
             .header-8cm { font-size: 8pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
             .items-8cm { font-size: 8pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .bill-info-10cm { font-size: 10pt; font-family: 'Times New Roman', Times, serif; }
+            .bill-info-10cm { font-size: 12pt; font-family: 'Times New Roman', Times, serif; font-weight: normal; }
             .bill-info-bold { font-weight: bold; font-family: 'Times New Roman', Times, serif; }
             .footer-7cm { font-size: 7pt; font-family: 'Times New Roman', Times, serif; }
             .center { text-align: center; font-family: 'Times New Roman', Times, serif; }
@@ -2002,24 +2002,24 @@ function NewBillingPageInner() {
           <div style="margin-top: 10px;">
             <table class="table">
               <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${generatedBill.bill_number}</td>
+                <td class="bill-info-10cm bill-info-bold">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${generatedBill.bill_number}</td>
               </tr>
               <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
+                <td class="bill-info-10cm bill-info-bold">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${patientUhid}</td>
               </tr>
               <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientName1}</td>
+                <td class="bill-info-10cm bill-info-bold">Patient Name&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${patientName1}</td>
               </tr>
               <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${formatISTDate(getISTDate())} ${formatISTTime(getISTDate())}</td>
+                <td class="bill-info-10cm bill-info-bold">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${formatISTDate(getISTDate())} ${formatISTTime(getISTDate())}</td>
               </tr>
               <tr>
-                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${salesType}</td>
+                <td class="header-10cm header-label">Sales Type&nbsp;:&nbsp;&nbsp;</td>
+                <td class="header-10cm">${salesType}</td>
               </tr>
             </table>
           </div>
@@ -2187,10 +2187,11 @@ function NewBillingPageInner() {
             }
             .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
             .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .header-10cm { font-size: 12pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .header-10cm { font-size: 14pt; font-weight: normal; font-family: 'Verdana', sans-serif; }
+            .header-label { font-weight: bold; font-family: 'Verdana', sans-serif; }
             .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
             .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .bill-info-10cm { font-size: 14pt; font-family: 'Verdana', sans-serif; font-weight: normal; }
             .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
             .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
             .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
@@ -2215,24 +2216,24 @@ function NewBillingPageInner() {
           <div style="margin-top: 10px;">
             <table class="table">
               <tr>
-                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${generatedBill.bill_number}</td>
+                <td class="bill-info-10cm bill-info-bold">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${generatedBill.bill_number}</td>
               </tr>
               <tr>
-                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
+                <td class="bill-info-10cm bill-info-bold">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${patientUhid}</td>
               </tr>
               <tr>
-                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${patientName}</td>
+                <td class="bill-info-10cm bill-info-bold">Patient Name&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${patientName}</td>
               </tr>
               <tr>
-                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                <td class="bill-info-10cm bill-info-bold">${formatISTDate(getISTDate())} ${formatISTTime(getISTDate())}</td>
+                <td class="bill-info-10cm bill-info-bold">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm">${formatISTDate(getISTDate())} ${formatISTTime(getISTDate())}</td>
               </tr>
               <tr>
-                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
-                <td class="header-10cm bill-info-bold">${salesType}</td>
+                <td class="header-10cm header-label">Sales Type&nbsp;:&nbsp;&nbsp;</td>
+                <td class="header-10cm">${salesType}</td>
               </tr>
             </table>
           </div>
