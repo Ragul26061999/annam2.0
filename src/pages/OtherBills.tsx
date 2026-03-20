@@ -164,7 +164,7 @@ export default function OtherBills() {
       itemsHtml = bill.items.map((item: any, idx: number) => `
         <tr>
           <td class="text-center">${idx + 1}</td>
-          <td class="text-left font-bold uppercase">${getCategoryLabel(item.charge_category)}<br/><small>${item.charge_description || ''}</small></td>
+          <td class="text-left font-bold uppercase">${item.charge_description || ''}</td>
           <td class="text-center">${item.quantity || 1}</td>
           <td class="text-right">₹${Number((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)}</td>
         </tr>
@@ -173,7 +173,7 @@ export default function OtherBills() {
       itemsHtml = `
         <tr>
           <td class="text-center">1</td>
-          <td class="text-left font-bold uppercase">${getCategoryLabel(bill.charge_category)}<br/><small>${bill.charge_description || ''}</small></td>
+          <td class="text-left font-bold uppercase">${bill.charge_description || ''}</td>
           <td class="text-center">${bill.quantity || 1}</td>
           <td class="text-right">₹${amount.toFixed(2)}</td>
         </tr>
@@ -282,6 +282,11 @@ export default function OtherBills() {
               <tr>
                 <td class="label">Sales Type</td><td class="value">: ${paymentType}</td>
               </tr>
+              ${(bill || selectedBill).doctor_name ? `
+              <tr>
+                <td class="label">Doctor Name</td><td class="value">: ${(bill || selectedBill).doctor_name}</td>
+              </tr>
+              ` : ''}
             </table>
             
             <table class="items-table">
@@ -387,7 +392,7 @@ const showThermalPreviewWithLogo = () => {
       itemsHtml = selectedBill.items.map((item: any, idx: number) => `
         <tr>
           <td class="text-center">${idx + 1}</td>
-          <td class="text-left font-bold uppercase">${getCategoryLabel(item.charge_category)}<br/><small>${item.charge_description || ''}</small></td>
+          <td class="text-left font-bold uppercase">${item.charge_description || ''}</td>
           <td class="text-center">${item.quantity || 1}</td>
           <td class="text-right">₹${Number((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)}</td>
         </tr>
@@ -396,7 +401,7 @@ const showThermalPreviewWithLogo = () => {
       itemsHtml = `
         <tr>
           <td class="text-center">1</td>
-          <td class="text-left font-bold uppercase">${getCategoryLabel(selectedBill.charge_category)}<br/><small>${selectedBill.charge_description || ''}</small></td>
+          <td class="text-left font-bold uppercase">${selectedBill.charge_description || ''}</td>
           <td class="text-center">${selectedBill.quantity || 1}</td>
           <td class="text-right">₹${amount.toFixed(2)}</td>
         </tr>
@@ -490,6 +495,11 @@ const showThermalPreviewWithLogo = () => {
               <tr>
                 <td class="label">Sales Type</td><td class="value">: ${paymentType}</td>
               </tr>
+              ${selectedBill.doctor_name ? `
+              <tr>
+                <td class="label">Doctor Name</td><td class="value">: ${selectedBill.doctor_name}</td>
+              </tr>
+              ` : ''}
             </table>
             
             <table class="items-table">
@@ -794,6 +804,12 @@ const showThermalPreviewWithLogo = () => {
                                         <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
                                         <td class="header-10cm bill-info-bold">${selectedBill.payment_status === 'paid' ? 'PAID' : 'CASH'}</td>
                                       </tr>
+                                      ${selectedBill.doctor_name ? `
+                                      <tr>
+                                        <td class="header-10cm">Doctor Name: &nbsp;</td>
+                                        <td class="header-10cm bill-info-bold">${selectedBill.doctor_name}</td>
+                                      </tr>
+                                      ` : ''}
                                     </table>
                                   </div>
 

@@ -456,8 +456,12 @@ export default function OutpatientRevisitPage() {
                 })()}</td>
               </tr>
               <tr>
-                <td class="header-10cm">Payment Type&nbsp;:&nbsp;&nbsp;</td>
+                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
                 <td class="header-10cm bill-info-bold">${paymentTypeText}</td>
+              </tr>
+              <tr>
+                <td class="bill-info-10cm">Consulting Dr&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm bill-info-bold">Dr. ${form.consultingDoctorName || 'N/A'}</td>
               </tr>
             </table>
           </div>

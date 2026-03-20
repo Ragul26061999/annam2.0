@@ -14,6 +14,8 @@ import {
   type PatientType 
 } from '../lib/otherBillsService';
 import { supabase } from '../lib/supabase';
+import { getAllDoctorsSimple, type Doctor } from '../lib/doctorService';
+import { getStaffMembers, type StaffMember } from '../lib/staffService';
 
 interface OtherBillsFormProps {
   isOpen: boolean;
@@ -46,6 +48,8 @@ export default function OtherBillsForm({ isOpen, onClose, onSuccess, initialData
   const [patientResults, setPatientResults] = useState<PatientSearchResult[]>([]);
   const [showPatientSearch, setShowPatientSearch] = useState(false);
   const [chargeCategories, setChargeCategories] = useState<any[]>(CHARGE_CATEGORIES);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
 
   const [calculatedAmounts, setCalculatedAmounts] = useState({
     subtotal: 0,
@@ -85,11 +89,17 @@ export default function OtherBillsForm({ isOpen, onClose, onSuccess, initialData
     let mounted = true;
     (async () => {
       try {
-        const cats = await getOtherBillChargeCategories();
+        const [cats, docs, staff] = await Promise.all([
+          getOtherBillChargeCategories(),
+          getAllDoctorsSimple(),
+          getStaffMembers({ is_active: true })
+        ]);
         if (!mounted) return;
         setChargeCategories(cats);
+        setDoctors(docs);
+        setStaffMembers(staff);
       } catch (err) {
-        console.warn('Failed to load other bill charge categories:', err);
+        console.warn('Failed to load initial data for bill form:', err);
       }
     })();
 
@@ -412,6 +422,58 @@ export default function OtherBillsForm({ isOpen, onClose, onSuccess, initialData
                     placeholder="Enter Phone"
                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">
+                    Doctor Name
+                  </label>
+                  <select
+                    value={formData.doctor_id || ''}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const selectedDoc = doctors.find(d => d.id === selectedId);
+                      setFormData({ 
+                        ...formData, 
+                        doctor_id: selectedId, 
+                        doctor_name: selectedDoc?.user?.name || '' 
+                      });
+                    }}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                  >
+                    <option value="">Select Doctor</option>
+                    {doctors.map(doc => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.user?.name || 'Unnamed Doctor'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 ml-1">
+                    Staff Name
+                  </label>
+                  <select
+                    value={formData.staff_id || ''}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const selectedStaff = staffMembers.find(s => s.id === selectedId);
+                      setFormData({ 
+                        ...formData, 
+                        staff_id: selectedId, 
+                        staff_name: selectedStaff?.name || '' 
+                      });
+                    }}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                  >
+                    <option value="">Select Staff</option>
+                    {staffMembers.map(staff => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

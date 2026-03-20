@@ -21,10 +21,14 @@ import {
   Hash,
   Calendar,
   Clock,
+  CreditCard
 } from 'lucide-react';
 import { addToQueue } from '../../../src/lib/outpatientQueueService';
+import { createAppointment, type AppointmentData } from '../../../src/lib/appointmentService';
+import { createOPConsultationBill, type PaymentRecord } from '../../../src/lib/universalPaymentService';
 import StaffSelect from '../../../src/components/StaffSelect';
 import BarcodeModal from '../../../src/components/BarcodeModal';
+import UniversalPaymentModal from '../../../src/components/UniversalPaymentModal';
 import { supabase } from '../../../src/lib/supabase';
 import { generateUHID } from '../../../src/lib/patientService';
 
@@ -85,6 +89,10 @@ export default function QuickRegisterPage() {
   const [doctors,           setDoctors]            = useState<any[]>([]);
   const [contactErr,        setContactErr]         = useState('');
   const [sidebarOpen,       setSidebarOpen]        = useState(true);
+  const [currentBill,       setCurrentBill]        = useState<PaymentRecord | null>(null);
+  const [showPaymentModal,  setShowPaymentModal]   = useState(false);
+  const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
+  const [refreshBillTrigger, setRefreshBillTrigger] = useState(0);
 
   // One ref map for every field — keyed by FIELDS array values
   const refs = useRef<Record<string, HTMLElement|null>>({});
@@ -307,6 +315,189 @@ export default function QuickRegisterPage() {
     }));
   };
 
+  const getImmediateApptTime = () => {
+    const now = new Date();
+    const base = new Date(now);
+    base.setMinutes(base.getMinutes() + 2);
+    base.setSeconds(0, 0);
+    const finalDate = base.toISOString().split('T')[0];
+    const appointmentTime = `${base.getHours().toString().padStart(2, '0')}:${base.getMinutes().toString().padStart(2, '0')}:00`;
+    return { appointmentDate: finalDate, appointmentTime };
+  };
+
+  const handlePrintThermalBill = async () => {
+    if (!currentBill || !registeredPatient) return;
+
+    const now = new Date();
+    const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+    const patientUhid = registeredPatient.patient_id || 'WALK-IN';
+
+    let paymentTypeText = 'CASH'; 
+    try {
+      const { data: payments } = await supabase
+        .from('billing_payments')
+        .select('method, amount')
+        .eq('billing_id', currentBill.id);
+      
+      if (payments && payments.length > 0) {
+        if (payments.length === 1) {
+          paymentTypeText = payments[0].method.toUpperCase();
+        } else {
+          paymentTypeText = payments
+            .map((p: any) => `${p.method.toUpperCase()} (₹${p.amount})`)
+            .join(' + ');
+        }
+      } else {
+        paymentTypeText = currentBill.payment_method?.toUpperCase() || 'CASH';
+      }
+    } catch (error) {
+      paymentTypeText = currentBill.payment_method?.toUpperCase() || 'CASH';
+    }
+
+    const thermalContent = `
+      <html>
+        <head>
+          <title>Thermal Receipt - ${currentBill.bill_id || (currentBill as any).bill_no || (currentBill as any).bill_number || 'N/A'}</title>
+          <style>
+            @page { margin: 1mm; size: 77mm 297mm; }
+            body { 
+              font-family: 'Verdana', sans-serif; 
+              font-weight: bold;
+              color: #000;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              margin: 0; 
+              padding: 2px;
+              font-size: 14px;
+              line-height: 1.2;
+              width: 77mm;
+            }
+            html, body { background: #fff; }
+            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .header-10cm { font-size: 12pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .bill-info-10cm { font-size: 12pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .right { text-align: right; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .table { width: 100%; border-collapse: collapse; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .table td { padding: 1px; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .totals-line { display: flex; justify-content: space-between; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .footer { margin-top: 15px; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .signature-area { margin-top: 25px; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .logo { width: 350px; height: auto; margin-bottom: 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            <img src="/logo/annamHospital-bk.png" alt="ANNAM LOGO" class="logo" />
+            <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
+            <div class="header-9cm">Phone- 04639 252592</div>
+            <div style="margin-top: 5px; font-weight: bold;">OUTPATIENT BILL</div>
+          </div>
+          
+          <div style="margin-top: 10px;">
+            <table class="table">
+              <tr>
+                <td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm bill-info-bold">${currentBill.bill_id || (currentBill as any).bill_no || (currentBill as any).bill_number || 'N/A'}</td>
+              </tr>
+              <tr>
+                <td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm bill-info-bold">${patientUhid}</td>
+              </tr>
+              <tr>
+                <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm bill-info-bold">${registeredPatient.name || 'Unknown Patient'}</td>
+              </tr>
+              <tr>
+                <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm bill-info-bold">${(() => {
+                  const raw = currentBill.bill_date || (currentBill as any).issued_at || (currentBill as any).created_at || new Date().toISOString();
+                  const d = new Date(raw);
+                  if (isNaN(d.getTime())) return new Date().toLocaleDateString('en-IN') + ' ' + new Date().toLocaleTimeString('en-IN');
+                  return d.toLocaleDateString('en-IN') + ' ' + d.toLocaleTimeString('en-IN');
+                })()}</td>
+              </tr>
+              <tr>
+                <td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>
+                <td class="header-10cm bill-info-bold">${paymentTypeText}</td>
+              </tr>
+              <tr>
+                <td class="bill-info-10cm">Consulting Dr&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm bill-info-bold">Dr. ${form.consultingDoctorName || 'N/A'}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin-top: 10px;">
+            <table class="table">
+              <tr style="border-bottom: 1px dashed #000;">
+                <td width="30%" class="items-8cm">S.No</td>
+                <td width="40%" class="items-8cm">Service</td>
+                <td width="15%" class="items-8cm text-center">Qty</td>
+                <td width="15%" class="items-8cm text-right">Amt</td>
+              </tr>
+              <tr>
+                <td class="items-8cm">1.</td>
+                <td class="items-8cm">Consultation Fee</td>
+                <td class="items-8cm text-center">1</td>
+                <td class="items-8cm text-right">${(Number(currentBill.total_amount) || Number(currentBill.subtotal) || Number((currentBill as any).total) || 0).toFixed(0)}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin-top: 10px;">
+            <div class="totals-line header-10cm" style="border-top: 1px solid #000; padding-top: 2px;">
+              <span>Total Amount</span>
+              <span>${((Number(currentBill.total_amount) || Number(currentBill.subtotal) || Number((currentBill as any).total) || 0) - (Number(currentBill.discount_amount) || Number((currentBill as any).discount) || 0)).toFixed(0)}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div class="totals-line footer-7cm">
+              <span>Printed on ${printedDateTime}</span>
+              <span>Authorized Sign</span>
+            </div>
+          </div>
+
+          <script>
+            (function() {
+              function triggerPrint() {
+                try {
+                  window.focus();
+                } catch (e) {}
+                setTimeout(function() {
+                  window.print();
+                }, 250);
+              }
+              window.onafterprint = function() {
+                try {
+                  window.close();
+                } catch (e) {}
+              };
+              if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                triggerPrint();
+              } else {
+                document.addEventListener('DOMContentLoaded', triggerPrint);
+              }
+            })();
+          </script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(thermalContent);
+      printWindow.document.close();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true); setError(null);
@@ -362,6 +553,42 @@ export default function QuickRegisterPage() {
 
       setQueueNumber(qr.queueEntry.queue_number);
       setRegisteredPatient(patient);
+
+      // ── Create Appointment & Bill if doctor is selected ──
+      if (form.consultingDoctorId) {
+        try {
+          const { appointmentDate, appointmentTime } = getImmediateApptTime();
+          const appointmentData: AppointmentData = {
+            patientId: patient.id,
+            doctorId: form.consultingDoctorId,
+            appointmentDate,
+            appointmentTime,
+            durationMinutes: 30,
+            type: 'consultation',
+            isEmergency: false,
+            chiefComplaint: form.primaryComplaint || 'OP Registration',
+            bookingMethod: 'walk_in'
+          };
+          const appointment = await createAppointment(appointmentData, form.staffId || undefined, true);
+          setCreatedAppointmentId(appointment.id);
+
+          if (appointment.encounter?.id) {
+            const bill = await createOPConsultationBill(
+              patient.id,
+              appointment.encounter.id,
+              parseFloat(form.consultationFee || '0'),
+              form.consultingDoctorName,
+              form.staffId
+            );
+            setCurrentBill(bill);
+            if (bill.total_amount > 0) setShowPaymentModal(true);
+          }
+        } catch (e) {
+          console.error('Failed to create appointment/bill:', e);
+          // Don't fail the whole registration if this fails
+        }
+      }
+
       setIsSuccess(true);
     } catch(err) {
       setError(`Registration failed: ${(err as Error).message}`);
@@ -408,6 +635,22 @@ export default function QuickRegisterPage() {
             </div>
           )}
           <div className="flex flex-col gap-2.5">
+            {currentBill && (
+              <>
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="w-full py-2.5 px-4 bg-orange-500 text-white font-semibold rounded-xl hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-orange-100"
+                >
+                  <CreditCard className="h-4 w-4" /> Make Payment
+                </button>
+                <button
+                  onClick={handlePrintThermalBill}
+                  className="w-full py-2.5 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-100"
+                >
+                  <Printer className="h-4 w-4" /> Print Bill
+                </button>
+              </>
+            )}
             <button onClick={() => setShowBarcodeModal(true)}
               className="w-full py-2.5 px-4 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center gap-2">
               <Printer className="h-4 w-4" /> Print Barcode
@@ -424,6 +667,17 @@ export default function QuickRegisterPage() {
         </div>
         {showBarcodeModal && registeredPatient && (
           <BarcodeModal patient={registeredPatient} onClose={() => setShowBarcodeModal(false)} />
+        )}
+        {showPaymentModal && currentBill && (
+          <UniversalPaymentModal
+            isOpen={showPaymentModal}
+            onClose={() => setShowPaymentModal(false)}
+            bill={currentBill}
+            onSuccess={() => {
+              setShowPaymentModal(false);
+              setRefreshBillTrigger(prev => prev + 1);
+            }}
+          />
         )}
       </div>
     );

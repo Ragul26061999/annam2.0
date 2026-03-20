@@ -127,6 +127,18 @@ export default function OtherBillPrintTemplate({ bill }: OtherBillPrintTemplateP
                     <td className="py-1">{bill.patient.patient_id}</td>
                   </tr>
                 )}
+                {bill.doctor_name && (
+                  <tr>
+                    <td className="font-semibold py-1">Doctor Name:</td>
+                    <td className="py-1">{bill.doctor_name}</td>
+                  </tr>
+                )}
+                {bill.staff_name && (
+                  <tr>
+                    <td className="font-semibold py-1">Staff Name:</td>
+                    <td className="py-1">{bill.staff_name}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

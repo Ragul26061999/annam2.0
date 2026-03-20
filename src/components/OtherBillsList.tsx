@@ -249,6 +249,9 @@ export default function OtherBillsList({ bills, onBillClick, onRoughBill, onRefr
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Doctor / Staff
+                </th>
                 <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -308,15 +311,12 @@ export default function OtherBillsList({ bills, onBillClick, onRoughBill, onRefr
                     <td className="px-3 py-4 whitespace-nowrap">
                       {getStatusBadge(bill.payment_status)}
                     </td>
+                    <td className="px-3 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{bill.doctor_name || '-'}</div>
+                      <div className="text-xs text-gray-500">{bill.staff_name || '-'}</div>
+                    </td>
                     <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => onRoughBill?.(bill)}
-                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                          title="RUF BILL"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
                         <button
                           onClick={() => onBillClick?.(bill)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

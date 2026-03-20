@@ -36,6 +36,10 @@ export interface OtherBillFormData {
   remarks?: string;
   bed_allocation_id?: string;
   encounter_id?: string;
+  doctor_id?: string;
+  doctor_name?: string;
+  staff_id?: string;
+  staff_name?: string;
 }
 
 export type OtherBillWithPatient = OtherBills['Row'] & {
@@ -50,6 +54,10 @@ export type OtherBillWithPatient = OtherBills['Row'] & {
     employee_id: string;
   } | null;
   items?: OtherBillItem[];
+  doctor_id?: string;
+  doctor_name?: string;
+  staff_id?: string;
+  staff_name?: string;
 };
 
 export const CHARGE_CATEGORIES: { value: string; label: string; description: string }[] = [
@@ -296,6 +304,10 @@ export async function createOtherBill(
       patient_type: normalizedFormData.patient_type,
       patient_name: normalizedFormData.patient_name,
       patient_phone: normalizedFormData.patient_phone || null,
+      doctor_id: normalizedFormData.doctor_id || null,
+      doctor_name: normalizedFormData.doctor_name || null,
+      staff_id: normalizedFormData.staff_id || null,
+      staff_name: normalizedFormData.staff_name || null,
       // Set main bill fields from first item for backward compatibility
       charge_category: validChargeCategory,
       charge_description: normalizedFormData.items[0]?.charge_description || 'Multiple items',
