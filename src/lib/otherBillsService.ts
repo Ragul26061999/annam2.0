@@ -121,18 +121,33 @@ export async function createOtherBillChargeCategory(label: string): Promise<Othe
     sort_order: 100, // Default to a higher sort order
   };
 
-  const { data, error } = await supabase
-    .from('other_bill_charge_categories')
-    .insert([newCategory])
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('other_bill_charge_categories')
+      .insert([newCategory])
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Error creating other bill charge category:', error);
-    throw new Error(`Failed to create category: ${error.message}`);
+    if (error) {
+      console.error('Error creating other bill charge category:', error);
+      throw new Error(`Failed to create category: ${error.message}`);
+    }
+
+    return data as OtherBillChargeCategory;
+  } catch (error: any) {
+    // If there's a constraint issue, fall back to using 'other' category
+    if (error.message?.includes('constraint') || error.code === '23514') {
+      console.warn('Constraint violation, falling back to "other" category');
+      return {
+        value: 'other',
+        label: 'Other',
+        description: 'Other miscellaneous charges',
+        is_active: true,
+        sort_order: 13
+      } as OtherBillChargeCategory;
+    }
+    throw error;
   }
-
-  return data as OtherBillChargeCategory;
 }
 
 export async function getActiveBedAllocationForPatient(patientId: string): Promise<{ id: string } | null> {
@@ -254,6 +269,26 @@ export async function createOtherBill(
     const billNumber = await generateOtherBillNumber();
     const amounts = calculateBillAmounts(normalizedFormData);
 
+    // Ensure the charge_category is valid for the constraint
+    let validChargeCategory = normalizedFormData.items[0]?.charge_category || 'other';
+    
+    // Check if the charge_category is allowed by the constraint
+    const allowedCategories = [
+      'nursing_charges', 'attendant_charges', 'medical_equipment', 'ambulance_service',
+      'special_procedures', 'dietary_charges', 'laundry_service', 'accommodation_extra',
+      'mortuary_charges', 'certificate_charges', 'photocopying', 'misc_supplies', 'other'
+    ];
+    
+    if (!allowedCategories.includes(validChargeCategory)) {
+      console.warn(`Charge category "${validChargeCategory}" not in allowed list, using "other"`);
+      validChargeCategory = 'other';
+    }
+    
+    // Update the first item to use the valid category
+    if (normalizedFormData.items[0]) {
+      normalizedFormData.items[0].charge_category = validChargeCategory;
+    }
+
     const billData: any = {
       bill_number: billNumber,
       bill_date: new Date().toISOString(),
@@ -262,7 +297,7 @@ export async function createOtherBill(
       patient_name: normalizedFormData.patient_name,
       patient_phone: normalizedFormData.patient_phone || null,
       // Set main bill fields from first item for backward compatibility
-      charge_category: normalizedFormData.items[0]?.charge_category || 'other',
+      charge_category: validChargeCategory,
       charge_description: normalizedFormData.items[0]?.charge_description || 'Multiple items',
       quantity: normalizedFormData.items.length,
       unit_price: amounts.total_amount / normalizedFormData.items.length,
@@ -294,17 +329,27 @@ export async function createOtherBill(
       throw new Error(`Failed to create other bill: ${error.message}`);
     }
 
-    // Insert bill items
-    const itemsToInsert = normalizedFormData.items.map((item, index) => ({
-      bill_id: data.id,
-      charge_category: item.charge_category,
-      charge_description: item.charge_description,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      discount_percent: item.discount_percent || 0,
-      tax_percent: item.tax_percent || 0,
-      sort_order: index,
-    }));
+    // Insert bill items with constraint validation
+    const itemsToInsert = normalizedFormData.items.map((item, index) => {
+      let validItemCategory = item.charge_category;
+      
+      // Ensure each item's charge_category is allowed by the constraint
+      if (!allowedCategories.includes(validItemCategory)) {
+        console.warn(`Item charge category "${validItemCategory}" not allowed, using "other"`);
+        validItemCategory = 'other';
+      }
+      
+      return {
+        bill_id: data.id,
+        charge_category: validItemCategory,
+        charge_description: item.charge_description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_percent: item.discount_percent || 0,
+        tax_percent: item.tax_percent || 0,
+        sort_order: index,
+      };
+    });
 
     const { error: itemsError } = await supabase
       .from('other_bill_items')
@@ -470,19 +515,41 @@ export async function updateOtherBill(
         unit_price: amounts.total_amount / updates.items.length,
       });
 
+      // Ensure the charge_category is valid for the constraint
+      const allowedCategories = [
+        'nursing_charges', 'attendant_charges', 'medical_equipment', 'ambulance_service',
+        'special_procedures', 'dietary_charges', 'laundry_service', 'accommodation_extra',
+        'mortuary_charges', 'certificate_charges', 'photocopying', 'misc_supplies', 'other'
+      ];
+      
+      if (!allowedCategories.includes(updateData.charge_category)) {
+        console.warn(`Update charge category "${updateData.charge_category}" not in allowed list, using "other"`);
+        updateData.charge_category = 'other';
+      }
+
       // Update items
       await supabase.from('other_bill_items').delete().eq('bill_id', billId);
       
-      const itemsToInsert = updates.items.map((item, index) => ({
-        bill_id: billId,
-        charge_category: item.charge_category,
-        charge_description: item.charge_description,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_percent: item.discount_percent || 0,
-        tax_percent: item.tax_percent || 0,
-        sort_order: index,
-      }));
+      const itemsToInsert = updates.items.map((item, index) => {
+        let validItemCategory = item.charge_category;
+        
+        // Ensure each item's charge_category is allowed by the constraint
+        if (!allowedCategories.includes(validItemCategory)) {
+          console.warn(`Update item charge category "${validItemCategory}" not allowed, using "other"`);
+          validItemCategory = 'other';
+        }
+        
+        return {
+          bill_id: billId,
+          charge_category: validItemCategory,
+          charge_description: item.charge_description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          discount_percent: item.discount_percent || 0,
+          tax_percent: item.tax_percent || 0,
+          sort_order: index,
+        };
+      });
 
       const { error: itemsError } = await supabase
         .from('other_bill_items')

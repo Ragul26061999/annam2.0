@@ -13,8 +13,9 @@
     "tauri:build": "npm run tauri build --prefix desktop"
   },
   "dependencies": {
+    "@e965/xlsx": "^0.20.2",
     "@supabase/mcp-server-supabase": "^0.5.10",
-    "@supabase/supabase-js": "^2.50.5",
+    "@supabase/supabase-js": "^2.99.3",
     "@types/qrcode.react": "^1.0.5",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
@@ -31,8 +32,7 @@
     "react-barcode": "^1.6.1",
     "react-dom": "^19.0.0",
     "react-transition-group": "^4.4.5",
-    "recharts": "^3.0.2",
-    "@e965/xlsx": "^0.20.2"
+    "recharts": "^3.0.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -43,7 +43,7 @@
     "@types/react-dom": "^19",
     "@types/react-router-dom": "^5.3.3",
     "autoprefixer": "^10.4.21",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
     "tailwindcss": "^3.4.17",
