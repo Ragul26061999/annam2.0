@@ -941,7 +941,9 @@ function OutpatientPageContent() {
       });
 
       // Filter for outpatient records only
-      const outpatientRecords = result.records.filter(record => record.source === 'outpatient');
+      const outpatientRecords = result.records.filter(record => 
+        record.source === 'outpatient' || record.source === 'outpatient_registration'
+      );
 
       setBillingRecords(outpatientRecords);
     } catch (error) {

@@ -16,7 +16,7 @@ export interface BillingRecord {
   payment_date?: string;
   created_at: string;
   updated_at: string;
-  source: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills';
+  source: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills' | 'outpatient_registration';
   patient: {
     id: string;
     name: string;
@@ -550,7 +550,7 @@ export async function getBillingRecords(
         payment_method: p.payment_mode || 'cash',
         created_at: p.created_at,
         updated_at: p.updated_at || p.created_at,
-        source: 'outpatient' as const,
+        source: 'outpatient_registration' as const,
         patient: {
           id: p.id,
           name: p.name || 'Unknown Patient',

@@ -295,7 +295,7 @@ export async function processSplitPayments(
     let billing: any = null;
     let billingFetchError: any = null;
 
-    if (source === 'outpatient') {
+    if (source === 'outpatient_registration') {
       const { data, error } = await supabase
         .from('patients')
         .select('id, total_amount, advance_amount, payment_mode')

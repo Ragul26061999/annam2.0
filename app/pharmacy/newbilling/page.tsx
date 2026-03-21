@@ -2438,12 +2438,12 @@ function NewBillingPageInner() {
             
             .info-table { width: 100%; font-size: 10px; border-collapse: collapse; margin-bottom: 2mm; }
             .info-table td { padding: 0.5mm 0; vertical-align: top; }
-            .label { font-weight: bold; width: 25mm; }
+            .label { font-weight: normal; width: 25mm; }
             .value { font-weight: normal; }
             
             .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
             .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
-            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
+            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: normal; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             
