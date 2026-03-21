@@ -448,14 +448,29 @@ export async function updateDiagnosticGroup(
 
 export async function deleteDiagnosticGroup(groupId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
+    // Try hard delete first
+    const { error: deleteError } = await supabase
       .from('diagnostic_groups')
       .delete()
       .eq('id', groupId);
 
-    if (error) {
-      console.error('Error deleting diagnostic group:', error);
-      throw new Error(`Failed to delete group: ${error.message}`);
+    if (deleteError) {
+      // If it's a foreign key constraint error, fall back to soft delete
+      if (deleteError.code === '23503') {
+        const { error: updateError } = await supabase
+          .from('diagnostic_groups')
+          .update({ is_active: false })
+          .eq('id', groupId);
+
+        if (updateError) {
+          console.error('Error soft-deleting diagnostic group:', updateError);
+          throw new Error(`Failed to deactivate group: ${updateError.message}`);
+        }
+        return true; // Successfully soft-deleted
+      }
+      
+      console.error('Error deleting diagnostic group:', deleteError);
+      throw new Error(`Failed to delete group: ${deleteError.message}`);
     }
     return true;
   } catch (error) {
@@ -558,6 +573,24 @@ export async function deleteDiagnosticGroupItem(itemId: string): Promise<boolean
     return true;
   } catch (error) {
     console.error('Error in deleteDiagnosticGroupItem:', error);
+    throw error;
+  }
+}
+
+export async function deleteDiagnosticGroupItemsByGroupId(groupId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('diagnostic_group_items')
+      .delete()
+      .eq('group_id', groupId);
+
+    if (error) {
+      console.error('Error deleting diagnostic group items:', error);
+      throw new Error(`Failed to delete group items: ${error.message}`);
+    }
+    return true;
+  } catch (error) {
+    console.error('Error in deleteDiagnosticGroupItemsByGroupId:', error);
     throw error;
   }
 }
@@ -765,6 +798,42 @@ export async function createLabTestCatalogEntry(testData: Partial<LabTestCatalog
 }
 
 /**
+ * Update a lab test in the catalog
+ */
+export async function updateLabTestCatalogEntry(id: string, updates: Partial<LabTestCatalog>): Promise<LabTestCatalog> {
+  const { data, error } = await supabase
+    .from('lab_test_catalog')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating lab test:', error);
+    throw new Error(`Failed to update lab test: ${error.message || error.code || 'Check console for details'}`);
+  }
+  return data as LabTestCatalog;
+}
+
+/**
+ * Delete (or deactivate) a lab test from the catalog
+ */
+export async function deleteLabTestCatalogEntry(id: string): Promise<boolean> {
+  /* Alternatively we could just set is_active to false here if hard deletes are not wanted.
+     Using hard delete for now to match 'delete' functionality. */
+  const { error } = await supabase
+    .from('lab_test_catalog')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting lab test:', error);
+    throw new Error(`Failed to delete lab test: ${error.message || error.code || 'Check console for details'}`);
+  }
+  return true;
+}
+
+/**
  * Get lab tests by category
  */
 export async function getLabTestsByCategory(category: string): Promise<LabTestCatalog[]> {
@@ -837,6 +906,43 @@ export async function createRadiologyTestCatalogEntry(testData: Partial<Radiolog
     throw new Error(`Failed to create radiology test: ${error.message || error.code || 'Unknown error'}`);
   }
   return data;
+}
+
+/**
+ * Update a radiology test catalog entry
+ */
+export async function updateRadiologyTestCatalogEntry(testId: string, testData: Partial<RadiologyTestCatalog>): Promise<RadiologyTestCatalog> {
+  const { data, error } = await supabase
+    .from('radiology_test_catalog')
+    .update({
+      ...testData,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', testId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating radiology test:', JSON.stringify(error, null, 2));
+    throw new Error(`Failed to update radiology test: ${error.message || error.code || 'Unknown error'}`);
+  }
+  return data;
+}
+
+/**
+ * Delete a radiology test catalog entry (Soft delete)
+ */
+export async function deleteRadiologyTestCatalogEntry(testId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('radiology_test_catalog')
+    .update({ is_active: false })
+    .eq('id', testId);
+
+  if (error) {
+    console.error('Error deleting radiology test:', JSON.stringify(error, null, 2));
+    throw new Error(`Failed to delete radiology test: ${error.message || error.code || 'Unknown error'}`);
+  }
+  return true;
 }
 
 /**
@@ -1918,6 +2024,46 @@ export async function createScanTestCatalogEntry(testData: Partial<ScanTestCatal
     throw new Error(`Failed to create scan test: ${error.message || error.code || 'Unknown error'}`);
   }
   return normalizeScanCatalogRow(data);
+}
+
+/**
+ * Update a scan test in the catalog
+ */
+export async function updateScanTestCatalogEntry(testId: string, testData: Partial<ScanTestCatalog>): Promise<ScanTestCatalog> {
+  const { data, error } = await supabase
+    .from('scan_test_catalog')
+    .update({
+      scan_name: testData.scan_name || testData.test_name,
+      category: testData.category || testData.modality,
+      test_cost: testData.test_cost,
+      body_part: testData.body_part,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', testId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating scan test:', JSON.stringify(error, null, 2));
+    throw new Error(`Failed to update scan test: ${error.message || error.code || 'Unknown error'}`);
+  }
+  return normalizeScanCatalogRow(data);
+}
+
+/**
+ * Delete a scan test in the catalog (Soft delete)
+ */
+export async function deleteScanTestCatalogEntry(testId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('scan_test_catalog')
+    .update({ is_active: false })
+    .eq('id', testId);
+
+  if (error) {
+    console.error('Error deleting scan test:', JSON.stringify(error, null, 2));
+    throw new Error(`Failed to delete scan test: ${error.message || error.code || 'Unknown error'}`);
+  }
+  return true;
 }
 
 // ============================================

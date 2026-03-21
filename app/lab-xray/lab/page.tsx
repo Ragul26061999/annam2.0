@@ -26,7 +26,8 @@ import {
     X,
     Printer,
     Save,
-    Loader2
+    Loader2,
+    Edit3
 } from 'lucide-react';
 import { supabase } from '../../../src/lib/supabase';
 import { SearchableSelect } from '../../../src/components/ui/SearchableSelect';
@@ -39,7 +40,13 @@ import {
     createLabTestCatalogEntry,
     createDiagnosticGroup,
     createDiagnosticGroupItem,
-    LabTestCatalog
+    LabTestCatalog,
+    updateLabTestCatalogEntry,
+    deleteLabTestCatalogEntry,
+    updateDiagnosticGroup,
+    deleteDiagnosticGroup,
+    deleteDiagnosticGroupItemsByGroupId,
+    DiagnosticGroup
 } from '../../../src/lib/labXrayService';
 import { createLabTestBill, type PaymentRecord } from '../../../src/lib/universalPaymentService';
 import StaffSelect from '../../../src/components/StaffSelect';
@@ -83,6 +90,8 @@ export default function LabOrderPage() {
 
     // New Test State
     const [showNewTestModal, setShowNewTestModal] = useState(false);
+    const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
+    const [catalogSearchTerm, setCatalogSearchTerm] = useState('');
     const [newTestData, setNewTestData] = useState({
         testName: '',
         groupName: '',
@@ -92,6 +101,7 @@ export default function LabOrderPage() {
 
     // New Group State
     const [showNewGroupModal, setShowNewGroupModal] = useState(false);
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
     const [newGroupData, setNewGroupData] = useState({
         name: '',
         category: 'Lab',
@@ -295,7 +305,7 @@ export default function LabOrderPage() {
         }
     };
 
-    const handleCreateNewTest = async () => {
+    const handleSaveCatalogEntry = async () => {
         if (!newTestData.testName || !newTestData.groupName) {
             setError('Test name and group name are required.');
             return;
@@ -303,35 +313,79 @@ export default function LabOrderPage() {
 
         try {
             setCreatingTest(true);
-            const newEntry = await createLabTestCatalogEntry({
-                test_name: newTestData.testName,
-                category: newTestData.groupName,
-                test_cost: newTestData.amount
-            });
+            
+            if (editingCatalogId) {
+                // Update existing test
+                const updated = await updateLabTestCatalogEntry(editingCatalogId, {
+                    test_name: newTestData.testName,
+                    category: newTestData.groupName,
+                    test_cost: newTestData.amount
+                });
+                
+                setLabCatalog(prev => prev.map(t => t.id === editingCatalogId ? updated : t));
+                setSelectedTests(prev => prev.map(t => t.testId === editingCatalogId ? {
+                    ...t,
+                    testName: updated.test_name,
+                    groupName: updated.category || 'N/A',
+                    amount: updated.test_cost
+                } : t));
+                
+                setEditingCatalogId(null);
+                setNewTestData({ testName: '', groupName: '', amount: 0 });
+            } else {
+                // Create new test
+                const newEntry = await createLabTestCatalogEntry({
+                    test_name: newTestData.testName,
+                    category: newTestData.groupName,
+                    test_cost: newTestData.amount
+                });
 
-            // Update master data
-            setLabCatalog(prev => [newEntry, ...prev]);
+                // Update master data
+                setLabCatalog(prev => [newEntry, ...prev]);
 
-            // Add newly created test to the top of the selected list (last selected first)
-            setSelectedTests(prev => [
-                {
-                    testId: newEntry.id,
-                    testName: newEntry.test_name,
-                    groupName: newEntry.category || 'N/A',
-                    amount: newEntry.test_cost || 0
-                },
-                // Remove any previous occurrence of this test
-                ...prev.filter(t => t.testId !== newEntry.id)
-            ]);
+                // Add newly created test to the top of the selected list (last selected first)
+                setSelectedTests(prev => [
+                    {
+                        testId: newEntry.id,
+                        testName: newEntry.test_name,
+                        groupName: newEntry.category || 'N/A',
+                        amount: newEntry.test_cost || 0
+                    },
+                    // Remove any previous occurrence of this test
+                    ...prev.filter(t => t.testId !== newEntry.id)
+                ]);
+                
+                setNewTestData({ testName: '', groupName: '', amount: 0 });
+            }
 
-            // Success!
-            setNewTestData({ testName: '', groupName: '', amount: 0 });
-            setShowNewTestModal(false);
+            // Do not close modal automatically so they can see existing tests
+            // setShowNewTestModal(false);
         } catch (err: any) {
-            console.error('Error creating test:', err);
-            setError('Failed to create new test catalog entry.');
+            console.error('Error saving test:', err);
+            setError('Failed to save test catalog entry.');
         } finally {
             setCreatingTest(false);
+        }
+    };
+
+    const handleEditCatalog = (test: LabTestCatalog) => {
+        setEditingCatalogId(test.id);
+        setNewTestData({
+            testName: test.test_name,
+            groupName: test.category || '',
+            amount: test.test_cost
+        });
+    };
+
+    const handleDeleteCatalog = async (id: string) => {
+        if (!window.confirm('Are you sure you want to delete this test? Cannot be undone.')) return;
+        try {
+            await deleteLabTestCatalogEntry(id);
+            setLabCatalog(prev => prev.filter(t => t.id !== id));
+            setSelectedTests(prev => prev.filter(t => t.testId !== id));
+        } catch (err: any) {
+            setError('Failed to delete catalog entry');
+            console.error(err);
         }
     };
 
@@ -397,7 +451,7 @@ export default function LabOrderPage() {
         setSelectedTests([]);
     };
 
-    const handleCreateGroup = async () => {
+    const handleSaveGroup = async () => {
         if (!newGroupData.name.trim()) {
             setError('Group name is required');
             return;
@@ -407,18 +461,31 @@ export default function LabOrderPage() {
         setError(null);
 
         try {
-            // Create the group
-            const group = await createDiagnosticGroup({
-                name: newGroupData.name.trim(),
-                category: newGroupData.category,
-                service_types: newGroupData.service_types
-            });
+            let groupId = editingGroupId;
+            if (editingGroupId) {
+                // Update the group details
+                await updateDiagnosticGroup(editingGroupId, {
+                    name: newGroupData.name.trim(),
+                    category: newGroupData.category,
+                    service_types: newGroupData.service_types
+                });
+                // Delete existing items
+                await deleteDiagnosticGroupItemsByGroupId(editingGroupId);
+            } else {
+                // Create new group
+                const group = await createDiagnosticGroup({
+                    name: newGroupData.name.trim(),
+                    category: newGroupData.category,
+                    service_types: newGroupData.service_types
+                });
+                groupId = group.id;
+            }
 
             // Add items to the group if any are selected
-            if (newGroupData.items.length > 0) {
+            if (newGroupData.items.length > 0 && groupId) {
                 for (const item of newGroupData.items) {
                     await createDiagnosticGroupItem({
-                        group_id: group.id,
+                        group_id: groupId,
                         service_type: item.service_type,
                         catalog_id: item.catalog_id,
                         default_selected: item.default_selected,
@@ -438,23 +505,66 @@ export default function LabOrderPage() {
             });
             setAvailableGroups(labGroups);
 
-            // Reset form and close modal
+            // Reset form
             setNewGroupData({
                 name: '',
                 category: 'Lab',
                 service_types: ['lab'],
                 items: []
             });
+            // Refresh current selection if it was the group being edited
+            if (editingGroupId === selectedGroupId && groupId) {
+                await applyGroupToSelection(groupId);
+            }
+            
+            setEditingGroupId(null);
+            // Optionally auto-select if creating new
+            if (!editingGroupId && groupId) {
+                setSelectedGroupId(groupId);
+                await applyGroupToSelection(groupId);
+            }
             setShowNewGroupModal(false);
 
-            // Auto-select the newly created group
-            setSelectedGroupId(group.id);
-            await applyGroupToSelection(group.id);
-
         } catch (e: any) {
-            setError(e?.message || 'Failed to create group');
+            setError(e?.message || 'Failed to save group');
         } finally {
             setCreatingGroup(false);
+        }
+    };
+
+    const handleEditGroup = async (group: DiagnosticGroup) => {
+        setEditingGroupId(group.id);
+        const serviceTypes = group.service_types && group.service_types.length > 0 
+            ? group.service_types 
+            : ['lab' as const];
+            
+        // Fetch items for this group
+        setGroupLoading(true);
+        try {
+            const items = await getDiagnosticGroupItems(group.id);
+            setNewGroupData({
+                name: group.name,
+                category: group.category,
+                service_types: serviceTypes as any,
+                items: items as any
+            });
+        } catch (e: any) {
+            setError('Failed to load group items');
+        } finally {
+            setGroupLoading(false);
+        }
+    };
+
+    const handleDeleteGroup = async (id: string) => {
+        if (!window.confirm('Are you sure you want to delete this group? Cannot be undone.')) return;
+        try {
+            await deleteDiagnosticGroupItemsByGroupId(id);
+            await deleteDiagnosticGroup(id);
+            setAvailableGroups(prev => prev.filter(g => g.id !== id));
+            if (selectedGroupId === id) clearGroupSelection();
+        } catch (err: any) {
+            setError('Failed to delete diagnostic group');
+            console.error(err);
         }
     };
 
@@ -828,7 +938,7 @@ export default function LabOrderPage() {
                                             {useGroup && (
                                                 <div className="space-y-3">
                                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Diagnostic Group</label>
-                                                    <div className="flex gap-2">
+                                                    <div className="flex items-center gap-2">
                                                         <select
                                                             value={selectedGroupId}
                                                             onChange={async (e) => {
@@ -836,21 +946,54 @@ export default function LabOrderPage() {
                                                                 setSelectedGroupId(id);
                                                                 await applyGroupToSelection(id);
                                                             }}
-                                                            className="flex-1 px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-teal-500 outline-none"
+                                                            className="min-w-0 flex-1 px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-teal-500 outline-none"
                                                         >
                                                             <option value="">Select Group...</option>
                                                             {availableGroups.map((g: any) => (
                                                                 <option key={g.id} value={g.id}>{g.name}</option>
                                                             ))}
                                                         </select>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowNewGroupModal(true)}
-                                                            className="p-3 bg-teal-50 text-teal-600 rounded-xl hover:bg-teal-100 transition-colors"
-                                                            title="Add Group"
-                                                        >
-                                                            <Plus size={20} />
-                                                        </button>
+                                                        
+                                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEditingGroupId(null);
+                                                                    setNewGroupData({ name: '', category: 'Lab', service_types: ['lab'], items: [] });
+                                                                    setShowNewGroupModal(true);
+                                                                }}
+                                                                className="p-2.5 bg-teal-50 text-teal-600 rounded-xl hover:bg-teal-100 transition-colors"
+                                                                title="Add Group"
+                                                            >
+                                                                <Plus size={20} />
+                                                            </button>
+                                                            {selectedGroupId && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const group = availableGroups.find(g => g.id === selectedGroupId);
+                                                                            if (group) {
+                                                                                handleEditGroup(group);
+                                                                                setShowNewGroupModal(true);
+                                                                            }
+                                                                        }}
+                                                                        className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                                                                        title="Edit Selected Group"
+                                                                    >
+                                                                        <Edit3 size={18} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteGroup(selectedGroupId)}
+                                                                        className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
+                                                                        title="Delete Selected Group"
+                                                                    >
+                                                                        <Trash2 size={18} />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
@@ -1172,11 +1315,15 @@ export default function LabOrderPage() {
                                 <motion.div
                                     initial={{ scale: 0.9, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
-                                    className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl space-y-6"
+                                    className="bg-white rounded-[32px] p-8 max-w-2xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto"
                                 >
                                     <div className="flex justify-between items-center">
-                                        <h3 className="text-xl font-black text-slate-900">Add New Test Catalog</h3>
-                                        <button onClick={() => setShowNewTestModal(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                                        <h3 className="text-xl font-black text-slate-900">{editingCatalogId ? 'Edit Test Catalog' : 'Add New Test Catalog'}</h3>
+                                        <button onClick={() => {
+                                            setShowNewTestModal(false);
+                                            setEditingCatalogId(null);
+                                            setNewTestData({ testName: '', groupName: '', amount: 0 });
+                                        }} className="p-2 hover:bg-slate-100 rounded-full">
                                             <X size={20} />
                                         </button>
                                     </div>
@@ -1240,19 +1387,79 @@ export default function LabOrderPage() {
 
                                     <div className="flex gap-3">
                                         <button
-                                            onClick={() => setShowNewTestModal(false)}
+                                            onClick={() => {
+                                                if (editingCatalogId) {
+                                                    setEditingCatalogId(null);
+                                                    setNewTestData({ testName: '', groupName: '', amount: 0 });
+                                                } else {
+                                                    setShowNewTestModal(false);
+                                                }
+                                            }}
                                             className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
                                         >
-                                            Cancel
+                                            {editingCatalogId ? 'Cancel Edit' : 'Cancel'}
                                         </button>
                                         <button
-                                            onClick={handleCreateNewTest}
+                                            onClick={handleSaveCatalogEntry}
                                             disabled={creatingTest}
                                             className="flex-1 py-3 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                         >
                                             {creatingTest ? <Loader2 className="animate-spin h-4 w-4" /> : <Save size={18} />}
-                                            Save Catalog
+                                            {editingCatalogId ? 'Update Catalog' : 'Save Catalog'}
                                         </button>
+                                    </div>
+                                    
+                                    {/* Existing Tests List */}
+                                    <div className="mt-8 pt-8 border-t border-slate-100">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Existing Tests</h4>
+                                            <div className="relative w-64">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search tests..."
+                                                    value={catalogSearchTerm}
+                                                    onChange={(e) => setCatalogSearchTerm(e.target.value)}
+                                                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 focus:outline-none focus:border-teal-500 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                            {labCatalog
+                                                .filter(t => t.test_name.toLowerCase().includes(catalogSearchTerm.toLowerCase()) || (t.category || '').toLowerCase().includes(catalogSearchTerm.toLowerCase()))
+                                                .slice(0, 50)  // Limit to 50 for performance
+                                                .map(test => (
+                                                <div key={test.id} className={`flex items-center justify-between p-3 rounded-xl border ${editingCatalogId === test.id ? 'border-teal-500 bg-teal-50/50' : 'border-slate-100 bg-white hover:border-slate-300'} transition-colors`}>
+                                                    <div>
+                                                        <div className="font-bold text-slate-800 text-sm">{test.test_name}</div>
+                                                        <div className="text-xs font-semibold text-slate-500 flex items-center gap-2">
+                                                            <span className="bg-slate-100 px-2 py-0.5 rounded-full">{test.category || 'No Category'}</span>
+                                                            <span className="text-teal-600 font-bold">₹{test.test_cost}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={() => handleEditCatalog(test)}
+                                                            className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                                                            title="Edit Test"
+                                                        >
+                                                            <Edit3 size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteCatalog(test.id)}
+                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Delete Test"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {labCatalog.filter(t => t.test_name.toLowerCase().includes(catalogSearchTerm.toLowerCase()) || (t.category || '').toLowerCase().includes(catalogSearchTerm.toLowerCase())).length === 0 && (
+                                                <div className="text-center py-6 text-slate-500 text-sm">No tests found.</div>
+                                            )}
+                                        </div>
                                     </div>
                                 </motion.div>
                             </motion.div>
@@ -1279,8 +1486,12 @@ export default function LabOrderPage() {
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     <div className="flex justify-between items-center mb-6">
-                                        <h3 className="text-xl font-black text-slate-900">Create New Test Group</h3>
-                                        <button onClick={() => setShowNewGroupModal(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                                        <h3 className="text-xl font-black text-slate-900">{editingGroupId ? 'Edit Test Group' : 'Create New Test Group'}</h3>
+                                        <button onClick={() => {
+                                            setShowNewGroupModal(false);
+                                            setEditingGroupId(null);
+                                            setNewGroupData({ name: '', category: 'Lab', service_types: ['lab'], items: [] });
+                                        }} className="p-2 hover:bg-slate-100 rounded-full">
                                             <X size={20} />
                                         </button>
                                     </div>
@@ -1363,19 +1574,62 @@ export default function LabOrderPage() {
 
                                     <div className="flex gap-3 mt-6">
                                         <button
-                                            onClick={() => setShowNewGroupModal(false)}
+                                            onClick={() => {
+                                                if (editingGroupId) {
+                                                    setEditingGroupId(null);
+                                                    setNewGroupData({ name: '', category: 'Lab', service_types: ['lab'], items: [] });
+                                                } else {
+                                                    setShowNewGroupModal(false);
+                                                }
+                                            }}
                                             className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
                                         >
-                                            Cancel
+                                            {editingGroupId ? 'Cancel Edit' : 'Cancel'}
                                         </button>
                                         <button
-                                            onClick={handleCreateGroup}
+                                            onClick={handleSaveGroup}
                                             disabled={creatingGroup || !newGroupData.name.trim()}
                                             className="flex-1 py-3 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                         >
                                             {creatingGroup ? <Loader2 className="animate-spin h-4 w-4" /> : <Save size={18} />}
-                                            Create Group
+                                            {editingGroupId ? 'Update Group' : 'Save Group'}
                                         </button>
+                                    </div>
+                                    
+                                    {/* Existing Groups List */}
+                                    <div className="mt-8 pt-8 border-t border-slate-100">
+                                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Existing Groups</h4>
+                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                            {availableGroups.map(group => (
+                                                <div key={group.id} className={`flex items-center justify-between p-3 rounded-xl border ${editingGroupId === group.id ? 'border-teal-500 bg-teal-50/50' : 'border-slate-100 bg-white hover:border-slate-300'} transition-colors`}>
+                                                    <div>
+                                                        <div className="font-bold text-slate-800 text-sm">{group.name}</div>
+                                                        <div className="text-xs font-semibold text-slate-500">
+                                                            <span className="bg-slate-100 px-2 py-0.5 rounded-full">{group.category}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={() => handleEditGroup(group)}
+                                                            className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                                                            title="Edit Group"
+                                                        >
+                                                            <Edit3 size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteGroup(group.id)}
+                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Delete Group"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {availableGroups.length === 0 && (
+                                                <div className="text-center py-6 text-slate-500 text-sm">No groups found.</div>
+                                            )}
+                                        </div>
                                     </div>
                                 </motion.div>
                             </motion.div>

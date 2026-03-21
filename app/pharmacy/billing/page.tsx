@@ -53,6 +53,7 @@ interface PharmacyBill {
   staff_id?: string
   staff_name?: string
   payments?: any[]
+  bill_type?: string
 }
 
 interface DashboardStats {
@@ -103,6 +104,15 @@ export default function PharmacyBillingPage() {
     { method: 'cash', amount: '', reference: '' }
   ])
   const [markingPaid, setMarkingPaid] = useState(false)
+  const [billTypeFilter, setBillTypeFilter] = useState('pharmacy')
+  
+  // Derived state for payment modal calculations
+  const _isCredit = selectedBillForPayment?.payment_method === 'credit'
+  const _totalRaw = selectedBillForPayment?.total_amount || 0
+  const _alreadyPaidRaw = selectedBillForPayment?.amount_paid || 0
+  const _initialBalance = _isCredit ? _totalRaw : Math.max(0, _totalRaw - _alreadyPaidRaw)
+  const _selectedTotal = splitPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
+  const _remainingTotal = Math.max(0, _initialBalance - _selectedTotal)
 
   // Bill Edit Modal state
   const [showBillEditModal, setShowBillEditModal] = useState(false)
@@ -246,7 +256,6 @@ export default function PharmacyBillingPage() {
           staff_id,
           bill_type
         `)
-        .or('bill_type.eq.pharmacy,bill_type.is.null')
         .order('created_at', { ascending: false })
 
       if (billsError) throw billsError
@@ -374,7 +383,8 @@ export default function PharmacyBillingPage() {
           created_at: bill.created_at,
           staff_id: bill.staff_id,
           staff_name: staffMap[bill.staff_id]?.full_name || 'Unknown Staff',
-          payments: paymentsMap[bill.id] || []
+          payments: paymentsMap[bill.id] || [],
+          bill_type: bill.bill_type || 'others'
         };
       })
 
@@ -564,9 +574,9 @@ export default function PharmacyBillingPage() {
       return
     }
 
-    // Prevent over-refunding if it's a refund
+    // Prevent over-payment if it's already overpaid
     if (isRefund && totalPaymentAmount > Math.abs(remainingBalance) + 0.1) {
-      alert(`Refund amount (₹${totalPaymentAmount.toFixed(2)}) exceeds the overpayment amount (₹${Math.abs(remainingBalance).toFixed(2)}).`)
+      alert(`Payment amount (₹${totalPaymentAmount.toFixed(2)}) exceeds the required adjustment (₹${Math.abs(remainingBalance).toFixed(2)}).`)
       return
     }
 
@@ -649,7 +659,7 @@ export default function PharmacyBillingPage() {
       setSelectedBillForPayment(null)
 
       if (isRefund) {
-        alert(`Refund of ₹${totalPaymentAmount.toFixed(2)} recorded successfully.`)
+        alert(`Payment adjustment of ₹${totalPaymentAmount.toFixed(2)} recorded successfully.`)
       } else if (paymentStatus === 'paid') {
         alert('Payment recorded successfully! Bill marked as fully paid.')
       } else {
@@ -1336,6 +1346,8 @@ export default function PharmacyBillingPage() {
 
     const matchesStatus = statusFilter === 'all' || bill.payment_status === statusFilter
     const matchesPayment = paymentFilter === 'all' || bill.payment_method === paymentFilter
+    const matchesBillType = billTypeFilter === 'all' || 
+                           (billTypeFilter === 'others' ? (bill.bill_type === 'others' || !bill.bill_type) : bill.bill_type === billTypeFilter)
 
     // Attribute Filter
     const matchesAttr = matchedBillIds === null || matchedBillIds.includes(bill.id)
@@ -1381,7 +1393,7 @@ export default function PharmacyBillingPage() {
       }
     }
 
-    return matchesSearch && matchesStatus && matchesPayment && matchesAttr && matchesTimeframe
+    return matchesSearch && matchesStatus && matchesPayment && matchesBillType && matchesAttr && matchesTimeframe
   })
 
   const getStatusBadge = (status: string) => {
@@ -1509,7 +1521,7 @@ export default function PharmacyBillingPage() {
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
         {/* Row 1: Basic Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <input
@@ -1544,6 +1556,20 @@ export default function PharmacyBillingPage() {
             <option value="upi">UPI</option>
             <option value="split">Split</option>
             <option value="credit">Credit</option>
+            <option value="others">Others</option>
+          </select>
+
+          <select
+            value={billTypeFilter}
+            onChange={(e) => setBillTypeFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium bg-gray-50/50"
+          >
+            <option value="all">All Types</option>
+            <option value="pharmacy">Pharmacy</option>
+            <option value="outpatient">Outpatient</option>
+            <option value="inpatient">Inpatient</option>
+            <option value="lab">Lab / X-Ray</option>
+            <option value="investigation">Investigation</option>
             <option value="others">Others</option>
           </select>
 
@@ -1759,7 +1785,7 @@ export default function PharmacyBillingPage() {
                         <button
                           onClick={(e) => { e.stopPropagation(); openMarkPaidModal(bill) }}
                           className="text-orange-600 hover:text-orange-800"
-                          title="Mark as Paid / Refund"
+                          title="Mark as Paid"
                         >
                           <CheckCircle className="w-4 h-4" />
                         </button>
@@ -2210,11 +2236,9 @@ export default function PharmacyBillingPage() {
                     </div>
                   )}
                   <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                    <span className="text-sm text-gray-600">
-                      {(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'Refund Due:' : 'Remaining Balance:'}
-                    </span>
-                    <span className={`font-bold ${(selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'text-red-600' : 'text-orange-600'}`}>
-                      ₹{Math.abs((selectedBillForPayment.total_amount || 0) - (selectedBillForPayment.amount_paid || 0)).toFixed(2)}
+                    <span className="text-sm text-gray-600">Remaining Balance:</span>
+                    <span className="font-bold text-orange-600">
+                      ₹{_remainingTotal.toFixed(2)}
                     </span>
                   </div>
                   {selectedBillForPayment.payment_method === 'credit' && (
@@ -2284,10 +2308,23 @@ export default function PharmacyBillingPage() {
                                 newPayments[index].amount = e.target.value
                                 setSplitPayments(newPayments)
                               }}
-                              className="w-full pl-7 pr-3 py-2 text-sm font-semibold border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all bg-white"
+                              className="w-full pl-7 pr-14 py-2 text-sm font-semibold border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all bg-white"
                               placeholder="0.00"
                             />
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const otherPayments = splitPayments.reduce((sum, p, i) => i === index ? sum : sum + (parseFloat(p.amount) || 0), 0);
+                                const fillAmount = Math.max(0, _initialBalance - otherPayments);
+                                const newPayments = [...splitPayments]
+                                newPayments[index].amount = fillAmount.toFixed(2)
+                                setSplitPayments(newPayments)
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-blue-50 text-blue-600 px-1.5 py-1 rounded border border-blue-100 hover:bg-blue-100 transition-colors font-bold uppercase"
+                            >
+                              Fill
+                            </button>
                           </div>
                         </div>
 
@@ -2312,7 +2349,7 @@ export default function PharmacyBillingPage() {
 
                 <div className="bg-blue-50 p-2 rounded-md flex justify-between items-center text-sm">
                    <span className="font-medium text-blue-700">Total Selected:</span>
-                   <span className="font-bold text-blue-800">₹{splitPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}</span>
+                   <span className="font-bold text-blue-800">₹{_selectedTotal.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -2328,14 +2365,10 @@ export default function PharmacyBillingPage() {
                 </button>
                 <button
                   onClick={handleMarkAsPaid}
-                  disabled={markingPaid || splitPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) <= 0}
-                  className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold ${
-                    (selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0)
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-green-600 hover:bg-green-700 shadow-sm'
-                  }`}
+                  disabled={markingPaid || _selectedTotal <= 0}
+                  className="flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold bg-green-600 hover:bg-green-700 shadow-sm"
                 >
-                  {markingPaid ? 'Processing...' : (selectedBillForPayment.total_amount || 0) < (selectedBillForPayment.amount_paid || 0) ? 'Record Refund' : 'Record Payment'}
+                  {markingPaid ? 'Processing...' : 'Record Payment'}
                 </button>
               </div>
             </div>

@@ -34,10 +34,16 @@ import {
     getScanTestCatalog,
     createScanTestOrder,
     createScanTestCatalogEntry,
+    updateScanTestCatalogEntry,
+    deleteScanTestCatalogEntry,
     getDiagnosticGroups,
     getDiagnosticGroupItems,
+    updateDiagnosticGroup,
+    deleteDiagnosticGroup,
+    deleteDiagnosticGroupItemsByGroupId,
     ScanTestCatalog
 } from '../../../src/lib/labXrayService';
+import { Edit3, Search as SearchIcon } from 'lucide-react';
 import { createScanBill, type PaymentRecord } from '../../../src/lib/universalPaymentService';
 import StaffSelect from '../../../src/components/StaffSelect';
 import UniversalPaymentModal from '../../../src/components/UniversalPaymentModal';
@@ -82,6 +88,21 @@ export default function ScanOrderPage() {
         amount: 0
     });
     const [creatingTest, setCreatingTest] = useState(false);
+    const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
+    const [catalogSearchTerm, setCatalogSearchTerm] = useState('');
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+    const [showNewGroupModal, setShowNewGroupModal] = useState(false);
+    const [newGroupData, setNewGroupData] = useState<{
+        name: string;
+        category: string;
+        service_types: string[];
+        items: any[];
+    }>({
+        name: '',
+        category: 'Scan',
+        service_types: ['scan'],
+        items: []
+    });
 
     // Patient Details (Auto-filled)
     const [patientDetails, setPatientDetails] = useState({
@@ -272,50 +293,180 @@ export default function ScanOrderPage() {
         }
     };
 
-    const handleCreateNewTest = async () => {
+    const handleSaveCatalogEntry = async () => {
         if (!newTestData.testName || !newTestData.groupName) {
-            setError('Test name and group name are required.');
+            setError('Scan name and modality are required.');
             return;
         }
 
         try {
             setCreatingTest(true);
-            const newEntry = await createScanTestCatalogEntry({
-                scan_name: newTestData.testName,
-                category: newTestData.groupName,
-                test_cost: newTestData.amount
-            });
-
-            // Update master data
-            setScanCatalog(prev => [newEntry, ...prev]);
-
-            // Automatically select this new test in the current list
-            setSelectedTests(prev => {
-                const newTests = [...prev];
-                // Find first empty row or the last row if it's empty
-                const emptyIndex = newTests.findIndex(t => !t.testId);
-
-                const selection = {
-                    testId: newEntry.id,
-                    testName: newEntry.test_name || newEntry.scan_name || '',
-                    groupName: newEntry.modality || newEntry.category || 'N/A',
-                    amount: newEntry.test_cost || 0
-                };
-
-                if (emptyIndex !== -1) {
-                    newTests[emptyIndex] = selection;
-                } else {
-                    newTests.push(selection);
-                }
-                return newTests;
-            });
+            if (editingCatalogId) {
+                const updated = await updateScanTestCatalogEntry(editingCatalogId, {
+                    scan_name: newTestData.testName,
+                    category: newTestData.groupName,
+                    test_cost: newTestData.amount
+                });
+                setScanCatalog(prev => prev.map(t => t.id === editingCatalogId ? updated : t));
+            } else {
+                const newEntry = await createScanTestCatalogEntry({
+                    scan_name: newTestData.testName,
+                    category: newTestData.groupName,
+                    test_cost: newTestData.amount
+                });
+                setScanCatalog(prev => [newEntry, ...prev]);
+            }
 
             // Success!
             setNewTestData({ testName: '', groupName: '', amount: 0 });
+            setEditingCatalogId(null);
             setShowNewTestModal(false);
         } catch (err: any) {
-            console.error('Error creating test:', err);
-            setError('Failed to create new test catalog entry.');
+            console.error('Error saving scan:', err);
+            setError(`Failed to ${editingCatalogId ? 'update' : 'create'} scan catalog entry.`);
+        } finally {
+            setCreatingTest(false);
+        }
+    };
+
+    const handleEditCatalog = (test: ScanTestCatalog) => {
+        setNewTestData({
+            testName: test.test_name || test.scan_name || '',
+            groupName: test.modality || test.category || '',
+            amount: test.test_cost || 0
+        });
+        setEditingCatalogId(test.id);
+    };
+
+    const handleDeleteCatalog = async (id: string) => {
+        if (!window.confirm('Are you sure you want to delete this scan from the catalog?')) return;
+        try {
+            await deleteScanTestCatalogEntry(id);
+            setScanCatalog(prev => prev.filter(t => t.id !== id));
+            if (pendingTestId === id) setPendingTestId('');
+        } catch (err: any) {
+            setError('Failed to delete catalog entry');
+            console.error(err);
+        }
+    };
+
+    const handleEditGroup = async (group: any) => {
+        setEditingGroupId(group.id);
+        const groupItems = await getDiagnosticGroupItems(group.id);
+        setNewGroupData({
+            name: group.name,
+            category: group.category || 'Scan',
+            service_types: group.service_types || ['scan'],
+            items: groupItems.map(it => {
+                const test = scanCatalog.find(t => t.id === it.catalog_id);
+                return {
+                    testId: it.catalog_id,
+                    testName: test?.test_name || test?.scan_name || 'Unknown',
+                    amount: test?.test_cost || 0
+                };
+            })
+        });
+        setShowNewGroupModal(true);
+    };
+
+    const handleDeleteGroup = async (id: string) => {
+        if (!window.confirm('Are you sure you want to delete this group? Cannot be undone.')) return;
+        try {
+            await deleteDiagnosticGroupItemsByGroupId(id);
+            await deleteDiagnosticGroup(id);
+            refreshGroups();
+            if (selectedGroupId === id) clearGroupSelection();
+        } catch (err: any) {
+            setError('Failed to delete diagnostic group');
+            console.error(err);
+        }
+    };
+
+    const refreshGroups = async () => {
+        if (!useGroup) return;
+        setGroupLoading(true);
+        try {
+            const groups = await getDiagnosticGroups({ is_active: true });
+            const scanGroups = (groups || []).filter((g: any) => {
+                const serviceTypes: string[] = Array.isArray(g.service_types) ? g.service_types : [];
+                if (serviceTypes.length === 0) {
+                    return String(g.category || '').toLowerCase() === 'scan' || String(g.category || '').toLowerCase() === 'mixed';
+                }
+                return serviceTypes.includes('scan');
+            });
+            setAvailableGroups(scanGroups);
+        } catch {
+            setAvailableGroups([]);
+        } finally {
+            setGroupLoading(false);
+        }
+    };
+
+    const handleSaveGroup = async () => {
+        if (!newGroupData.name) {
+            setError('Group name is required');
+            return;
+        }
+
+        try {
+            setCreatingTest(true);
+            let groupId = editingGroupId;
+
+            if (editingGroupId) {
+                await updateDiagnosticGroup(editingGroupId, {
+                    name: newGroupData.name,
+                    category: newGroupData.category,
+                    service_types: newGroupData.service_types as any[]
+                });
+                await deleteDiagnosticGroupItemsByGroupId(editingGroupId);
+            } else {
+                const { data: { user } } = await supabase.auth.getUser();
+                const { data: group, error: groupError } = await supabase
+                    .from('diagnostic_groups')
+                    .insert([{
+                        name: newGroupData.name,
+                        category: newGroupData.category,
+                        service_types: newGroupData.service_types,
+                        created_by: user?.id,
+                        is_active: true,
+                        updated_at: new Date().toISOString()
+                    }])
+                    .select()
+                    .single();
+                
+                if (groupError) throw groupError;
+                groupId = group.id;
+            }
+
+            if (groupId) {
+                const itemPromises = newGroupData.items.map((item, index) => {
+                    return supabase
+                        .from('diagnostic_group_items')
+                        .insert([{
+                            group_id: groupId,
+                            service_type: 'scan',
+                            catalog_id: item.testId,
+                            sort_order: index,
+                            default_selected: true,
+                            updated_at: new Date().toISOString()
+                        }]);
+                });
+                await Promise.all(itemPromises);
+            }
+
+            setNewGroupData({ name: '', category: 'Scan', service_types: ['scan'], items: [] });
+            
+            if (editingGroupId === selectedGroupId && groupId) {
+                await applyGroupToSelection(groupId);
+            }
+            
+            setEditingGroupId(null);
+            refreshGroups();
+            setShowNewGroupModal(true); // Wait, should be false
+            setShowNewGroupModal(false);
+
+        } catch (e: any) {
+            setError(e?.message || 'Failed to save group');
         } finally {
             setCreatingTest(false);
         }
@@ -665,20 +816,61 @@ export default function ScanOrderPage() {
                                             animate={{ opacity: 1, height: 'auto' }}
                                             className="space-y-3"
                                         >
-                                            <select
-                                                value={selectedGroupId}
-                                                onChange={async (e) => {
-                                                    const id = e.target.value;
-                                                    setSelectedGroupId(id);
-                                                    await applyGroupToSelection(id);
-                                                }}
-                                                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-purple-500 transition-all outline-none"
-                                            >
-                                                <option value="">Select Protocol Group...</option>
-                                                {availableGroups.map((g: any) => (
-                                                    <option key={g.id} value={g.id}>{g.name}</option>
-                                                ))}
-                                            </select>
+                                            <div className="flex items-center gap-2">
+                                                <select
+                                                    value={selectedGroupId}
+                                                    onChange={async (e) => {
+                                                        const id = e.target.value;
+                                                        setSelectedGroupId(id);
+                                                        await applyGroupToSelection(id);
+                                                    }}
+                                                    className="min-w-0 flex-1 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:border-purple-500 transition-all outline-none"
+                                                >
+                                                    <option value="">Select Protocol Group...</option>
+                                                    {availableGroups.map((g: any) => (
+                                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditingGroupId(null);
+                                                            setNewGroupData({ name: '', category: 'Scan', service_types: ['scan'], items: [] });
+                                                            setShowNewGroupModal(true);
+                                                        }}
+                                                        className="p-3 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 transition-colors"
+                                                        title="Add Group"
+                                                    >
+                                                        <Plus size={20} />
+                                                    </button>
+                                                    {selectedGroupId && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const group = availableGroups.find(g => g.id === selectedGroupId);
+                                                                    if (group) {
+                                                                        handleEditGroup(group);
+                                                                    }
+                                                                }}
+                                                                className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                                                                title="Edit Selected Group"
+                                                            >
+                                                                <Edit3 size={18} />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteGroup(selectedGroupId)}
+                                                                className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
+                                                                title="Delete Selected Group"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </motion.div>
                                     )}
                                 </div>
@@ -1056,19 +1248,23 @@ export default function ScanOrderPage() {
                             <motion.div
                                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
                                 animate={{ scale: 1, opacity: 1, y: 0 }}
-                                className="bg-white rounded-[3rem] p-10 max-w-md w-full shadow-2xl space-y-8"
+                                className="bg-white rounded-[3rem] p-10 max-w-2xl w-full shadow-2xl space-y-6"
                             >
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">Add New Study</h3>
-                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Register new procedure type</p>
+                                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                                            {editingCatalogId ? 'Edit Scan Study' : 'Add New Study'}
+                                        </h3>
+                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                                            {editingCatalogId ? 'Update existing catalog entry' : 'Register new procedure type'}
+                                        </p>
                                     </div>
                                     <button onClick={() => setShowNewTestModal(false)} className="p-3 hover:bg-slate-100 rounded-2xl transition-all">
                                         <X size={20} className="text-slate-400" />
                                     </button>
                                 </div>
 
-                                <div className="space-y-5">
+                                <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-2 text-left">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Procedure Name</label>
                                         <input
@@ -1089,7 +1285,7 @@ export default function ScanOrderPage() {
                                             placeholder="e.g., MRI"
                                         />
                                     </div>
-                                    <div className="space-y-2 text-left">
+                                    <div className="space-y-2 text-left col-span-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Base Scan Cost (₹)</label>
                                         <input
                                             type="number"
@@ -1099,6 +1295,48 @@ export default function ScanOrderPage() {
                                         />
                                     </div>
                                 </div>
+                                <div className="pt-6 border-t border-slate-100">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Existing Scans</h4>
+                                            <div className="relative">
+                                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                                <input 
+                                                    type="text"
+                                                    placeholder="Search catalog..."
+                                                    value={catalogSearchTerm}
+                                                    onChange={(e) => setCatalogSearchTerm(e.target.value)}
+                                                    className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:ring-2 focus:ring-purple-500 outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                            {scanCatalog
+                                                .filter(t => (t.test_name || t.scan_name || '').toLowerCase().includes(catalogSearchTerm.toLowerCase()) || 
+                                                           (t.modality || t.category || '').toLowerCase().includes(catalogSearchTerm.toLowerCase()))
+                                                .map((test) => (
+                                                    <div key={test.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-xs font-black text-slate-700 truncate">{test.test_name || test.scan_name}</p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase">{test.modality || test.category} • ₹{test.test_cost}</p>
+                                                        </div>
+                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                            <button 
+                                                                onClick={() => handleEditCatalog(test)}
+                                                                className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                                                            >
+                                                                <Edit3 size={14} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleDeleteCatalog(test.id)}
+                                                                className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
 
                                 <div className="flex gap-4">
                                     <button
@@ -1108,12 +1346,141 @@ export default function ScanOrderPage() {
                                         Cancel
                                     </button>
                                     <button
-                                        onClick={handleCreateNewTest}
+                                        onClick={handleSaveCatalogEntry}
                                         disabled={creatingTest}
                                         className="flex-1 py-4 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl shadow-purple-100 hover:scale-[1.02] active:scale-[0.98]"
                                     >
                                         {creatingTest ? <Loader2 className="animate-spin h-4 w-4" /> : <Save size={18} />}
-                                        Save Scan
+                                        {editingCatalogId ? 'Update Study' : 'Save Scan'}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* New Group Modal */}
+                <AnimatePresence>
+                    {showNewGroupModal && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[220] p-6"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                className="bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl space-y-8"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                                            {editingGroupId ? 'Manage Scan Group' : 'Create Protocol Bundle'}
+                                        </h3>
+                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Bundle specific scans together</p>
+                                    </div>
+                                    <button onClick={() => setShowNewGroupModal(false)} className="p-3 hover:bg-slate-100 rounded-2xl transition-all">
+                                        <X size={20} className="text-slate-400" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Group Name</label>
+                                        <input
+                                            type="text"
+                                            value={newGroupData.name}
+                                            onChange={(e) => setNewGroupData({ ...newGroupData, name: e.target.value })}
+                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-purple-500 outline-none"
+                                            placeholder="e.g., Cardiac Scan Series"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex justify-between">
+                                            <span>Included Studies</span>
+                                            <span className="text-purple-600">{newGroupData.items.length} Selected</span>
+                                        </label>
+                                        
+                                        <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                <SearchableSelect
+                                                    value=""
+                                                    onChange={(val) => {
+                                                        if (!val) return;
+                                                        const test = scanCatalog.find(t => t.id === val);
+                                                        if (test && !newGroupData.items.find(it => it.testId === val)) {
+                                                            setNewGroupData(prev => ({
+                                                                ...prev,
+                                                                items: [...prev.items, { 
+                                                                    testId: test.id, 
+                                                                    testName: test.test_name || test.scan_name, 
+                                                                    amount: test.test_cost || 0 
+                                                                }]
+                                                            }));
+                                                        }
+                                                    }}
+                                                    options={scanCatalog.map(t => ({
+                                                        value: t.id,
+                                                        label: t.test_name || t.scan_name || '',
+                                                        group: t.modality || t.category,
+                                                        subLabel: `₹${t.test_cost}`
+                                                    }))}
+                                                    placeholder="Search & add studies..."
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4 max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
+                                            {newGroupData.items.length === 0 ? (
+                                                <p className="text-center py-6 text-xs font-bold text-slate-400 uppercase">No studies added yet</p>
+                                            ) : (
+                                                newGroupData.items.map((item, idx) => (
+                                                    <div key={item.testId} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded text-[10px] flex items-center justify-center font-bold">{idx + 1}</span>
+                                                            <span className="text-xs font-bold text-slate-700">{item.testName}</span>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => setNewGroupData(prev => ({
+                                                                ...prev,
+                                                                items: prev.items.filter(it => it.testId !== item.testId)
+                                                            }))}
+                                                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-4">
+                                    {editingGroupId && (
+                                        <button
+                                            onClick={() => handleDeleteGroup(editingGroupId as string)}
+                                            className="p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                                            title="Delete Group"
+                                        >
+                                            <Trash2 size={20} />
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setShowNewGroupModal(false)}
+                                        className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSaveGroup}
+                                        disabled={creatingTest || !newGroupData.name}
+                                        className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl shadow-purple-100"
+                                    >
+                                        {creatingTest ? <Loader2 className="animate-spin h-4 w-4" /> : <Save size={18} />}
+                                        {editingGroupId ? 'Update Group' : 'Save Group'}
                                     </button>
                                 </div>
                             </motion.div>
