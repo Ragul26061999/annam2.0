@@ -520,13 +520,19 @@ export default function PharmacyBillingPage() {
 
     try {
       setLoading(true)
+      const updateData: any = { 
+        payment_status: 'paid',
+        amount_paid: bill.total_amount,
+        updated_at: new Date().toISOString()
+      }
+
+      if (bill.payment_method === 'credit') {
+        updateData.created_at = new Date().toISOString()
+      }
+
       const { error } = await supabase
         .from('billing')
-        .update({ 
-          payment_status: 'paid',
-          amount_paid: bill.total_amount,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', bill.id)
 
       if (error) throw error
@@ -608,17 +614,24 @@ export default function PharmacyBillingPage() {
         paymentStatus = 'paid'
       }
 
-      // If it was a credit bill and we are now paying it, change the method to the first real payment method
       const mainPaymentMethod = validPayments[0].method
+
+      const updateData: any = {
+        payment_status: paymentStatus,
+        amount_paid: newTotalPaid,
+        payment_method: mainPaymentMethod,
+        updated_at: new Date().toISOString()
+      }
+
+      // If it was a credit bill and we are now paying it, change the bill date 
+      // to the actual payment date as requested
+      if (isCreditBill && paymentStatus === 'paid') {
+        updateData.created_at = new Date().toISOString()
+      }
 
       const { error: billingError } = await supabase
         .from('billing')
-        .update({
-          payment_status: paymentStatus,
-          amount_paid: newTotalPaid,
-          payment_method: mainPaymentMethod,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', selectedBillForPayment.id)
 
       if (billingError) {
