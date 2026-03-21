@@ -1966,41 +1966,37 @@ function NewBillingPageInner() {
           <style>
             @page { margin: 5mm; size: 77mm 297mm; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Times New Roman', Times, serif; 
               margin: 0; 
               padding: 10px;
               font-size: 12px;
               line-height: 1.2;
               width: 77mm;
-              font-weight: bold;
-            }
-            .title-serif {
-              font-family: 'Times New Roman', Times, serif;
-              font-weight: bold;
             }
             .header-14cm { font-size: 14pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .header-9cm { font-size: 9pt; font-family: 'Courier New', Courier, monospace; }
-            .header-10cm { font-size: 10pt; font-family: 'Courier New', Courier, monospace; }
-            .header-8cm { font-size: 8pt; font-family: 'Courier New', Courier, monospace; }
-            .items-8cm { font-size: 8pt; font-family: 'Courier New', Courier, monospace; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
-            .bill-info-bold { font-family: 'Courier New', Courier, monospace; font-weight: bold; }
-            .footer-7cm { font-size: 7pt; font-family: 'Courier New', Courier, monospace; }
-            .center { text-align: center; }
-            .right { text-align: right; }
-            .table { width: 100%; border-collapse: collapse; }
-            .table td { padding: 2px; }
-            .totals-line { display: flex; justify-content: space-between; }
-            .footer { margin-top: 20px; }
-            .signature-area { margin-top: 30px; }
+            .header-9cm { font-size: 9pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
+            .header-10cm { font-size: 10pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
+            .header-8cm { font-size: 8pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
+            .items-8cm { font-size: 8pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
+            .bill-info-10cm { font-size: 12pt; font-family: 'Times New Roman', Times, serif; font-weight: normal; }
+            .bill-info-bold { font-weight: bold; font-family: 'Times New Roman', Times, serif; }
+            .footer-7cm { font-size: 7pt; font-family: 'Times New Roman', Times, serif; }
+            .center { text-align: center; font-family: 'Times New Roman', Times, serif; }
+            .right { text-align: right; font-family: 'Times New Roman', Times, serif; }
+            .table { width: 100%; border-collapse: collapse; font-family: 'Times New Roman', Times, serif; }
+            .table td { padding: 2px; font-family: 'Times New Roman', Times, serif; }
+            .totals-line { display: flex; justify-content: space-between; font-family: 'Times New Roman', Times, serif; }
+            .footer { margin-top: 20px; font-family: 'Times New Roman', Times, serif; }
+            .signature-area { margin-top: 30px; font-family: 'Times New Roman', Times, serif; }
           </style>
         </head>
         <body>
           <div class="center">
+            <div class="header-14cm">ANNAM PHARMACY</div>
             <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
             <div class="header-9cm">Phone- 04639 252592</div>
             <div class="header-10cm">Gst No: 33AJWPR2713G2ZZ</div>
-            <div class="title-serif" style="margin-top: 5px; font-size: 14px;">INVOICE</div>
+            <div style="margin-top: 5px; font-weight: bold;">INVOICE</div>
           </div>
           
           <div style="margin-top: 10px;">
@@ -2181,34 +2177,30 @@ function NewBillingPageInner() {
           <style>
             @page { margin: 3mm 8mm 3mm 3mm; size: 85mm 297mm; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Verdana', sans-serif; 
+              font-weight: bold;
               margin: 0; 
               padding: 2px;
               font-size: 14px;
               line-height: 1.2;
               width: 85mm;
-              font-weight: bold;
             }
-            .title-serif {
-              font-family: 'Times New Roman', Times, serif;
-              font-weight: bold;
-            }
-            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Times New Roman', Times, serif; }
-            .header-9cm { font-size: 11pt; font-family: 'Courier New', Courier, monospace; }
-            .header-10cm { font-size: 14pt; font-weight: normal; font-family: 'Courier New', Courier, monospace; }
-            .header-label { font-family: 'Courier New', Courier, monospace; }
-            .header-8cm { font-size: 10pt; font-family: 'Courier New', Courier, monospace; }
-            .items-8cm { font-size: 10pt; font-family: 'Courier New', Courier, monospace; }
-            .bill-info-10cm { font-size: 14pt; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
-            .bill-info-bold { font-family: 'Courier New', Courier, monospace; }
-            .footer-7cm { font-size: 9pt; font-family: 'Courier New', Courier, monospace; }
-            .center { text-align: center; }
-            .right { text-align: right; }
-            .table { width: 100%; border-collapse: collapse; }
-            .table td { padding: 1px; }
-            .totals-line { display: flex; justify-content: space-between; }
-            .footer { margin-top: 15px; }
-            .signature-area { margin-top: 25px; }
+            .header-14cm { font-size: 16pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .header-9cm { font-size: 11pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .header-10cm { font-size: 14pt; font-weight: normal; font-family: 'Verdana', sans-serif; }
+            .header-label { font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .header-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .items-8cm { font-size: 10pt; font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .bill-info-10cm { font-size: 14pt; font-family: 'Verdana', sans-serif; font-weight: normal; }
+            .bill-info-bold { font-weight: bold; font-family: 'Verdana', sans-serif; }
+            .footer-7cm { font-size: 9pt; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .center { text-align: center; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .right { text-align: right; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .table { width: 100%; border-collapse: collapse; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .table td { padding: 1px; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .totals-line { display: flex; justify-content: space-between; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .footer { margin-top: 15px; font-family: 'Verdana', sans-serif; font-weight: bold; }
+            .signature-area { margin-top: 25px; font-family: 'Verdana', sans-serif; font-weight: bold; }
             .logo { width: 300px; height: auto; margin-bottom: 5px; }
           </style>
         </head>
@@ -2218,7 +2210,7 @@ function NewBillingPageInner() {
             <div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>
             <div class="header-9cm">Phone- 04639 252592</div>
             <div class="footer-7cm">Gst No: 33AJWPR2713G2ZZ</div>
-            <div class="title-serif" style="margin-top: 5px; font-size: 16px;">INVOICE</div>
+            <div style="margin-top: 5px; font-weight: bold;">INVOICE</div>
           </div>
           
           <div style="margin-top: 10px;">

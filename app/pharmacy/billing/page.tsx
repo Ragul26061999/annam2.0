@@ -1125,16 +1125,12 @@ export default function PharmacyBillingPage() {
           <style>
             @page { margin: 3mm; size: 80mm auto; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Verdana', sans-serif; 
+              font-weight: bold;
               margin: 0; 
               padding: 0px;
               font-size: 11px;
               width: 77mm;
-              font-weight: bold;
-            }
-            .title-serif {
-              font-family: 'Times New Roman', Times, serif;
-              font-weight: bold;
             }
             .center { text-align: center; }
             .text-right { text-align: right; }
@@ -1152,9 +1148,10 @@ export default function PharmacyBillingPage() {
               color: #000;
             }
             .invoice-info td {
-              font-weight: bold;
+              font-weight: normal;
             }
             .invoice-info td:first-child {
+              font-weight: bold;
               width: 30%;
             }
 
@@ -1180,7 +1177,7 @@ export default function PharmacyBillingPage() {
               border-left: 1px solid #000;
               border-right: 1px solid #000;
               padding: 3px 2px;
-              font-size: 11px;
+              font-size: 12px;
               font-weight: bold;
             }
             /* Remove outer vertical borders to avoid duplicate with invoice-box */
@@ -1200,10 +1197,12 @@ export default function PharmacyBillingPage() {
             .totals-label {
               text-align: right;
               width: 70%;
+              font-weight: bold;
             }
             .totals-value {
               text-align: right;
               width: 30%;
+              font-weight: bold;
             }
             .font-bold { font-weight: bold; }
             .uppercase { text-transform: uppercase; }
@@ -1214,12 +1213,12 @@ export default function PharmacyBillingPage() {
             <img src="/logo/annamPharmacy.png" alt="ANNAM LOGO" class="logo" />
             <div style="font-size: 10px;">${address}</div>
             <div style="font-size: 10px;">${contact_number}</div>
-            <div style="font-size: 10px;">GST No: ${gst_number}</div>
+            <div style="font-size: 10px; font-weight: normal;">GST No: ${gst_number}</div>
           </div>
 
           <div class="invoice-box">
             <div class="center" style="border-bottom: 1px solid #000; padding: 2px;">
-              <span class="title-serif" style="font-size: 14px; letter-spacing: 2px;">INVOICE</span>
+              <span style="font-size: 12px; letter-spacing: 2px; font-weight: bold;">INVOICE</span>
             </div>
 
             <div class="invoice-info">
@@ -1250,10 +1249,10 @@ export default function PharmacyBillingPage() {
             <div style="border-top: 1px solid #000;">
               <table class="totals-box">
                 <tbody>
-                  <tr><td class="totals-label">Taxable Amount</td><td class="totals-value">₹${taxableAmount.toFixed(2)}</td></tr>
-                  <tr><td class="totals-label">Disc Amt:</td><td class="totals-value">₹${discount.toFixed(2)}</td></tr>
-                  <tr><td class="totals-label">CGST Amt:</td><td class="totals-value">₹${cgst.toFixed(2)}</td></tr>
-                  <tr><td class="totals-label">SGST Amt:</td><td class="totals-value">₹${sgst.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label" style="font-weight: normal;">Taxable Amount</td><td class="totals-value" style="font-weight: normal;">₹${taxableAmount.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label" style="font-weight: normal;">Disc Amt:</td><td class="totals-value" style="font-weight: normal;">₹${discount.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label" style="font-weight: normal;">CGST Amt:</td><td class="totals-value" style="font-weight: normal;">₹${cgst.toFixed(2)}</td></tr>
+                  <tr><td class="totals-label" style="font-weight: normal;">SGST Amt:</td><td class="totals-value" style="font-weight: normal;">₹${sgst.toFixed(2)}</td></tr>
                   <tr><td class="totals-label" style="font-size: 13px; border-top: 1px solid #000;">Tot.Net.Amt:</td><td class="totals-value" style="font-size: 13px; border-top: 1px solid #000;">₹${totalAmount.toFixed(2)}</td></tr>
                 </tbody>
               </table>
@@ -1261,11 +1260,11 @@ export default function PharmacyBillingPage() {
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
-            <div style="font-size: 9px;">
+            <div style="font-size: 9px; font-weight: bold;">
               <p>PRINTED ON ${printedDate}</p>
               <p>${printedTime}</p>
             </div>
-            <div style="text-align: right; font-size: 9px;">
+            <div style="text-align: right; font-size: 9px; font-weight: bold;">
               <p style="margin-bottom: 25px;">PHARMACIST SIGNATURE</p>
             </div>
           </div>
