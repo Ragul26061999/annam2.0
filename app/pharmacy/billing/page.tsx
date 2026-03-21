@@ -1125,12 +1125,15 @@ export default function PharmacyBillingPage() {
           <style>
             @page { margin: 3mm; size: 80mm auto; }
             body { 
-              font-family: 'Verdana', sans-serif; 
-              font-weight: bold;
+              font-family: 'Courier New', Courier, monospace; 
               margin: 0; 
               padding: 0px;
               font-size: 11px;
               width: 77mm;
+            }
+            .title-serif {
+              font-family: 'Times New Roman', Times, serif;
+              font-weight: bold;
             }
             .center { text-align: center; }
             .text-right { text-align: right; }
@@ -1151,7 +1154,6 @@ export default function PharmacyBillingPage() {
               font-weight: normal;
             }
             .invoice-info td:first-child {
-              font-weight: bold;
               width: 30%;
             }
 
@@ -1178,7 +1180,6 @@ export default function PharmacyBillingPage() {
               border-right: 1px solid #000;
               padding: 3px 2px;
               font-size: 12px;
-              font-weight: bold;
             }
             /* Remove outer vertical borders to avoid duplicate with invoice-box */
             .receipt-table th:first-child, .receipt-table td:first-child { border-left: none; }
@@ -1197,12 +1198,10 @@ export default function PharmacyBillingPage() {
             .totals-label {
               text-align: right;
               width: 70%;
-              font-weight: bold;
             }
             .totals-value {
               text-align: right;
               width: 30%;
-              font-weight: bold;
             }
             .font-bold { font-weight: bold; }
             .uppercase { text-transform: uppercase; }
@@ -1211,7 +1210,6 @@ export default function PharmacyBillingPage() {
         <body>
           <div class="center">
             <img src="/logo/annamPharmacy.png" alt="ANNAM LOGO" class="logo" />
-            <div style="font-size: 15px; font-weight: bold;">${name}</div>
             <div style="font-size: 10px;">${address}</div>
             <div style="font-size: 10px;">${contact_number}</div>
             <div style="font-size: 10px;">GST No: ${gst_number}</div>
@@ -1219,7 +1217,7 @@ export default function PharmacyBillingPage() {
 
           <div class="invoice-box">
             <div class="center" style="border-bottom: 1px solid #000; padding: 2px;">
-              <span style="font-size: 12px; letter-spacing: 2px; font-weight: bold;">INVOICE</span>
+              <span class="title-serif" style="font-size: 14px; letter-spacing: 2px;">INVOICE</span>
             </div>
 
             <div class="invoice-info">
@@ -1261,11 +1259,11 @@ export default function PharmacyBillingPage() {
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
-            <div style="font-size: 9px; font-weight: bold;">
+            <div style="font-size: 9px;">
               <p>PRINTED ON ${printedDate}</p>
               <p>${printedTime}</p>
             </div>
-            <div style="text-align: right; font-size: 9px; font-weight: bold;">
+            <div style="text-align: right; font-size: 9px;">
               <p style="margin-bottom: 25px;">PHARMACIST SIGNATURE</p>
             </div>
           </div>

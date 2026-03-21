@@ -2410,25 +2410,28 @@ function NewBillingPageInner() {
             @page { margin: 0; size: 72mm auto; }
             body { 
               margin: 0; padding: 2mm; 
-              font-family: 'Verdana', sans-serif; 
+              font-family: 'Courier New', Courier, monospace; 
               width: 72mm; 
               color: #000;
               background: #fff;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
             }
+            .title-serif {
+              font-family: 'Times New Roman', Times, serif;
+              font-weight: bold;
+            }
             .container { border: 1px solid #000; padding: 1mm; }
             .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
             .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
-            .hospital-name { font-size: 15px; font-weight: bold; display: block; }
+            .hospital-name { font-size: 15px; display: block; }
             .hospital-addr { font-size: 10px; display: block; }
             .hospital-contact { font-size: 10px; display: block; }
-            .gst-no { font-size: 10px; font-weight: bold; margin-top: 1mm; display: block; }
+            .gst-no { font-size: 10px; margin-top: 1mm; display: block; }
             
             .invoice-title { 
                 text-align: center; 
-                font-size: 12px; 
-                font-weight: bold; 
+                font-size: 14px; 
                 border-top: 1px solid #000;
                 border-bottom: 1px solid #000;
                 padding: 1mm 0;
@@ -2438,22 +2441,22 @@ function NewBillingPageInner() {
             
             .info-table { width: 100%; font-size: 10px; border-collapse: collapse; margin-bottom: 2mm; }
             .info-table td { padding: 0.5mm 0; vertical-align: top; }
-            .label { font-weight: bold; width: 25mm; }
+            .label { width: 25mm; }
             .value { font-weight: normal; }
             
             .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
             .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
-            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
+            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             
             .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; }
             .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
-            .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
-            .total-value { width: 20mm; text-align: right; font-weight: bold; }
+            .total-label { width: 40mm; text-align: right; padding-right: 2mm; }
+            .total-value { width: 20mm; text-align: right; }
             .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
             
-            .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; font-weight: bold; }
+            .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; }
             .footer-left { text-align: left; }
             .footer-right { text-align: right; }
             .sig-space { margin-top: 8mm; border-top: 1px solid #000; width: 35mm; display: inline-block; }
@@ -2463,13 +2466,12 @@ function NewBillingPageInner() {
           <div class="container">
             <div class="header">
               <img src="/logo/annamPharmacy.png" class="logo" />
-              <span class="hospital-name">${name}</span>
               <span class="hospital-addr">${address}</span>
               <span class="hospital-contact">${contactNumber}</span>
               <span class="gst-no">GST No: ${gstNumber}</span>
             </div>
             
-            <div class="invoice-title">INVOICE</div>
+            <div class="invoice-title title-serif">INVOICE</div>
             
             <table class="info-table">
               <tr>
