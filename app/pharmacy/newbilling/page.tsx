@@ -2416,6 +2416,7 @@ function NewBillingPageInner() {
               background: #fff;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+              font-weight: bold;
             }
             .title-serif {
               font-family: 'Times New Roman', Times, serif;
@@ -2424,10 +2425,10 @@ function NewBillingPageInner() {
             .container { border: 1px solid #000; padding: 1mm; }
             .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
             .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
-            .hospital-name { font-size: 15px; display: block; }
-            .hospital-addr { font-size: 10px; display: block; }
-            .hospital-contact { font-size: 10px; display: block; }
-            .gst-no { font-size: 10px; margin-top: 1mm; display: block; }
+            .hospital-name { font-size: 15px; display: block; font-weight: bold; }
+            .hospital-addr { font-size: 10px; display: block; font-weight: bold; }
+            .hospital-contact { font-size: 10px; display: block; font-weight: bold; }
+            .gst-no { font-size: 10px; margin-top: 1mm; display: block; font-weight: bold; }
             
             .invoice-title { 
                 text-align: center; 
@@ -2442,18 +2443,18 @@ function NewBillingPageInner() {
             .info-table { width: 100%; font-size: 10px; border-collapse: collapse; margin-bottom: 2mm; }
             .info-table td { padding: 0.5mm 0; vertical-align: top; }
             .label { width: 25mm; }
-            .value { font-weight: normal; }
+            .value { font-weight: bold; }
             
             .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
             .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
-            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; }
+            .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             
             .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; }
             .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
-            .total-label { width: 40mm; text-align: right; padding-right: 2mm; }
-            .total-value { width: 20mm; text-align: right; }
+            .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
+            .total-value { width: 20mm; text-align: right; font-weight: bold; }
             .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
             
             .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; }

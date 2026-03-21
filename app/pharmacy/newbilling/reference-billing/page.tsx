@@ -1972,6 +1972,7 @@ function NewBillingPageInner() {
               font-size: 12px;
               line-height: 1.2;
               width: 77mm;
+              font-weight: bold;
             }
             .title-serif {
               font-family: 'Times New Roman', Times, serif;
@@ -1982,7 +1983,7 @@ function NewBillingPageInner() {
             .header-10cm { font-size: 10pt; font-family: 'Courier New', Courier, monospace; }
             .header-8cm { font-size: 8pt; font-family: 'Courier New', Courier, monospace; }
             .items-8cm { font-size: 8pt; font-family: 'Courier New', Courier, monospace; }
-            .bill-info-10cm { font-size: 12pt; font-family: 'Courier New', Courier, monospace; font-weight: normal; }
+            .bill-info-10cm { font-size: 12pt; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
             .bill-info-bold { font-family: 'Courier New', Courier, monospace; font-weight: bold; }
             .footer-7cm { font-size: 7pt; font-family: 'Courier New', Courier, monospace; }
             .center { text-align: center; }
@@ -2186,6 +2187,7 @@ function NewBillingPageInner() {
               font-size: 14px;
               line-height: 1.2;
               width: 85mm;
+              font-weight: bold;
             }
             .title-serif {
               font-family: 'Times New Roman', Times, serif;
@@ -2197,7 +2199,7 @@ function NewBillingPageInner() {
             .header-label { font-family: 'Courier New', Courier, monospace; }
             .header-8cm { font-size: 10pt; font-family: 'Courier New', Courier, monospace; }
             .items-8cm { font-size: 10pt; font-family: 'Courier New', Courier, monospace; }
-            .bill-info-10cm { font-size: 14pt; font-family: 'Courier New', Courier, monospace; font-weight: normal; }
+            .bill-info-10cm { font-size: 14pt; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
             .bill-info-bold { font-family: 'Courier New', Courier, monospace; }
             .footer-7cm { font-size: 9pt; font-family: 'Courier New', Courier, monospace; }
             .center { text-align: center; }

@@ -1130,6 +1130,7 @@ export default function PharmacyBillingPage() {
               padding: 0px;
               font-size: 11px;
               width: 77mm;
+              font-weight: bold;
             }
             .title-serif {
               font-family: 'Times New Roman', Times, serif;
@@ -1151,7 +1152,7 @@ export default function PharmacyBillingPage() {
               color: #000;
             }
             .invoice-info td {
-              font-weight: normal;
+              font-weight: bold;
             }
             .invoice-info td:first-child {
               width: 30%;
@@ -1179,7 +1180,8 @@ export default function PharmacyBillingPage() {
               border-left: 1px solid #000;
               border-right: 1px solid #000;
               padding: 3px 2px;
-              font-size: 12px;
+              font-size: 11px;
+              font-weight: bold;
             }
             /* Remove outer vertical borders to avoid duplicate with invoice-box */
             .receipt-table th:first-child, .receipt-table td:first-child { border-left: none; }
