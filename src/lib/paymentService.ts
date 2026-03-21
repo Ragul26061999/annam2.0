@@ -17,7 +17,7 @@ export interface PaymentData {
   patientId?: string;
   patientName?: string;
   billId?: string;
-  source?: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills';
+  source?: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills' | 'outpatient_registration';
 }
 
 /**
@@ -268,6 +268,38 @@ async function updateBillingPaymentStatus(billId: string, paymentAmount: number,
 
       if (error) {
         console.error('Error updating billing status:', error);
+        throw error;
+      }
+    } else if (source === 'outpatient_registration') {
+      // For registration-related fees in patients table
+      const { data: currentPatient } = await supabase
+        .from('patients')
+        .select('total_amount, advance_amount')
+        .eq('id', billId)
+        .single();
+      
+      if (!currentPatient) {
+        console.warn('Patient record not found:', billId);
+        return;
+      }
+
+      const totalAmount = Number(currentPatient.total_amount) || 0;
+      const currentPaid = Number(currentPatient.advance_amount) || 0;
+      const newPaidAmount = currentPaid + paymentAmount;
+      const remainingAmount = totalAmount - newPaidAmount;
+      
+      const paymentStatus = remainingAmount <= 0 ? 'paid' : 'partial';
+
+      const { error } = await supabase
+        .from('patients')
+        .update({
+          advance_amount: newPaidAmount,
+          payment_mode: paymentStatus
+        })
+        .eq('id', billId);
+
+      if (error) {
+        console.error('Error updating patient status:', error);
         throw error;
       }
     } else {

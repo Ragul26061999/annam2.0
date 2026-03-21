@@ -75,6 +75,7 @@ export default function FinanceDashboard({ className }: FinanceDashboardProps) {
     radiology: { color: 'text-orange-600', bgColor: 'bg-orange-100', icon: Scan, label: 'Radiology' },
     diagnostic: { color: 'text-pink-600', bgColor: 'bg-pink-100', icon: FileText, label: 'Diagnostic' },
     outpatient: { color: 'text-teal-600', bgColor: 'bg-teal-100', icon: User, label: 'Outpatient' },
+    outpatient_registration: { color: 'text-teal-600', bgColor: 'bg-teal-100', icon: User, label: 'Outpatient' },
     other_bills: { color: 'text-cyan-600', bgColor: 'bg-cyan-100', icon: Receipt, label: 'Other Bills' }
   };
 

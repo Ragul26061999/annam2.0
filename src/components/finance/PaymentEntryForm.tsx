@@ -20,7 +20,7 @@ interface PaymentEntryFormProps {
   patientId?: string;
   patientName?: string;
   billId?: string;
-  source?: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills';
+  source?: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills' | 'outpatient_registration';
 }
 
 interface PaymentData {
@@ -31,7 +31,7 @@ interface PaymentData {
   patientId?: string;
   patientName?: string;
   billId?: string;
-  source?: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills';
+  source?: 'billing' | 'pharmacy' | 'lab' | 'radiology' | 'diagnostic' | 'outpatient' | 'other_bills' | 'outpatient_registration';
 }
 
 const paymentModes = [
