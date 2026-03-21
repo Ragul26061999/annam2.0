@@ -288,15 +288,21 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
     reasonForAdmission:     '',
     selectedBedId:          '',
     admissionDate:          new Date().toISOString().split('T')[0],
-    admissionTime:          new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+    admissionTime:          new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
     staffId:                '',
     admissionCategory:      '',
     ipNumber:               '',
+    registrationType:       'admission' as 'admission' | 'observation',
   });
   const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
 
   const set = (key: string, val: string) => setFormData(p => ({ ...p, [key]: val }));
   const toggleDoctor = (id: string) => setFormData(p => ({ ...p, attendingDoctorIds: p.attendingDoctorIds.includes(id) ? p.attendingDoctorIds.filter(x => x !== id) : [...p.attendingDoctorIds, id] }));
+
+  const updatePatientField = (key: string, val: any) => {
+    if (!selectedPatient) return;
+    setSelectedPatient((p: any) => p ? ({ ...p, [key]: val }) : null);
+  };
 
   useEffect(() => {
     loadInitialData();
@@ -400,10 +406,14 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatient) { setMessage({ type: 'error', text: 'Please select a patient' }); return; }
+    if (!formData.selectedBedId) { setMessage({ type: 'error', text: 'Please assign a bed' }); return; }
     setLoading(true); setMessage(null);
     try {
+      console.log('Starting IP admission for patient:', selectedPatient.id, selectedPatient.patient_id);
+      
       if (formData.selectedBedId) {
-        await allocateBed({
+        console.log('Allocating bed:', formData.selectedBedId);
+        const allocation = await allocateBed({
           patientId:        selectedPatient.id,
           bedId:            formData.selectedBedId,
           doctorId:         formData.attendingDoctorIds[0],
@@ -413,9 +423,13 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
           staffId:          formData.staffId,
           admissionCategory: formData.admissionCategory,
           ipNumber:         formData.ipNumber,
+          registrationType: formData.registrationType,
+          admissionTime:    formData.admissionTime,
         });
+        console.log('Bed allocation created:', allocation?.id);
       }
 
+      console.log('Updating patient admission status...');
       await updatePatientAdmissionStatus(selectedPatient.patient_id, true, 'inpatient', {
         department_ward:        formData.department,
         diagnosis:              selectedPatient.diagnosis || '',
@@ -423,9 +437,17 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
         admission_date:         formData.admissionDate,
         admission_category:     formData.admissionCategory,
       });
+      console.log('Patient status updated successfully');
 
-      onComplete({ uhid: selectedPatient.patient_id, patientName: selectedPatient.name, qrCode: selectedPatient.qr_code });
+      // Show success message before navigating
+      setMessage({ type: 'success', text: 'IP Admission created successfully! Redirecting...' });
+      
+      // Small delay to show success message
+      setTimeout(() => {
+        onComplete({ uhid: selectedPatient.patient_id, patientName: selectedPatient.name, qrCode: selectedPatient.qr_code });
+      }, 1000);
     } catch (error: any) {
+      console.error('IP Admission error:', error);
       setMessage({ type: 'error', text: error.message || 'Failed to create admission' });
     } finally { setLoading(false); }
   };
@@ -489,7 +511,17 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
               </span>
               <span className="flex items-center gap-1.5">
                 <Clock size={12}/>
-                <strong className="text-white">{formData.admissionTime}</strong>
+                <strong className="text-white">
+                  {(() => {
+                    const time = formData.admissionTime || '00:00';
+                    const parts = time.split(':');
+                    const h = parseInt(parts[0]) || 0;
+                    const m = parts[1] || '00';
+                    const period = h >= 12 ? 'PM' : 'AM';
+                    const h12 = h % 12 || 12;
+                    return `${h12}:${m} ${period}`;
+                  })()}
+                </strong>
               </span>
             </div>
           </div>
@@ -510,7 +542,30 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
             )}
 
             {/* ══ SECTION 1: IP Registration Details ══ */}
-            <SCard icon={<User size={14}/>} title="IP Registration Details" accent="blue">
+            <SCard 
+              icon={<User size={14}/>} 
+              title="IP Registration Details" 
+              accent="blue"
+              rightElement={
+                <div className="flex items-center gap-5 mr-4 bg-white/50 px-3 py-1 rounded-lg border border-slate-200 shadow-sm">
+                  {['admission', 'observation'].map(type => (
+                    <label key={type} className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="registrationType" 
+                        checked={formData.registrationType === type}
+                        onChange={() => set('registrationType', type)}
+                        className="w-4 h-4 accent-blue-600 cursor-pointer"
+                      />
+                      <span className={`text-[11px] font-black uppercase tracking-widest transition-colors duration-200 
+                        ${formData.registrationType === type ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                        {type}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              }
+            >
               {/* Row 1 */}
               <div className="grid grid-cols-12 gap-3 mb-3">
                 {/* IP Reg No — compact */}
@@ -528,14 +583,68 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
                 </div>
 
                 {/* Admission Time — slightly wider */}
-                <div className="col-span-2">
-                  <label className={lbl}>Time</label>
-                  <input type="time" value={formData.admissionTime}
-                    onChange={e => set('admissionTime', e.target.value)} className={`${inp} text-sm`}/>
+                <div className="col-span-3">
+                  <label className={lbl}>Admission Time (12h)</label>
+                  <div className="flex items-center gap-1">
+                    {/* Hour */}
+                    <select 
+                      value={(() => {
+                        const h = parseInt(formData.admissionTime.split(':')[0]) || 0;
+                        return (h % 12 || 12).toString().padStart(2, '0');
+                      })()}
+                      onChange={(e) => {
+                        const h12 = parseInt(e.target.value);
+                        const m = formData.admissionTime.split(':')[1] || '00';
+                        const p = (parseInt(formData.admissionTime.split(':')[0]) || 0) >= 12 ? 'PM' : 'AM';
+                        let h24 = h12 % 12;
+                        if (p === 'PM') h24 += 12;
+                        set('admissionTime', `${h24.toString().padStart(2, '0')}:${m}`);
+                      }}
+                      className="w-14 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    
+                    <span className="text-slate-400 font-bold">:</span>
+
+                    {/* Minute */}
+                    <select 
+                      value={formData.admissionTime.split(':')[1] || '00'}
+                      onChange={(e) => {
+                        const h24 = formData.admissionTime.split(':')[0] || '00';
+                        set('admissionTime', `${h24}:${e.target.value}`);
+                      }}
+                      className="w-14 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+
+                    {/* AM/PM */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const parts = formData.admissionTime.split(':');
+                        let h = parseInt(parts[0]) || 0;
+                        const m = parts[1] || '00';
+                        if (h >= 12) h -= 12; else h += 12;
+                        set('admissionTime', `${h.toString().padStart(2, '0')}:${m}`);
+                      }}
+                      className={`px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all
+                        ${(parseInt(formData.admissionTime.split(':')[0]) || 0) >= 12 
+                          ? 'bg-blue-600 text-white shadow-sm' 
+                          : 'bg-blue-50 text-blue-600 border border-blue-100'}`}
+                    >
+                      {(parseInt(formData.admissionTime.split(':')[0]) || 0) >= 12 ? 'PM' : 'AM'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Patient Search — takes remaining space */}
-                <div className="col-span-8 relative">
+                <div className="col-span-7 relative">
                   <label className={lbl}>Patient Search (UHID / Mobile / Name) <span className="text-red-400">*</span></label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4"/>
@@ -612,8 +721,9 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
                   {/* Age */}
                   <div className="col-span-1">
                     <label className={lbl}>Age</label>
-                    <input type="text" value={selectedPatient.age || '—'} readOnly
-                      className={`${inp} bg-slate-50 text-slate-500 cursor-default`}/>
+                    <input type="number" value={selectedPatient.age || ''} 
+                      onChange={e => updatePatientField('age', parseInt(e.target.value))}
+                      className={`${inp} bg-white shadow-sm font-bold text-slate-800`}/>
                   </div>
 
                   {/* Gender radios */}
@@ -621,9 +731,15 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
                     <label className={lbl}>Gender</label>
                     <div className="flex items-center gap-4 py-2">
                       {['Male','Female','Other'].map(g => (
-                        <label key={g} className="flex items-center gap-1.5 text-xs cursor-default text-slate-600">
-                          <input type="radio" readOnly checked={selectedPatient.gender?.toLowerCase() === g.toLowerCase()} className="accent-blue-600"/>
-                          {g}
+                        <label key={g} className="flex items-center gap-1.5 text-xs cursor-pointer text-slate-600 group">
+                          <input 
+                            type="radio" 
+                            name="patientGender"
+                            checked={selectedPatient.gender?.toLowerCase() === g.toLowerCase()} 
+                            onChange={() => updatePatientField('gender', g)}
+                            className="accent-blue-600 w-3.5 h-3.5"
+                          />
+                          <span className="group-hover:text-blue-600 transition-colors font-semibold">{g}</span>
                         </label>
                       ))}
                     </div>
@@ -661,28 +777,58 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
                 <div className="grid grid-cols-12 gap-3">
                   <div className="col-span-4">
                     <label className={lbl}>Address</label>
-                    <textarea readOnly rows={2} value={selectedPatient.address || '—'}
-                      className={`${inp} bg-slate-50 text-slate-600 resize-none cursor-default`}/>
+                    <textarea 
+                      rows={2} 
+                      value={selectedPatient.address || ''}
+                      onChange={e => updatePatientField('address', e.target.value)}
+                      className={`${inp} bg-white shadow-sm resize-none text-slate-700 font-semibold`}
+                      placeholder="Street address..."
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className={lbl}>City</label>
-                    <input readOnly value={selectedPatient.city || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                    <input 
+                      value={selectedPatient.city || ''} 
+                      onChange={e => updatePatientField('city', e.target.value)}
+                      className={`${inp} bg-white shadow-sm text-slate-700 font-semibold`}
+                      placeholder="City"
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className={lbl}>State</label>
-                    <input readOnly value={selectedPatient.state || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                    <input 
+                      value={selectedPatient.state || ''} 
+                      onChange={e => updatePatientField('state', e.target.value)}
+                      className={`${inp} bg-white shadow-sm text-slate-700 font-semibold`}
+                      placeholder="State"
+                    />
                   </div>
                   <div className="col-span-1">
                     <label className={lbl}>Pincode</label>
-                    <input readOnly value={selectedPatient.pincode || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                    <input 
+                      value={selectedPatient.pincode || ''} 
+                      onChange={e => updatePatientField('pincode', e.target.value)}
+                      className={`${inp} bg-white shadow-sm text-slate-700 font-semibold`}
+                      placeholder="Pin"
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className={lbl}>Phone</label>
-                    <input readOnly value={selectedPatient.phone || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                    <input 
+                      value={selectedPatient.phone || ''} 
+                      onChange={e => updatePatientField('phone', e.target.value)}
+                      className={`${inp} bg-white shadow-sm text-slate-700 font-semibold`}
+                      placeholder="Phone"
+                    />
                   </div>
                   <div className="col-span-1">
                     <label className={lbl}>Place</label>
-                    <input readOnly value={selectedPatient.place || '—'} className={`${inp} bg-slate-50 text-slate-600 cursor-default`}/>
+                    <input 
+                      value={selectedPatient.place || ''} 
+                      onChange={e => updatePatientField('place', e.target.value)}
+                      className={`${inp} bg-white shadow-sm text-slate-700 font-semibold`}
+                      placeholder="Place"
+                    />
                   </div>
                 </div>
               </SCard>
@@ -718,7 +864,7 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
                             <input type="checkbox" checked={formData.attendingDoctorIds.includes(doc.id)}
                               onChange={() => toggleDoctor(doc.id)}
                               className="w-3.5 h-3.5 rounded accent-indigo-600" />
-                            <span className="text-xs text-slate-700">Dr. {doc.user?.name} — {doc.specialization}</span>
+                            <span className="text-xs text-slate-700">Dr. {doc.user?.name} {doc.qualification} — {doc.specialization}</span>
                           </label>
                         ))}
                       </div>
@@ -769,6 +915,133 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
               </div>
             </SCard>
 
+            {/* ── Selected Doctors Display ── */}
+            {formData.attendingDoctorIds.length > 0 && (
+              <div className="bg-white border border-indigo-100 rounded-xl px-5 py-3 shadow-sm flex items-center justify-between animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
+                    <Stethoscope size={20} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selected Attending Doctor(s)</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {formData.attendingDoctorIds.map(id => {
+                        const doc = doctors.find(d => d.id === id);
+                        return (
+                          <span key={id} className="bg-indigo-50 px-2.5 py-1 rounded-md text-xs font-bold text-indigo-700 border border-indigo-100 flex items-center gap-1.5">
+                            <Check size={12} className="text-indigo-500" />
+                             Dr. {doc?.user?.name || 'Unknown'} {doc?.qualification || ''}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ SECTION: Bed Assignment ══ */}
+            <SCard 
+              icon={<BedDouble size={14}/>} 
+              title="Bed Assignment" 
+              accent="green"
+              rightElement={
+                selectedBed ? (
+                  <span className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                    <Check size={12}/> Bed Selected
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                    <AlertCircle size={12}/> No Bed Assigned
+                  </span>
+                )
+              }
+            >
+              <div className="flex items-center gap-4">
+                {/* Bed Info Display */}
+                <div className="flex-1">
+                  {selectedBed ? (
+                    <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-emerald-50 to-white rounded-xl border border-emerald-200">
+                      <div className="w-14 h-14 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-100">
+                        <BedDouble size={24} className="text-white"/>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className="text-lg font-bold text-slate-800">Room {selectedBed.room_number}</span>
+                          <span className="text-slate-400">•</span>
+                          <span className="text-lg font-bold text-slate-800">Bed {selectedBed.bed_number}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                            selectedBed.bed_type?.toLowerCase() === 'icu' ? 'bg-red-100 text-red-700' :
+                            selectedBed.bed_type?.toLowerCase() === 'private' ? 'bg-violet-100 text-violet-700' :
+                            selectedBed.bed_type?.toLowerCase() === 'semi' ? 'bg-sky-100 text-sky-700' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {selectedBed.bed_type}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-slate-600">
+                          <span className="flex items-center gap-1">
+                            <Building size={12}/> Floor {selectedBed.floor_number ?? 0}
+                          </span>
+                          {selectedBed.daily_rate && (
+                            <span className="flex items-center gap-1">
+                              <span className="font-bold text-emerald-600">₹{selectedBed.daily_rate}</span> / day
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1 text-emerald-600 font-semibold">
+                            <Check size={12}/> Available
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
+                      <div className="w-14 h-14 bg-slate-200 rounded-xl flex items-center justify-center">
+                        <BedDouble size={24} className="text-slate-400"/>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-600">No bed assigned yet</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Click the button to view available beds and assign one</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Assign/Change Bed Button */}
+                <button 
+                  type="button" 
+                  onClick={() => setShowBedPicker(true)}
+                  className={`flex flex-col items-center justify-center gap-1 px-6 py-4 rounded-xl font-bold text-sm transition-all shadow-md focus:ring-2 focus:ring-offset-1 focus:outline-none min-w-[140px]
+                    ${selectedBed 
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-emerald-200 focus:ring-emerald-400' 
+                      : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200 focus:ring-blue-400 animate-pulse'
+                    }`}
+                >
+                  <BedDouble size={20}/>
+                  <span>{selectedBed ? 'Change Bed' : 'Assign Bed'}</span>
+                </button>
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Legend:</span>
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-emerald-400"></span>
+                    <span className="text-slate-600">Available</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-red-400"></span>
+                    <span className="text-slate-600">Occupied</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-amber-400"></span>
+                    <span className="text-slate-600">Maintenance</span>
+                  </span>
+                </div>
+              </div>
+            </SCard>
+
             {/* ── Action bar ── */}
             <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-5 py-3 shadow-sm">
               <span className="text-[11px] text-slate-400">
@@ -801,11 +1074,12 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
 }
 
 // ─── Section Card ─────────────────────────────────────────────────────────────
-function SCard({ icon, title, accent = 'blue', children }: {
+function SCard({ icon, title, accent = 'blue', children, rightElement }: {
   icon: React.ReactNode;
   title: string;
   accent?: 'blue' | 'green' | 'slate';
   children: React.ReactNode;
+  rightElement?: React.ReactNode;
 }) {
   const colors = {
     blue:  'text-blue-500',
@@ -814,9 +1088,12 @@ function SCard({ icon, title, accent = 'blue', children }: {
   };
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 rounded-t-xl">
-        <span className={colors[accent]}>{icon}</span>
-        <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{title}</span>
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 rounded-t-xl">
+        <div className="flex items-center gap-2">
+          <span className={colors[accent]}>{icon}</span>
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{title}</span>
+        </div>
+        {rightElement}
       </div>
       <div className="p-4">{children}</div>
     </div>

@@ -11,6 +11,8 @@ export interface BedAllocationData {
   staffId?: string;
   admissionCategory?: string;
   ipNumber?: string; // New field for Inpatient Number
+  registrationType?: 'admission' | 'observation';
+  admissionTime?: string;
 }
 
 export interface BedAllocation {
@@ -18,6 +20,7 @@ export interface BedAllocation {
   patient_id: string;
   bed_id: string;
   doctor_id: string;
+  staff_id?: string;
   admission_date: string;
   discharge_date?: string;
   reason: string;
@@ -178,7 +181,7 @@ export async function allocateBed(allocationData: BedAllocationData): Promise<Be
 
     const allocationId = await generateAllocationId();
     const now = new Date();
-    const admissionTime = now.toTimeString().split(' ')[0]; // HH:MM:SS format
+    const admissionTime = allocationData.admissionTime || now.toTimeString().split(' ')[0]; // HH:MM:SS format
 
     // Fetch a sample record to check available columns
     const { data: sampleData } = await supabase
@@ -209,6 +212,10 @@ export async function allocateBed(allocationData: BedAllocationData): Promise<Be
     // Handle ip_number
     if (availableColumns.includes('ip_number')) {
       allocationRecord.ip_number = allocationData.ipNumber || await getNextIPNumber();
+    }
+
+    if (availableColumns.includes('registration_type')) {
+      allocationRecord.registration_type = allocationData.registrationType || 'admission';
     }
 
     // Add optional columns if they exist
@@ -467,8 +474,13 @@ export async function getBedAllocations(options: {
     // Apply filters
     if (patientId) query = query.eq('patient_id', patientId);
     if (doctorId) query = query.eq('doctor_id', doctorId);
-    if (bedId) query = query.eq('bed_id', bedId);
-    if (status) query = query.eq('status', status);
+    if (status) {
+      if (status === 'active') {
+        query = query.in('status', ['active', 'allocated']);
+      } else {
+        query = query.eq('status', status);
+      }
+    }
     // Note: admission_type column doesn't exist in the schema, so we can't filter by it
 
     if (dateRange) {

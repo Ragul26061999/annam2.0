@@ -1394,6 +1394,7 @@ export default function XrayOrderPage() {
                                     </div>
                                 </div>
 
+
                             <div className="flex gap-4">
                                 <button
                                     onClick={() => setShowNewTestModal(false)}
@@ -1517,7 +1518,8 @@ export default function XrayOrderPage() {
                             <div className="flex gap-4">
                                 {editingGroupId && (
                                     <button
-                                        onClick={() => handleDeleteGroup(editingGroupId as string)}
+                                        onClick={() => handleDeleteGroup(editingGroupId!)}
+
                                         className="p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
                                         title="Delete Group"
                                     >

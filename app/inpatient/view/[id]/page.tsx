@@ -10,9 +10,9 @@ import {
   Hash, CreditCard, ChevronRight, HeartPulse, Shield,
   X, Pill, Eye, Plus, RefreshCw, FlaskConical, Search,
   ChevronDown, Microscope, Radiation, ScanLine, CheckSquare,
-  Square, Zap, Filter
+  Square, Zap, Filter, Pencil, Check, Bed
 } from 'lucide-react';
-import { getBedAllocationById, type BedAllocation } from '../../../../src/lib/bedAllocationService';
+import { getBedAllocationById, type BedAllocation, getAvailableBeds } from '../../../../src/lib/bedAllocationService';
 import IPClinicalRecords from '../../../../src/components/ip-clinical/IPClinicalRecords';
 import IPPrescriptionForm from '../../../../src/components/ip-clinical/IPPrescriptionForm';
 import { supabase } from '../../../../src/lib/supabase';
@@ -50,6 +50,29 @@ export default function IPDetailPage() {
   const [labUrgency, setLabUrgency] = useState<'routine' | 'urgent' | 'stat'>('routine');
   const [submittingLab, setSubmittingLab] = useState(false);
   const [labToast, setLabToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  // Edit mode states
+  const [editSection, setEditSection] = useState<string | null>(null);
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  
+  // Edit form states
+  const [editPatientData, setEditPatientData] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    diagnosis: '',
+    age: '',
+    gender: ''
+  });
+  const [editReason, setEditReason] = useState('');
+  const [editDoctorId, setEditDoctorId] = useState('');
+  const [editStaffId, setEditStaffId] = useState('');
+  const [editBedId, setEditBedId] = useState('');
+  
+  // Dropdown data
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [availableBeds, setAvailableBeds] = useState<any[]>([]);
 
   useEffect(() => {
     if (allocationId) loadData();
@@ -271,6 +294,161 @@ export default function IPDetailPage() {
     }
   };
 
+  // ── Edit Functions ──
+  const loadDropdownData = async (section: string) => {
+    try {
+      if (section === 'doctor') {
+        const { data } = await supabase
+          .from('doctors')
+          .select('id, license_number, user:user_id(name)')
+          .eq('status', 'active');
+        setDoctors(data || []);
+      } else if (section === 'staff') {
+        const { data } = await supabase
+          .from('staff')
+          .select('id, first_name, last_name, employee_id')
+          .eq('status', 'active');
+        setStaffList(data || []);
+      } else if (section === 'bed') {
+        const beds = await getAvailableBeds();
+        // Include current bed in the list
+        if (allocation?.bed_id && allocation?.bed) {
+          const currentBedInList = beds.find((b: any) => b.id === allocation.bed_id);
+          if (!currentBedInList) {
+            setAvailableBeds([allocation.bed, ...beds]);
+          } else {
+            setAvailableBeds(beds);
+          }
+        } else {
+          setAvailableBeds(beds);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load dropdown data:', e);
+    }
+  };
+
+  const startEdit = (section: string) => {
+    setEditSection(section);
+    if (section === 'patient' && allocation?.patient) {
+      setEditPatientData({
+        name: allocation.patient.name || '',
+        phone: allocation.patient.phone || '',
+        address: (allocation.patient as any).address || '',
+        diagnosis: allocation.patient.diagnosis || '',
+        age: String(allocation.patient.age || ''),
+        gender: allocation.patient.gender || ''
+      });
+    } else if (section === 'reason') {
+      setEditReason(allocation?.reason || '');
+    } else if (section === 'doctor') {
+      setEditDoctorId(allocation?.doctor_id || '');
+      loadDropdownData('doctor');
+    } else if (section === 'staff') {
+      setEditStaffId(allocation?.staff_id || '');
+      loadDropdownData('staff');
+    } else if (section === 'bed') {
+      setEditBedId(allocation?.bed_id || '');
+      loadDropdownData('bed');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditSection(null);
+    setEditPatientData({ name: '', phone: '', address: '', diagnosis: '', age: '', gender: '' });
+    setEditReason('');
+    setEditDoctorId('');
+    setEditStaffId('');
+    setEditBedId('');
+  };
+
+  const saveSection = async (section: string) => {
+    if (!allocation) return;
+    setSavingSection(section);
+    try {
+      if (section === 'patient') {
+        const { error } = await supabase
+          .from('patients')
+          .update({
+            name: editPatientData.name,
+            phone: editPatientData.phone,
+            address: editPatientData.address,
+            diagnosis: editPatientData.diagnosis,
+            age: editPatientData.age ? parseInt(editPatientData.age) : null,
+            gender: editPatientData.gender,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', allocation.patient_id);
+        if (error) throw error;
+      } else if (section === 'reason') {
+        const { error } = await supabase
+          .from('bed_allocations')
+          .update({
+            reason: editReason,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', allocationId);
+        if (error) throw error;
+      } else if (section === 'doctor') {
+        const { error } = await supabase
+          .from('bed_allocations')
+          .update({
+            doctor_id: editDoctorId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', allocationId);
+        if (error) throw error;
+      } else if (section === 'staff') {
+        const { error } = await supabase
+          .from('bed_allocations')
+          .update({
+            staff_id: editStaffId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', allocationId);
+        if (error) throw error;
+      } else if (section === 'bed') {
+        // Get current bed and new bed details
+        const oldBedId = allocation.bed_id;
+        const newBedId = editBedId;
+        
+        if (oldBedId !== newBedId) {
+          // Update bed allocation
+          const { error: allocError } = await supabase
+            .from('bed_allocations')
+            .update({
+              bed_id: newBedId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', allocationId);
+          if (allocError) throw allocError;
+          
+          // Mark old bed as available
+          if (oldBedId) {
+            await supabase
+              .from('beds')
+              .update({ status: 'available', updated_at: new Date().toISOString() })
+              .eq('id', oldBedId);
+          }
+          
+          // Mark new bed as occupied
+          await supabase
+            .from('beds')
+            .update({ status: 'occupied', updated_at: new Date().toISOString() })
+            .eq('id', newBedId);
+        }
+      }
+      
+      // Reload data to show updates
+      await loadData();
+      setEditSection(null);
+    } catch (e: any) {
+      alert('Failed to save: ' + e.message);
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
       <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center">
@@ -426,89 +604,276 @@ export default function IPDetailPage() {
                         )}
                       </div>
                     </div>
+                    {/* Edit Patient Button */}
+                    {editSection === 'patient' ? (
+                      <div className="ml-auto flex items-center gap-1">
+                        <button 
+                          onClick={() => saveSection('patient')}
+                          disabled={savingSection === 'patient'}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-all"
+                        >
+                          {savingSection === 'patient' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        </button>
+                        <button 
+                          onClick={cancelEdit}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => startEdit('patient')}
+                        className="ml-auto w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
 
-                  {/* Patient info fields */}
-                  <div className="space-y-3">
-                    {patient?.phone && (
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                          <Phone className="h-3.5 w-3.5 text-slate-400" />
+                  {/* Patient info fields - Edit Mode */}
+                  {editSection === 'patient' ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Name</label>
+                        <input 
+                          type="text" 
+                          value={editPatientData.name}
+                          onChange={(e) => setEditPatientData({...editPatientData, name: e.target.value})}
+                          className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Age</label>
+                          <input 
+                            type="number" 
+                            value={editPatientData.age}
+                            onChange={(e) => setEditPatientData({...editPatientData, age: e.target.value})}
+                            className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+                          />
                         </div>
                         <div>
-                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Phone</p>
-                          <p className="text-sm font-medium text-slate-700">{patient.phone}</p>
+                          <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Gender</label>
+                          <select 
+                            value={editPatientData.gender}
+                            onChange={(e) => setEditPatientData({...editPatientData, gender: e.target.value})}
+                            className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none bg-white"
+                          >
+                            <option value="">Select</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                          </select>
                         </div>
                       </div>
-                    )}
-                    {(patient as any)?.address && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Address</p>
-                          <p className="text-sm text-slate-700 leading-snug">{(patient as any).address}</p>
-                        </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Phone</label>
+                        <input 
+                          type="text" 
+                          value={editPatientData.phone}
+                          onChange={(e) => setEditPatientData({...editPatientData, phone: e.target.value})}
+                          className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+                        />
                       </div>
-                    )}
-                    {patient?.diagnosis && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <Activity className="h-3.5 w-3.5 text-indigo-400" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Diagnosis</p>
-                          <p className="text-sm text-slate-700 leading-snug">{patient.diagnosis}</p>
-                        </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Address</label>
+                        <textarea 
+                          value={editPatientData.address}
+                          onChange={(e) => setEditPatientData({...editPatientData, address: e.target.value})}
+                          rows={2}
+                          className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none resize-none"
+                        />
                       </div>
-                    )}
-                    {(patient as any)?.medical_history && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <Shield className="h-3.5 w-3.5 text-amber-400" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Medical History</p>
-                          <p className="text-sm text-slate-700 leading-snug line-clamp-3">{(patient as any).medical_history}</p>
-                        </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Diagnosis</label>
+                        <textarea 
+                          value={editPatientData.diagnosis}
+                          onChange={(e) => setEditPatientData({...editPatientData, diagnosis: e.target.value})}
+                          rows={2}
+                          className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none resize-none"
+                        />
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    /* Patient info fields - View Mode */
+                    <div className="space-y-3">
+                      {patient?.phone && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                            <Phone className="h-3.5 w-3.5 text-slate-400" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Phone</p>
+                            <p className="text-sm font-medium text-slate-700">{patient.phone}</p>
+                          </div>
+                        </div>
+                      )}
+                      {(patient as any)?.address && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Address</p>
+                            <p className="text-sm text-slate-700 leading-snug">{(patient as any).address}</p>
+                          </div>
+                        </div>
+                      )}
+                      {patient?.diagnosis && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <Activity className="h-3.5 w-3.5 text-indigo-400" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Diagnosis</p>
+                            <p className="text-sm text-slate-700 leading-snug">{patient.diagnosis}</p>
+                          </div>
+                        </div>
+                      )}
+                      {(patient as any)?.medical_history && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <Shield className="h-3.5 w-3.5 text-amber-400" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Medical History</p>
+                            <p className="text-sm text-slate-700 leading-snug line-clamp-3">{(patient as any).medical_history}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Attending doctor */}
               <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Attending Doctor</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center shrink-0">
-                    <Stethoscope className="h-5 w-5 text-sky-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">Dr. {doctorName}</p>
-                    {allocation.doctor?.license_number && (
-                      <p className="text-xs text-slate-400 mt-0.5">License: {allocation.doctor.license_number}</p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Attending Doctor</p>
+                  {editSection === 'doctor' ? (
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => saveSection('doctor')}
+                        disabled={savingSection === 'doctor'}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-all"
+                      >
+                        {savingSection === 'doctor' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </button>
+                      <button 
+                        onClick={cancelEdit}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => startEdit('doctor')}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                
+                {editSection === 'doctor' ? (
+                  <div className="space-y-2">
+                    <select 
+                      value={editDoctorId}
+                      onChange={(e) => setEditDoctorId(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none bg-white"
+                    >
+                      <option value="">Select Doctor</option>
+                      {doctors.map((doc) => (
+                        <option key={doc.id} value={doc.id}>
+                          Dr. {doc.user?.name || 'Unknown'} {doc.license_number ? `(Lic: ${doc.license_number})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {doctors.length === 0 && (
+                      <p className="text-xs text-amber-600">Loading doctors...</p>
                     )}
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center shrink-0">
+                      <Stethoscope className="h-5 w-5 text-sky-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Dr. {doctorName}</p>
+                      {allocation.doctor?.license_number && (
+                        <p className="text-xs text-slate-400 mt-0.5">License: {allocation.doctor.license_number}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Admitted by staff */}
-              {allocation.staff && (
-                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Admitted By</p>
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Admitted By</p>
+                  {editSection === 'staff' ? (
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => saveSection('staff')}
+                        disabled={savingSection === 'staff'}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-all"
+                      >
+                        {savingSection === 'staff' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </button>
+                      <button 
+                        onClick={cancelEdit}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => startEdit('staff')}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                
+                {editSection === 'staff' ? (
+                  <div className="space-y-2">
+                    <select 
+                      value={editStaffId}
+                      onChange={(e) => setEditStaffId(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none bg-white"
+                    >
+                      <option value="">Select Staff</option>
+                      {staffList.map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.first_name} {staff.last_name} {staff.employee_id ? `(EMP: ${staff.employee_id})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {staffList.length === 0 && (
+                      <p className="text-xs text-amber-600">Loading staff...</p>
+                    )}
+                  </div>
+                ) : (
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
                       <User className="h-5 w-5 text-violet-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">{allocation.staff.first_name} {allocation.staff.last_name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">EMP: {allocation.staff.employee_id}</p>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {allocation.staff?.first_name} {allocation.staff?.last_name}
+                      </p>
+                      {allocation.staff?.employee_id && (
+                        <p className="text-xs text-slate-400 mt-0.5">EMP: {allocation.staff.employee_id}</p>
+                      )}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Right column — Admission + Bed + Stats */}
@@ -554,35 +919,121 @@ export default function IPDetailPage() {
                 <div className="px-5 py-3.5 border-b border-slate-50 flex items-center justify-between">
                   <span className="text-sm font-semibold text-slate-700">Bed Assignment</span>
                   <div className="flex items-center gap-1.5">
+                    {editSection === 'bed' ? (
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={() => saveSection('bed')}
+                          disabled={savingSection === 'bed'}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-all"
+                        >
+                          {savingSection === 'bed' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        </button>
+                        <button 
+                          onClick={cancelEdit}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => startEdit('bed')}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${bed?.status === 'occupied' ? 'bg-orange-100 text-orange-700 border border-orange-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
                       {bed?.status || 'occupied'}
                     </span>
                   </div>
                 </div>
-                <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Bed Number', value: bed?.bed_number || '—', highlight: true },
-                    { label: 'Bed Type', value: bed?.bed_type || '—', capitalize: true },
-                    { label: 'Room', value: bed?.room_number ? `Room ${bed.room_number}` : '—' },
-                    { label: 'Floor', value: bed?.floor_number ? `Floor ${bed.floor_number}` : '—' },
-                    { label: 'Daily Rate', value: bed?.daily_rate ? `₹ ${bed.daily_rate.toLocaleString()}` : '—' },
-                    { label: 'Features', value: bed?.features?.join(', ') || '—' },
-                  ].map(({ label, value, highlight, capitalize }) => (
-                    <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
-                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{label}</p>
-                      <p className={`text-sm font-semibold mt-0.5 ${highlight ? 'text-indigo-600' : 'text-slate-700'} ${capitalize ? 'capitalize' : ''}`}>{value}</p>
+                <div className="p-5">
+                  {editSection === 'bed' ? (
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Select Bed</label>
+                      <select 
+                        value={editBedId}
+                        onChange={(e) => setEditBedId(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none bg-white"
+                      >
+                        <option value="">Select a bed</option>
+                        {availableBeds.map((bedItem) => (
+                          <option key={bedItem.id} value={bedItem.id}>
+                            {bedItem.bed_number} - Room {bedItem.room_number} ({bedItem.bed_type}) - Floor {bedItem.floor_number || 0}
+                            {bedItem.status === 'occupied' ? ' (Current)' : ' (Available)'}
+                          </option>
+                        ))}
+                      </select>
+                      {availableBeds.length === 0 && (
+                        <p className="text-xs text-amber-600">Loading available beds...</p>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Current: {bed?.bed_number} - Room {bed?.room_number}
+                      </p>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {[
+                        { label: 'Bed Number', value: bed?.bed_number || '—', highlight: true },
+                        { label: 'Bed Type', value: bed?.bed_type || '—', capitalize: true },
+                        { label: 'Room', value: bed?.room_number ? `Room ${bed.room_number}` : '—' },
+                        { label: 'Floor', value: bed?.floor_number ? `Floor ${bed.floor_number}` : '—' },
+                        { label: 'Daily Rate', value: bed?.daily_rate ? `₹ ${bed.daily_rate.toLocaleString()}` : '—' },
+                        { label: 'Features', value: bed?.features?.join(', ') || '—' },
+                      ].map(({ label, value, highlight, capitalize }) => (
+                        <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
+                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{label}</p>
+                          <p className={`text-sm font-semibold mt-0.5 ${highlight ? 'text-indigo-600' : 'text-slate-700'} ${capitalize ? 'capitalize' : ''}`}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Admission reason */}
-              {allocation.reason && (
-                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Reason for Admission</p>
-                  <p className="text-sm text-slate-700 leading-relaxed">{allocation.reason}</p>
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Reason for Admission</p>
+                  {editSection === 'reason' ? (
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => saveSection('reason')}
+                        disabled={savingSection === 'reason'}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-all"
+                      >
+                        {savingSection === 'reason' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </button>
+                      <button 
+                        onClick={cancelEdit}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => startEdit('reason')}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
-              )}
+                
+                {editSection === 'reason' ? (
+                  <textarea 
+                    value={editReason}
+                    onChange={(e) => setEditReason(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none resize-none"
+                    placeholder="Enter reason for admission..."
+                  />
+                ) : (
+                  <p className="text-sm text-slate-700 leading-relaxed">{allocation.reason || 'No reason specified'}</p>
+                )}
+              </div>
 
               {/* Quick links */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

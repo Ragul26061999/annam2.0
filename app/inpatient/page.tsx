@@ -66,6 +66,18 @@ export default function InpatientPage() {
   const [cardMenuOpen, setCardMenuOpen] = useState<string | null>(null);
 
   useEffect(() => { loadInpatientData(); }, [statusFilter]);
+  
+  // Refresh data when page becomes visible (e.g., after creating new admission)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadInpatientData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+  
   useEffect(() => {
     const close = () => setCardMenuOpen(null);
     document.addEventListener('click', close);

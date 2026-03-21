@@ -95,7 +95,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const { count: admittedPatients } = await supabase
       .from('bed_allocations')
       .select('patient_id', { count: 'exact', head: true })
-      .eq('status', 'active')
+      .in('status', ['active', 'allocated'])
       .is('discharge_date', null);
 
     // Get total appointments - try new table first, then legacy
@@ -193,7 +193,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const { count: occupiedBeds } = await supabase
       .from('bed_allocations')
       .select('bed_id', { count: 'exact', head: true })
-      .eq('status', 'active')
+      .in('status', ['active', 'allocated'])
       .is('discharge_date', null);
 
     const { count: availableBeds } = await supabase
@@ -474,7 +474,7 @@ export async function getDepartmentStatus(): Promise<DepartmentStatus[]> {
     const { data: allocations, error: allocError } = await supabase
       .from('bed_allocations')
       .select('bed_id')
-      .eq('status', 'active')
+      .in('status', ['active', 'allocated'])
       .is('discharge_date', null);
 
     if (allocError) {
