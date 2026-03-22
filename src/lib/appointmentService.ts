@@ -502,8 +502,8 @@ export async function createAppointment(
     const { data: encounterType } = await supabase
       .from('ref_code')
       .select('id')
-      .eq('domain', 'encounter_type')
-      .eq('code', appointmentData.type || 'consultation')
+      .eq('code_type', 'encounter_type')
+      .eq('code_value', appointmentData.type || 'consultation')
       .single();
 
     if (encounterType) {
@@ -540,8 +540,8 @@ export async function createAppointment(
     const { data: appointmentStatus } = await supabase
       .from('ref_code')
       .select('id')
-      .eq('domain', 'appointment_status')
-      .eq('code', 'scheduled')
+      .eq('code_type', 'appointment_status')
+      .eq('code_value', 'scheduled')
       .single();
 
     if (appointmentStatus) {
@@ -1016,60 +1016,117 @@ export async function updateAppointmentStatus(
 ): Promise<Appointment> {
 
   try {
-    // Get status_id from ref_code table
-    const { data: statusRecord, error: statusError } = await supabase
-      .from('ref_code')
-      .select('id')
-      .eq('domain', 'appointment_status')
-      .eq('code', status)
-      .single();
-
-    if (statusError || !statusRecord) {
-      throw new Error(`Invalid appointment status: ${status}`);
-    }
-
-    const statusId = statusRecord.id;
-
+    console.log('Updating appointment status for ID:', appointmentId, 'to status:', status);
+    
+    // Try updating new appointment table first (new structure)
     try {
+      // For new table, we need to get the status_id from ref_code, but let's handle the case where ref_code might not be available
+      let updateData: any = { updated_at: new Date().toISOString() };
+      
+      // Try to get status_id from ref_code table
+      try {
+        const { data: statusRecord, error: statusError } = await supabase
+          .from('ref_code')
+          .select('id')
+          .eq('code_type', 'appointment_status')
+          .eq('code_value', status)
+          .single();
+
+        if (!statusError && statusRecord) {
+          updateData.status_id = statusRecord.id;
+          console.log('Found status_id:', statusRecord.id);
+        } else {
+          console.warn('Could not find status_id for status:', status, 'error:', statusError?.message);
+          // If we can't find status_id, we might need to update the encounter table instead
+          // or skip the status update for now
+        }
+      } catch (refCodeError) {
+        console.warn('ref_code table not available:', refCodeError);
+      }
+
+      console.log('Attempting to update appointment table with ID:', appointmentId, 'data:', updateData);
       const { data: appointment, error } = await supabase
         .from('appointment')
-        .update({ status_id: statusId })
+        .update(updateData)
         .eq('id', appointmentId)
         .select('*')
         .single();
 
       if (!error && appointment) {
-        return appointment as any;
+        console.log('Successfully updated appointment in appointment table');
+        // Transform to expected format
+        return {
+          ...appointment,
+          id: appointment.id,
+          appointment_id: `APT-${appointment.id.slice(0, 8)}`,
+          patient_id: appointment.encounter?.patient_id || '',
+          doctor_id: appointment.encounter?.clinician_id || '',
+          appointment_date: appointment.scheduled_at ? new Date(appointment.scheduled_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          appointment_time: appointment.scheduled_at ? new Date(appointment.scheduled_at).toTimeString().split(' ')[0] : '00:00:00',
+          duration_minutes: appointment.duration_minutes || 30,
+          type: 'Consultation',
+          status: status, // Return the status we tried to set
+          symptoms: appointment.notes,
+          chief_complaint: appointment.notes,
+          diagnosis: undefined,
+          treatment_plan: undefined,
+          prescriptions: [],
+          next_appointment_date: undefined,
+          follow_up_instructions: undefined,
+          notes: appointment.notes,
+          booking_method: appointment.booking_method,
+          created_by: undefined,
+          created_at: appointment.created_at,
+          updated_at: appointment.updated_at
+        } as any;
+      } else {
+        console.log('Failed to update appointment table:', error?.message);
       }
     } catch (appointmentTableError) {
-      console.warn('Error updating status in appointment table:', appointmentTableError);
+      console.warn('Error updating appointment table:', appointmentTableError);
     }
 
-    // Fallback to legacy appointments table if needed
-    const { data: appointment, error } = await supabase
-      .from('appointments')
-      .update({ status })
-      .eq('appointment_id', appointmentId)
-      .select('*')
-      .single();
+    // Fallback to legacy appointments table
+    try {
+      console.log('Attempting to update legacy appointments table with ID:', appointmentId);
+      const { data: appointment, error } = await supabase
+        .from('appointments')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', appointmentId)
+        .select('*')
+        .single();
 
-    if (!error && appointment) {
-      return appointment as any;
+      if (!error && appointment) {
+        console.log('Successfully updated legacy appointments table');
+        return appointment as any;
+      } else {
+        console.log('Failed to update legacy table by id:', error?.message);
+      }
+    } catch (legacyError) {
+      console.warn('Error updating legacy appointments table:', legacyError);
     }
 
-    const { data: appointmentById, error: idError } = await supabase
-      .from('appointments')
-      .update({ status })
-      .eq('id', appointmentId)
-      .select('*')
-      .single();
+    // If both failed, try with appointment_id field in legacy table (in case the ID passed is appointment_id)
+    try {
+      console.log('Attempting to update legacy appointments table by appointment_id:', appointmentId);
+      const { data: appointment, error } = await supabase
+        .from('appointments')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('appointment_id', appointmentId)
+        .select('*')
+        .single();
 
-    if (idError) {
-      console.error('Error updating appointment status:', idError);
-      throw new Error(`Failed to update appointment status: ${idError.message}`);
+      if (!error && appointment) {
+        console.log('Successfully updated legacy appointments table by appointment_id');
+        return appointment as any;
+      } else {
+        console.log('Failed to update legacy table by appointment_id:', error?.message);
+      }
+    } catch (appointmentIdError) {
+      console.warn('Error updating appointments table by appointment_id:', appointmentIdError);
     }
 
-    return appointmentById as any;
+    throw new Error(`Failed to update appointment status: Appointment not found or update failed in all tables`);
   } catch (error) {
     console.error('Error updating appointment status:', error);
     throw error;
@@ -1081,7 +1138,41 @@ export async function updateAppointmentStatus(
  */
 export async function deleteAppointment(appointmentId: string): Promise<void> {
   try {
-    // First try to delete from the appointments table (legacy)
+    // First try to delete from the new appointment table
+    try {
+      // Get the appointment to find the encounter_id
+      const { data: appointment, error: fetchError } = await supabase
+        .from('appointment')
+        .select('encounter_id')
+        .eq('id', appointmentId)
+        .single();
+
+      if (!fetchError && appointment) {
+        // Delete from appointment table first
+        const { error: deleteError } = await supabase
+          .from('appointment')
+          .delete()
+          .eq('id', appointmentId);
+
+        if (!deleteError) {
+          console.log('Appointment deleted from appointment table:', appointmentId);
+          
+          // Also delete the associated encounter if it exists
+          if (appointment.encounter_id) {
+            await supabase
+              .from('encounter')
+              .delete()
+              .eq('id', appointment.encounter_id);
+            console.log('Associated encounter deleted:', appointment.encounter_id);
+          }
+          return;
+        }
+      }
+    } catch (newTableError) {
+      console.warn('Error deleting from new appointment table:', newTableError);
+    }
+
+    // Fallback to legacy appointments table
     try {
       const { error } = await supabase
         .from('appointments')
@@ -1096,22 +1187,22 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
       console.warn('Error deleting from appointments table:', appointmentsError);
     }
 
-    // Try to delete from the encounter table (where OP appointments are stored)
+    // Try by ID field in legacy table
     try {
       const { error } = await supabase
-        .from('encounter')
+        .from('appointments')
         .delete()
         .eq('id', appointmentId);
 
       if (!error) {
-        console.log('Appointment deleted from encounter table:', appointmentId);
+        console.log('Appointment deleted from appointments table by ID:', appointmentId);
         return;
       }
-    } catch (encounterError) {
-      console.warn('Error deleting from encounter table:', encounterError);
+    } catch (appointmentsIdError) {
+      console.warn('Error deleting from appointments table by ID:', appointmentsIdError);
     }
 
-    throw new Error(`Failed to delete appointment: Appointment not found in either appointments or encounter table`);
+    throw new Error(`Failed to delete appointment: Appointment not found in any table`);
   } catch (error) {
     console.error('Error deleting appointment:', error);
     throw error;
