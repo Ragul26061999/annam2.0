@@ -1977,6 +1977,19 @@ export default function PharmacyBillingPage() {
               <button onClick={showThermalPreviewWithLogo} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Thermal Print</button>
               {isAdmin && (
                 <button
+                  onClick={() => {
+                    setShowViewModal(false)
+                    setSelectedBillForEdit(selectedBill)
+                    setShowBillEditModal(true)
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  Edit Bill
+                </button>
+              )}
+              {isAdmin && (
+                <button
                   onClick={() => handleDeleteBill(selectedBill.id, selectedBill.bill_number)}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
                 >

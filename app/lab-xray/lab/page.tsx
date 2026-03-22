@@ -27,7 +27,8 @@ import {
     Printer,
     Save,
     Loader2,
-    Edit3
+    Edit3,
+    RefreshCw
 } from 'lucide-react';
 import { supabase } from '../../../src/lib/supabase';
 import { SearchableSelect } from '../../../src/components/ui/SearchableSelect';
@@ -46,7 +47,8 @@ import {
     updateDiagnosticGroup,
     deleteDiagnosticGroup,
     deleteDiagnosticGroupItemsByGroupId,
-    DiagnosticGroup
+    DiagnosticGroup,
+    getPatientLabOrders
 } from '../../../src/lib/labXrayService';
 import { createLabTestBill, type PaymentRecord } from '../../../src/lib/universalPaymentService';
 import StaffSelect from '../../../src/components/StaffSelect';
@@ -138,7 +140,10 @@ export default function LabOrderPage() {
     const [staffId, setStaffId] = useState('');
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [generatedBill, setGeneratedBill] = useState<PaymentRecord | null>(null);
-    const [createdOrders, setCreatedOrders] = useState<any[]>([]);
+    // Patient Existing Orders
+    const [patientOrders, setPatientOrders] = useState<any[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadInitialData();
@@ -243,7 +248,7 @@ export default function LabOrderPage() {
         }
     };
 
-    const handlePatientSelect = (patient: any) => {
+    const handlePatientSelect = async (patient: any) => {
         // Calculate age
         let age = '';
         if (patient.date_of_birth) {
@@ -272,6 +277,50 @@ export default function LabOrderPage() {
         setSearchResults([]);
         setActivePatientIndex(-1);
         setError(null);
+
+        // Load existing lab orders for this patient
+        await loadPatientOrders(patient.id);
+    };
+
+    const loadPatientOrders = async (patientId: string) => {
+        if (!patientId) return;
+        setLoadingOrders(true);
+        try {
+            const orders = await getPatientLabOrders(patientId);
+            // Filter only scheduled and sample_pending orders
+            const filteredOrders = orders.filter((order: any) => 
+                order.status === 'scheduled' || order.status === 'sample_pending'
+            );
+            // Enrich orders with catalog data
+            const enrichedOrders = await Promise.all(
+                filteredOrders.map(async (order: any) => {
+                    const { data: catalog } = await supabase
+                        .from('lab_test_catalog')
+                        .select('*')
+                        .eq('id', order.test_catalog_id)
+                        .maybeSingle();
+                    return { ...order, test_catalog: catalog };
+                })
+            );
+            setPatientOrders(enrichedOrders);
+        } catch (err) {
+            console.error('Error loading patient orders:', err);
+        } finally {
+            setLoadingOrders(false);
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'ordered': return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'sample_pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'sample_collected': return 'bg-purple-100 text-purple-800 border-purple-200';
+            case 'in_progress': return 'bg-orange-100 text-orange-800 border-orange-200';
+            case 'completed': return 'bg-green-100 text-green-800 border-green-200';
+            case 'cancelled':
+            case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
+            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+        }
     };
 
     const handleUHIDSearch = async () => {
@@ -593,8 +642,100 @@ export default function LabOrderPage() {
         }));
     };
 
+    // Handle selecting/deselecting an order
+    const toggleOrderSelection = (orderId: string) => {
+        setSelectedOrderIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(orderId)) {
+                newSet.delete(orderId);
+            } else {
+                newSet.add(orderId);
+            }
+            return newSet;
+        });
+    };
+
+    // Handle select all orders
+    const toggleSelectAllOrders = () => {
+        if (selectedOrderIds.size === patientOrders.length) {
+            setSelectedOrderIds(new Set());
+        } else {
+            setSelectedOrderIds(new Set(patientOrders.map(o => o.id)));
+        }
+    };
+
+    // Add selected orders to Selected Tests
+    const handleBillSelectedOrders = () => {
+        const selectedOrders = patientOrders.filter(order => selectedOrderIds.has(order.id));
+        
+        selectedOrders.forEach(order => {
+            const testCatalog = order.test_catalog;
+            if (testCatalog) {
+                // Check if test is already in selectedTests
+                const alreadySelected = selectedTests.some(t => t.testId === testCatalog.id);
+                if (!alreadySelected) {
+                    setSelectedTests(prev => [
+                        ...prev,
+                        {
+                            testId: testCatalog.id,
+                            testName: testCatalog.test_name,
+                            groupName: testCatalog.category || 'N/A',
+                            amount: testCatalog.test_cost || 0
+                        }
+                    ]);
+                }
+            }
+        });
+
+        // Clear selections after adding
+        setSelectedOrderIds(new Set());
+    };
+
     const handleAmountChange = (testId: string, amount: number) => {
         setSelectedTests(prev => prev.map(t => t.testId === testId ? { ...t, amount } : t));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!patientDetails.id) {
+            setError('Please search and select a patient first.');
+            return;
+        }
+        if (selectedTests.length === 0) {
+            setError('Please add at least one test.');
+            return;
+        }
+
+        setSubmitting(true);
+        setError(null);
+
+        try {
+            // Create individual lab test orders
+            const orderPromises = selectedTests.map(test =>
+                createLabTestOrder({
+                    patient_id: patientDetails.id,
+                    ordering_doctor_id: orderingDoctorId || undefined,
+                    test_catalog_id: test.testId,
+                    clinical_indication: clinicalIndication,
+                    urgency: urgency,
+                    status: 'ordered',
+                    staff_id: staffId || undefined
+                })
+            );
+            const orders = await Promise.all(orderPromises);
+
+            // Create bill for the lab tests
+            const bill = await createLabTestBill(patientDetails.id, orders, staffId);
+            setGeneratedBill(bill);
+
+            // Show payment modal
+            setShowPaymentModal(true);
+        } catch (err: any) {
+            console.error('Submission error:', err);
+            setError(err.message || 'Failed to create orders.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     // Update pending amount automatically when pending test changes
@@ -607,79 +748,14 @@ export default function LabOrderPage() {
         setPendingAmount(t?.test_cost || 0);
     }, [pendingTestId, labCatalog]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!patientDetails.id) {
-            setError('Please search and select a patient first.');
-            return;
-        }
-        // Remove required validation for ordering doctor and staff - make them optional
-        const filledTests = selectedTests.filter(t => t.testId);
-        if (filledTests.length === 0) {
-            setError('Please add at least one test.');
-            return;
-        }
-
-        setSubmitting(true);
-        setError(null);
-
-        try {
-            let orders;
-
-            // Use grouped orders if multiple tests selected
-            if (filledTests.length > 1) {
-                const groupedOrder = await createGroupedLabOrder({
-                    patient_id: patientDetails.id,
-                    ordering_doctor_id: orderingDoctorId || undefined,
-                    clinical_indication: clinicalIndication,
-                    urgency: urgency,
-                    service_items: filledTests.map((test, index) => ({
-                        service_type: 'lab',
-                        catalog_id: test.testId,
-                        item_name: test.testName,
-                        sort_order: index
-                    })),
-                    group_id: selectedGroupId || crypto.randomUUID(),
-                    group_name: `Lab Order - ${new Date().toLocaleDateString()}`
-                });
-                orders = [groupedOrder];
-            } else {
-                // Create individual lab test orders for single test
-                const orderPromises = filledTests.map(test =>
-                    createLabTestOrder({
-                        patient_id: patientDetails.id,
-                        ordering_doctor_id: orderingDoctorId || undefined,
-                        test_catalog_id: test.testId,
-                        clinical_indication: clinicalIndication,
-                        urgency: urgency,
-                        status: 'ordered',
-                        staff_id: staffId || undefined
-                    })
-                );
-                orders = await Promise.all(orderPromises);
-            }
-
-            setCreatedOrders(orders);
-
-            // Create bill for the lab tests
-            const bill = await createLabTestBill(patientDetails.id, orders, staffId);
-            setGeneratedBill(bill);
-
-            // Show payment modal first
-            setShowPaymentModal(true);
-            // Don't show success modal yet - wait for payment interaction
-        } catch (err: any) {
-            console.error('Submission error:', err);
-            setError(err.message || 'Failed to create orders.');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
     const handlePaymentSuccess = () => {
         // Close payment modal and show success modal
         setShowPaymentModal(false);
         setSuccess(true);
+        // Refresh existing orders to remove billed ones
+        if (patientDetails.id) {
+            loadPatientOrders(patientDetails.id);
+        }
     };
 
     const handlePaymentClose = () => {
@@ -880,6 +956,123 @@ export default function LabOrderPage() {
                                 </div>
                             </div>
                         </motion.div>
+
+                        {/* Existing Lab Orders for Patient */}
+                        {patientDetails.id && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-white rounded-[32px] border border-slate-200 shadow-sm mt-6 overflow-hidden"
+                            >
+                                <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-600/20">
+                                            <FileText size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-black text-slate-900">Existing Lab Orders</h2>
+                                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                                {patientOrders.length} order(s) for this patient
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {selectedOrderIds.size > 0 && (
+                                            <button
+                                                onClick={handleBillSelectedOrders}
+                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors"
+                                            >
+                                                <Plus size={16} />
+                                                Bill ({selectedOrderIds.size})
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => loadPatientOrders(patientDetails.id)}
+                                            className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                                            title="Refresh Orders"
+                                        >
+                                            <RefreshCw size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="p-6">
+                                    {loadingOrders ? (
+                                        <div className="flex items-center justify-center py-8">
+                                            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                                            <span className="ml-2 text-slate-500">Loading orders...</span>
+                                        </div>
+                                    ) : patientOrders.length === 0 ? (
+                                        <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                                            <p className="text-slate-500 font-medium">No existing lab orders for this patient</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead className="bg-slate-50 border-b border-slate-200">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={patientOrders.length > 0 && selectedOrderIds.size === patientOrders.length}
+                                                                onChange={toggleSelectAllOrders}
+                                                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                        </th>
+                                                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Order #</th>
+                                                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Test Name</th>
+                                                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Status</th>
+                                                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Urgency</th>
+                                                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {patientOrders.map((order) => (
+                                                        <tr key={order.id} className="hover:bg-slate-50/50">
+                                                            <td className="px-4 py-3">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedOrderIds.has(order.id)}
+                                                                    onChange={() => toggleOrderSelection(order.id)}
+                                                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm font-mono text-slate-600">
+                                                                {order.order_number || order.id.slice(0, 8)}
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <span className="font-semibold text-slate-800">
+                                                                    {order.test_catalog?.test_name || 'Unknown Test'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${getStatusColor(order.status)}`}>
+                                                                    {order.status?.replace(/_/g, ' ') || 'Unknown'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                                                                    order.urgency === 'stat' ? 'bg-red-100 text-red-700' :
+                                                                    order.urgency === 'urgent' ? 'bg-amber-100 text-amber-700' :
+                                                                    order.urgency === 'emergency' ? 'bg-red-200 text-red-800 animate-pulse' :
+                                                                    'bg-slate-100 text-slate-600'
+                                                                }`}>
+                                                                    {order.urgency || 'routine'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm text-slate-500">
+                                                                {new Date(order.created_at).toLocaleDateString()}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
                     </div>
 
                     {/* Lab Test Selection - Rectangular Section */}

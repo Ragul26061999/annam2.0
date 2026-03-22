@@ -26,7 +26,8 @@ import {
     Activity,
     Monitor,
     Save,
-    Beaker
+    Beaker,
+    RefreshCw
 } from 'lucide-react';
 import { supabase } from '../../../src/lib/supabase';
 import { SearchableSelect } from '../../../src/components/ui/SearchableSelect';
@@ -42,7 +43,8 @@ import {
     deleteDiagnosticGroup,
     deleteDiagnosticGroupItemsByGroupId,
     RadiologyTestCatalog,
-    DiagnosticGroup
+    DiagnosticGroup,
+    getPatientXrayOrders
 } from '../../../src/lib/labXrayService';
 import { Edit3, Search as SearchIcon } from 'lucide-react';
 import { createRadiologyBill, type PaymentRecord } from '../../../src/lib/universalPaymentService';
@@ -135,7 +137,10 @@ export default function XrayOrderPage() {
     const [staffId, setStaffId] = useState('');
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [generatedBill, setGeneratedBill] = useState<PaymentRecord | null>(null);
-    const [createdOrders, setCreatedOrders] = useState<any[]>([]);
+    // Patient Existing Orders
+    const [patientOrders, setPatientOrders] = useState<any[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadInitialData();
@@ -239,7 +244,7 @@ export default function XrayOrderPage() {
         }
     };
 
-    const handlePatientSelect = (patient: any) => {
+    const handlePatientSelect = async (patient: any) => {
         // Calculate age
         let age = '';
         if (patient.date_of_birth) {
@@ -263,11 +268,56 @@ export default function XrayOrderPage() {
             emailId: patient.email || ''
         });
 
-        setUhidSearch(patient.name); // Show selected patient name
+        setUhidSearch(patient.name);
         setShowSearchDropdown(false);
         setSearchResults([]);
         setActivePatientIndex(-1);
         setError(null);
+
+        // Load existing radiology orders for this patient
+        await loadPatientOrders(patient.id);
+    };
+
+    const loadPatientOrders = async (patientId: string) => {
+        if (!patientId) return;
+        setLoadingOrders(true);
+        try {
+            const orders = await getPatientXrayOrders(patientId);
+            // Filter only scheduled and sample_pending orders
+            const filteredOrders = orders.filter((order: any) => 
+                order.status === 'scheduled' || order.status === 'sample_pending'
+            );
+            // Enrich orders with catalog data
+            const enrichedOrders = await Promise.all(
+                filteredOrders.map(async (order: any) => {
+                    const { data: catalog } = await supabase
+                        .from('radiology_test_catalog')
+                        .select('*')
+                        .eq('id', order.test_catalog_id)
+                        .maybeSingle();
+                    return { ...order, test_catalog: catalog };
+                })
+            );
+            setPatientOrders(enrichedOrders);
+        } catch (err) {
+            console.error('Error loading patient orders:', err);
+        } finally {
+            setLoadingOrders(false);
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'ordered': return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'scheduled': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
+            case 'patient_arrived': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+            case 'scan_completed': return 'bg-teal-100 text-teal-800 border-teal-200';
+            case 'report_pending': return 'bg-amber-100 text-amber-800 border-amber-200';
+            case 'completed': return 'bg-green-100 text-green-800 border-green-200';
+            case 'cancelled':
+            case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
+            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+        }
     };
 
     const handleUHIDSearch = async () => {
@@ -555,6 +605,56 @@ export default function XrayOrderPage() {
         setSelectedTests([]);
     };
 
+    // Handle selecting/deselecting an order
+    const toggleOrderSelection = (orderId: string) => {
+        setSelectedOrderIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(orderId)) {
+                newSet.delete(orderId);
+            } else {
+                newSet.add(orderId);
+            }
+            return newSet;
+        });
+    };
+
+    // Handle select all orders
+    const toggleSelectAllOrders = () => {
+        if (selectedOrderIds.size === patientOrders.length) {
+            setSelectedOrderIds(new Set());
+        } else {
+            setSelectedOrderIds(new Set(patientOrders.map(o => o.id)));
+        }
+    };
+
+    // Add selected orders to Selected Tests
+    const handleBillSelectedOrders = () => {
+        const selectedOrders = patientOrders.filter(order => selectedOrderIds.has(order.id));
+        
+        selectedOrders.forEach(order => {
+            const testCatalog = order.test_catalog;
+            if (testCatalog) {
+                // Check if test is already in selectedTests
+                const alreadySelected = selectedTests.some(t => t.testId === testCatalog.id);
+                if (!alreadySelected) {
+                    setSelectedTests(prev => [
+                        ...prev,
+                        {
+                            testId: testCatalog.id,
+                            testName: testCatalog.test_name,
+                            groupName: testCatalog.modality || 'X-Ray',
+                            bodyPart: testCatalog.body_part || '',
+                            amount: testCatalog.test_cost || 0
+                        }
+                    ]);
+                }
+            }
+        });
+
+        // Clear selections after adding
+        setSelectedOrderIds(new Set());
+    };
+
     const handleAmountChange = (testId: string, amount: number) => {
         setSelectedTests(prev => prev.map(t => t.testId === testId ? { ...t, amount } : t));
     };
@@ -605,7 +705,6 @@ export default function XrayOrderPage() {
             );
 
             const orders = await Promise.all(orderPromises);
-            setCreatedOrders(orders);
 
             // Create bill for the radiology tests
             const bill = await createRadiologyBill(patientDetails.id, orders, staffId);
@@ -626,6 +725,10 @@ export default function XrayOrderPage() {
         // Close payment modal and show success modal
         setShowPaymentModal(false);
         setSuccess(true);
+        // Refresh existing orders to remove billed ones
+        if (patientDetails.id) {
+            loadPatientOrders(patientDetails.id);
+        }
     };
 
     const handlePaymentClose = () => {
@@ -822,6 +925,123 @@ export default function XrayOrderPage() {
                             </div>
                         </div>
                     </motion.div>
+
+                    {/* Existing Radiology Orders for Patient */}
+                    {patientDetails.id && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden"
+                        >
+                            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-cyan-600 text-white rounded-2xl shadow-lg shadow-cyan-600/20">
+                                        <FileText size={24} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-black text-slate-900">Existing Radiology Orders</h2>
+                                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                            {patientOrders.length} order(s) for this patient
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {selectedOrderIds.size > 0 && (
+                                        <button
+                                            onClick={handleBillSelectedOrders}
+                                            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-xl text-sm font-bold hover:bg-cyan-700 transition-colors"
+                                        >
+                                            <Plus size={16} />
+                                            Bill ({selectedOrderIds.size})
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => loadPatientOrders(patientDetails.id)}
+                                        className="p-2.5 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-100 transition-colors"
+                                        title="Refresh Orders"
+                                    >
+                                        <RefreshCw size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="p-6">
+                                {loadingOrders ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+                                        <span className="ml-2 text-slate-500">Loading orders...</span>
+                                    </div>
+                                ) : patientOrders.length === 0 ? (
+                                    <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                                        <p className="text-slate-500 font-medium">No existing radiology orders for this patient</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-slate-50 border-b border-slate-200">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={patientOrders.length > 0 && selectedOrderIds.size === patientOrders.length}
+                                                            onChange={toggleSelectAllOrders}
+                                                            className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                                                        />
+                                                    </th>
+                                                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Order #</th>
+                                                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Test Name</th>
+                                                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Status</th>
+                                                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Urgency</th>
+                                                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {patientOrders.map((order) => (
+                                                    <tr key={order.id} className="hover:bg-slate-50/50">
+                                                        <td className="px-4 py-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedOrderIds.has(order.id)}
+                                                                onChange={() => toggleOrderSelection(order.id)}
+                                                                className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm font-mono text-slate-600">
+                                                            {order.order_number || order.id.slice(0, 8)}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className="font-semibold text-slate-800">
+                                                                {order.test_catalog?.test_name || 'Unknown Test'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${getStatusColor(order.status)}`}>
+                                                                {order.status?.replace(/_/g, ' ') || 'Unknown'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                                                                order.urgency === 'stat' ? 'bg-red-100 text-red-700' :
+                                                                order.urgency === 'urgent' ? 'bg-amber-100 text-amber-700' :
+                                                                order.urgency === 'emergency' ? 'bg-red-200 text-red-800 animate-pulse' :
+                                                                'bg-slate-100 text-slate-600'
+                                                            }`}>
+                                                                {order.urgency || 'routine'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-slate-500">
+                                                            {new Date(order.created_at).toLocaleDateString()}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
 
                     {/* 2. Diagnostic Selection Workspace - Split Section */}
                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 h-full min-h-[600px]">

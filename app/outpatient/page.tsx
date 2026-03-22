@@ -144,6 +144,12 @@ function OutpatientPageContent() {
   const [associatedTests, setAssociatedTests] = useState<{ lab: any[], radiology: any[], scan: any[], grouped: any[] }>({ lab: [], radiology: [], scan: [], grouped: [] });
   const [testsLoading, setTestsLoading] = useState(false);
 
+  // Lab Test Accept/Reject state
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedTestForAction, setSelectedTestForAction] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [testActionLoading, setTestActionLoading] = useState(false);
+
   // Additional state for patient listing
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState(1);
@@ -1116,11 +1122,19 @@ function OutpatientPageContent() {
         const appointmentId = prescription.appointment_id;
         const encounterId = prescription.encounter_id;
 
-        // Match tests
-        const matchedLab = labOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
-        const matchedRadio = radioOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
-        const matchedScan = scanOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
-        const matchedGrouped = groupedOrders.filter((o: any) => o.appointment_id === appointmentId || (encounterId && o.encounter_id === encounterId));
+        // Match tests - only if appointmentId or encounterId exists
+        const matchedLab = appointmentId || encounterId 
+          ? labOrders.filter((o: any) => (appointmentId && o.appointment_id === appointmentId) || (encounterId && o.encounter_id === encounterId))
+          : [];
+        const matchedRadio = appointmentId || encounterId
+          ? radioOrders.filter((o: any) => (appointmentId && o.appointment_id === appointmentId) || (encounterId && o.encounter_id === encounterId))
+          : [];
+        const matchedScan = appointmentId || encounterId
+          ? scanOrders.filter((o: any) => (appointmentId && o.appointment_id === appointmentId) || (encounterId && o.encounter_id === encounterId))
+          : [];
+        const matchedGrouped = appointmentId || encounterId
+          ? groupedOrders.filter((o: any) => (appointmentId && o.appointment_id === appointmentId) || (encounterId && o.encounter_id === encounterId))
+          : [];
 
         return {
           id: prescription.id,
@@ -1275,6 +1289,237 @@ function OutpatientPageContent() {
       console.error('Error loading associated tests:', err);
     } finally {
       setTestsLoading(false);
+    }
+  };
+
+  // Handle Accept All Tests - Send all pending tests to Lab
+  const handleAcceptAllTests = async (prescription: any) => {
+    try {
+      setTestActionLoading(true);
+      
+      const pendingLab = (prescription.tests?.lab || []).filter((t: any) => !t.status || t.status === 'ordered');
+      const pendingRadio = (prescription.tests?.radiology || []).filter((t: any) => !t.status || t.status === 'ordered');
+      const pendingScan = (prescription.tests?.scan || []).filter((t: any) => !t.status || t.status === 'ordered');
+      
+      const updates = [];
+      
+      // Update all pending lab tests with better error handling
+      for (const test of pendingLab) {
+        if (!test.id) {
+          console.warn('Lab test missing ID:', test);
+          continue;
+        }
+        updates.push(
+          supabase
+            .from('lab_test_orders')
+            .update({ status: 'sample_pending', updated_at: new Date().toISOString() })
+            .eq('id', test.id)
+        );
+      }
+      
+      // Update all pending radiology tests - use 'scheduled' not 'sample_pending'
+      for (const test of pendingRadio) {
+        if (!test.id) {
+          console.warn('Radiology test missing ID:', test);
+          continue;
+        }
+        updates.push(
+          supabase
+            .from('radiology_test_orders')
+            .update({ status: 'scheduled', updated_at: new Date().toISOString() })
+            .eq('id', test.id)
+        );
+      }
+      
+      // Update all pending scan tests - use 'scheduled' not 'sample_pending'
+      for (const test of pendingScan) {
+        if (!test.id) {
+          console.warn('Scan test missing ID:', test);
+          continue;
+        }
+        updates.push(
+          supabase
+            .from('scan_test_orders')
+            .update({ status: 'scheduled', updated_at: new Date().toISOString() })
+            .eq('id', test.id)
+        );
+      }
+      
+      // Execute all updates and log detailed errors
+      const results = await Promise.all(updates);
+      const errors = results.filter(r => r.error).map(r => ({
+        message: r.error?.message,
+        details: r.error?.details,
+        hint: r.error?.hint
+      }));
+      
+      if (errors.length > 0) {
+        console.error('Some tests failed to accept:', JSON.stringify(errors, null, 2));
+        // Still continue to update successful ones locally
+      }
+      
+      // Update local state with correct statuses for each test type
+      setLabTestPrescriptions(prev => prev.map(p => {
+        if (p.id === prescription.id) {
+          return {
+            ...p,
+            tests: {
+              lab: p.tests.lab.map((t: any) => 
+                (!t.status || t.status === 'ordered') ? { ...t, status: 'sample_pending' } : t
+              ),
+              radiology: p.tests.radiology.map((t: any) => 
+                (!t.status || t.status === 'ordered') ? { ...t, status: 'scheduled' } : t
+              ),
+              scan: p.tests.scan.map((t: any) => 
+                (!t.status || t.status === 'ordered') ? { ...t, status: 'scheduled' } : t
+              )
+            }
+          };
+        }
+        return p;
+      }));
+
+      const totalAccepted = pendingLab.length + pendingRadio.length + pendingScan.length;
+      alert(`${totalAccepted} test(s) accepted and sent to Lab successfully!`);
+    } catch (err) {
+      console.error('Error in handleAcceptAllTests:', err);
+      alert('Failed to accept tests');
+    } finally {
+      setTestActionLoading(false);
+    }
+  };
+
+  // Handle Reject All Tests - Show Rejection Modal for all
+  const handleRejectAllClick = (prescription: any) => {
+    const pendingLab = (prescription.tests?.lab || []).filter((t: any) => !t.status || t.status === 'ordered');
+    const pendingRadio = (prescription.tests?.radiology || []).filter((t: any) => !t.status || t.status === 'ordered');
+    const pendingScan = (prescription.tests?.scan || []).filter((t: any) => !t.status || t.status === 'ordered');
+    
+    const totalPending = pendingLab.length + pendingRadio.length + pendingScan.length;
+    
+    if (totalPending === 0) {
+      alert('No pending tests to reject');
+      return;
+    }
+    
+    setSelectedTestForAction({ prescription, totalPending });
+    setRejectionReason('');
+    setShowRejectModal(true);
+  };
+
+  // Submit Rejection for All Tests
+  const handleSubmitRejectionAll = async () => {
+    if (!rejectionReason.trim()) {
+      alert('Please enter a rejection reason');
+      return;
+    }
+
+    if (!selectedTestForAction) return;
+
+    const { prescription } = selectedTestForAction;
+    const timestamp = new Date().toISOString();
+    
+    try {
+      setTestActionLoading(true);
+      
+      const pendingLab = (prescription.tests?.lab || []).filter((t: any) => !t.status || t.status === 'ordered');
+      const pendingRadio = (prescription.tests?.radiology || []).filter((t: any) => !t.status || t.status === 'ordered');
+      const pendingScan = (prescription.tests?.scan || []).filter((t: any) => !t.status || t.status === 'ordered');
+      
+      const updates = [];
+      
+      // Reject all pending lab tests
+      for (const test of pendingLab) {
+        updates.push(
+          supabase
+            .from('lab_test_orders')
+            .update({ 
+              status: 'rejected',
+              cancellation_reason: rejectionReason,
+              cancelled_at: timestamp,
+              updated_at: timestamp
+            })
+            .eq('id', test.id)
+        );
+      }
+      
+      // Reject all pending radiology tests
+      for (const test of pendingRadio) {
+        updates.push(
+          supabase
+            .from('radiology_test_orders')
+            .update({ 
+              status: 'rejected',
+              cancellation_reason: rejectionReason,
+              cancelled_at: timestamp,
+              updated_at: timestamp
+            })
+            .eq('id', test.id)
+        );
+      }
+      
+      // Reject all pending scan tests
+      for (const test of pendingScan) {
+        updates.push(
+          supabase
+            .from('scan_test_orders')
+            .update({ 
+              status: 'rejected',
+              cancellation_reason: rejectionReason,
+              cancelled_at: timestamp,
+              updated_at: timestamp
+            })
+            .eq('id', test.id)
+        );
+      }
+      
+      // Execute all updates
+      const results = await Promise.all(updates);
+      const errors = results.filter(r => r.error);
+      
+      if (errors.length > 0) {
+        console.error('Some tests failed to reject:', errors);
+        alert(`Failed to reject ${errors.length} test(s). Please try again.`);
+        return;
+      }
+
+      // Update local state
+      setLabTestPrescriptions(prev => prev.map(p => {
+        if (p.id === prescription.id) {
+          return {
+            ...p,
+            tests: {
+              lab: p.tests.lab.map((t: any) => 
+                (!t.status || t.status === 'ordered') 
+                  ? { ...t, status: 'rejected', cancellation_reason: rejectionReason, cancelled_at: timestamp } 
+                  : t
+              ),
+              radiology: p.tests.radiology.map((t: any) => 
+                (!t.status || t.status === 'ordered') 
+                  ? { ...t, status: 'rejected', cancellation_reason: rejectionReason, cancelled_at: timestamp } 
+                  : t
+              ),
+              scan: p.tests.scan.map((t: any) => 
+                (!t.status || t.status === 'ordered') 
+                  ? { ...t, status: 'rejected', cancellation_reason: rejectionReason, cancelled_at: timestamp } 
+                  : t
+              )
+            }
+          };
+        }
+        return p;
+      }));
+
+      const totalRejected = pendingLab.length + pendingRadio.length + pendingScan.length;
+      setShowRejectModal(false);
+      setSelectedTestForAction(null);
+      setRejectionReason('');
+      alert(`${totalRejected} test(s) rejected successfully!`);
+    } catch (err) {
+      console.error('Error in handleSubmitRejectionAll:', err);
+      alert('Failed to reject tests');
+    } finally {
+      setTestActionLoading(false);
     }
   };
 
@@ -3199,25 +3444,52 @@ function OutpatientPageContent() {
                           </div>
                         </td>
                         <td className="px-3 py-4">
-                          <div className="flex flex-wrap gap-1.5 max-w-sm">
-                            {/* Individual Lab Tests */}
+                          <div className="flex flex-col gap-2 max-w-sm">
+                            {/* Lab Tests - Display only, no individual buttons */}
                             {(prescription.tests?.lab || []).map((test: any, idx: number) => (
-                              <span key={`lab-${idx}`} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-100 uppercase tracking-tight">
+                              <span key={`lab-${idx}`} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tight ${
+                                test.status === 'rejected' 
+                                  ? 'bg-red-50 text-red-700 border-red-200 line-through' 
+                                  : test.status === 'sample_pending' || test.status === 'in_progress' || test.status === 'completed'
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : 'bg-purple-50 text-purple-700 border-purple-100'
+                              }`}>
                                 {test.catalog?.test_name || 'Lab Test'}
+                                {test.status === 'rejected' && test.cancellation_reason && (
+                                  <span className="ml-1 text-[9px] italic">(Rejected: {test.cancellation_reason})</span>
+                                )}
                               </span>
                             ))}
                             
-                            {/* Individual Radiology/X-Ray Tests */}
+                            {/* Radiology/X-Ray Tests - Display only */}
                             {(prescription.tests?.radiology || []).map((test: any, idx: number) => (
-                              <span key={`rad-${idx}`} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-tight">
+                              <span key={`rad-${idx}`} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tight ${
+                                test.status === 'rejected' 
+                                  ? 'bg-red-50 text-red-700 border-red-200 line-through' 
+                                  : test.status === 'scheduled' || test.status === 'in_progress' || test.status === 'completed' || test.status === 'scan_completed' || test.status === 'report_pending'
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-100'
+                              }`}>
                                 {test.catalog?.test_name || 'X-Ray'}
+                                {test.status === 'rejected' && test.cancellation_reason && (
+                                  <span className="ml-1 text-[9px] italic">(Rejected: {test.cancellation_reason})</span>
+                                )}
                               </span>
                             ))}
                             
-                            {/* Individual Scans */}
+                            {/* Scans - Display only */}
                             {(prescription.tests?.scan || []).map((test: any, idx: number) => (
-                              <span key={`scan-${idx}`} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-100 uppercase tracking-tight">
+                              <span key={`scan-${idx}`} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tight ${
+                                test.status === 'rejected' 
+                                  ? 'bg-red-50 text-red-700 border-red-200 line-through' 
+                                  : test.status === 'scheduled' || test.status === 'in_progress' || test.status === 'completed' || test.status === 'scan_completed' || test.status === 'report_pending'
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : 'bg-orange-50 text-orange-700 border-orange-100'
+                              }`}>
                                 {test.scan_name || 'Scan'}
+                                {test.status === 'rejected' && test.cancellation_reason && (
+                                  <span className="ml-1 text-[9px] italic">(Rejected: {test.cancellation_reason})</span>
+                                )}
                               </span>
                             ))}
 
@@ -3246,6 +3518,36 @@ function OutpatientPageContent() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center gap-2">
+                          {/* Single Accept All Button - only show if there are pending tests */}
+                          {(prescription.tests?.lab?.some((t: any) => !t.status || t.status === 'ordered') ||
+                            prescription.tests?.radiology?.some((t: any) => !t.status || t.status === 'ordered') ||
+                            prescription.tests?.scan?.some((t: any) => !t.status || t.status === 'ordered')) && (
+                            <button
+                              onClick={() => handleAcceptAllTests(prescription)}
+                              disabled={testActionLoading}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors text-xs font-medium"
+                              title="Accept All - Send to Lab"
+                            >
+                              <CheckCircle size={14} />
+                              Accept
+                            </button>
+                          )}
+
+                          {/* Single Reject All Button - only show if there are pending tests */}
+                          {(prescription.tests?.lab?.some((t: any) => !t.status || t.status === 'ordered') ||
+                            prescription.tests?.radiology?.some((t: any) => !t.status || t.status === 'ordered') ||
+                            prescription.tests?.scan?.some((t: any) => !t.status || t.status === 'ordered')) && (
+                            <button
+                              onClick={() => handleRejectAllClick(prescription)}
+                              disabled={testActionLoading}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors text-xs font-medium"
+                              title="Reject All"
+                            >
+                              <XCircle size={14} />
+                              Reject
+                            </button>
+                          )}
+
                           <button
                             onClick={() => {
                               setSelectedPrescriptionForTests(prescription);
@@ -3257,7 +3559,6 @@ function OutpatientPageContent() {
                           >
                             <Eye size={18} />
                           </button>
-
                         </td>
                       </tr>
                     ))}
@@ -4141,6 +4442,94 @@ function OutpatientPageContent() {
         />
       )}
 
+      {/* Rejection Reason Modal */}
+      {showRejectModal && selectedTestForAction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-red-50">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-red-600" />
+                <h3 className="text-lg font-bold text-gray-900">Reject All Tests</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setSelectedTestForAction(null);
+                  setRejectionReason('');
+                }}
+                className="p-2 hover:bg-red-100 rounded-full transition-colors"
+              >
+                <CloseIcon size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Patient: <span className="font-semibold text-gray-900">
+                    {selectedTestForAction.prescription?.patient?.name}
+                  </span>
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  Prescription ID: <span className="font-semibold text-gray-900">
+                    {selectedTestForAction.prescription?.prescription_id}
+                  </span>
+                </p>
+                <p className="text-sm text-red-600 font-medium">
+                  {selectedTestForAction.totalPending} test(s) will be rejected
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rejection Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter reason for rejecting these tests..."
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                  rows={4}
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This reason will be applied to all rejected tests and displayed in the test list.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setSelectedTestForAction(null);
+                    setRejectionReason('');
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitRejectionAll}
+                  disabled={testActionLoading || !rejectionReason.trim()}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {testActionLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4" />
+                      Reject All
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
