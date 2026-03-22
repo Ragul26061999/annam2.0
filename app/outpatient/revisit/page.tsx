@@ -21,6 +21,7 @@ import { supabase } from '../../../src/lib/supabase';
 import { createAppointment, type AppointmentData } from '../../../src/lib/appointmentService';
 import { createOPConsultationBill, type PaymentRecord } from '../../../src/lib/universalPaymentService';
 import { addToQueue } from '../../../src/lib/outpatientQueueService';
+import { createRevisit } from '../../../src/lib/revisitService';
 import StaffSelect from '../../../src/components/StaffSelect';
 import UniversalPaymentModal from '../../../src/components/UniversalPaymentModal';
 
@@ -614,6 +615,28 @@ export default function OutpatientRevisitPage() {
 
       const appointment = await createAppointment(appointmentData, form.staffId || undefined, true);
       setCreatedAppointmentId(appointment.id);
+
+      // Create revisit record in patient_revisits table
+      try {
+        await createRevisit({
+          patient_id: selectedPatient.id,
+          uhid: selectedPatient.patient_id,
+          visit_date: appointmentDate,
+          visit_time: appointmentTime,
+          doctor_id: form.consultingDoctorId || undefined,
+          consulting_doctor_name: form.consultingDoctorName || undefined,
+          reason_for_visit: form.complaints || 'Revisit consultation',
+          symptoms: form.notes || undefined,
+          consultation_fee: parseFloat(form.consultationFee || '0'),
+          payment_mode: 'Cash', // Default payment mode
+          payment_status: 'pending',
+          visit_type: 'follow-up',
+          staff_id: form.staffId || undefined
+        });
+      } catch (revisitError) {
+        console.error('Error creating revisit record:', revisitError);
+        // Don't fail the entire process if revisit creation fails
+      }
 
       // Add patient to outpatient queue for vitals
       try {

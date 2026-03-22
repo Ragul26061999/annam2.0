@@ -13,6 +13,7 @@ export interface BillingRecord {
   discount_amount: number;
   payment_status: string;
   payment_method: string;
+  consulting_doctor_name?: string;
   payment_date?: string;
   created_at: string;
   updated_at: string;

@@ -732,6 +732,7 @@ function OutpatientPageContent() {
     const patientUhid = bill.patient?.patient_id || 'WALK-IN';
     const patientName = bill.patient?.name || 'Unknown Patient';
     const billNumber = bill.bill_id || 'N/A';
+    const consultingDoctorName = bill.consulting_doctor_name || 'N/A';
     
     // Get sales type
     let salesType = bill.payment_method?.toUpperCase() || 'CASH';
@@ -844,6 +845,9 @@ function OutpatientPageContent() {
               </tr>
               <tr>
                 <td class="label">Sales Type</td><td class="value">: ${salesType}</td>
+              </tr>
+              <tr>
+                <td class="label">Consulting Dr</td><td class="value">: Dr. ${consultingDoctorName}</td>
               </tr>
             </table>
             
@@ -1734,6 +1738,7 @@ function OutpatientPageContent() {
     const patientUhid = selectedBill.patient?.patient_id || 'WALK-IN';
     const patientName = selectedBill.patient?.name || 'Unknown Patient';
     const billNumber = selectedBill.bill_id || 'N/A';
+    const consultingDoctorName = selectedBill.consulting_doctor_name || 'N/A';
     
     // Get sales type
     let salesType = selectedBill.payment_method?.toUpperCase() || 'CASH';
@@ -1845,6 +1850,9 @@ function OutpatientPageContent() {
               </tr>
               <tr>
                 <td class="label">Sales Type</td><td class="value">: ${salesType}</td>
+              </tr>
+              <tr>
+                <td class="label">Consulting Dr</td><td class="value">: Dr. ${consultingDoctorName}</td>
               </tr>
             </table>
             
@@ -2046,6 +2054,10 @@ function OutpatientPageContent() {
                 <tr>
                   <td class="header-10cm">Payment Mode&nbsp;:&nbsp;&nbsp;</td>
                   <td class="header-10cm bill-info-bold">${(patient.payment_mode || 'CASH').toUpperCase()}</td>
+                </tr>
+                <tr>
+                  <td class="header-10cm">Consulting Dr&nbsp;:&nbsp;&nbsp;</td>
+                  <td class="header-10cm bill-info-bold">Dr. ${patient.consulting_doctor_name || 'N/A'}</td>
                 </tr>
               </tbody>
             </table>

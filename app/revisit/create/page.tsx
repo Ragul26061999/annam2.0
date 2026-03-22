@@ -43,6 +43,7 @@ export default function CreateRevisitPage() {
         visitTime: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
         department: '',
         doctorId: '',
+        consultingDoctorName: '',
         reasonForVisit: '',
         symptoms: '',
         previousDiagnosis: '',
@@ -111,6 +112,15 @@ export default function CreateRevisitPage() {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleDoctorSelect = (doctorId: string) => {
+        const doctor = doctors.find(d => d.id === doctorId);
+        setFormData(prev => ({
+            ...prev,
+            doctorId: doctorId,
+            consultingDoctorName: doctor?.user?.name || ''
+        }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -140,6 +150,7 @@ export default function CreateRevisitPage() {
                 visit_time: formData.visitTime,
                 department: formData.department || undefined,
                 doctor_id: formData.doctorId || undefined,
+                consulting_doctor_name: formData.consultingDoctorName || undefined,
                 reason_for_visit: formData.reasonForVisit,
                 symptoms: formData.symptoms || undefined,
                 previous_diagnosis: formData.previousDiagnosis || undefined,
@@ -346,7 +357,7 @@ export default function CreateRevisitPage() {
                                 </label>
                                 <select
                                     value={formData.doctorId}
-                                    onChange={(e) => handleInputChange('doctorId', e.target.value)}
+                                    onChange={(e) => handleDoctorSelect(e.target.value)}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none"
                                 >
                                     <option value="">Select Doctor</option>

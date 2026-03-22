@@ -80,6 +80,7 @@ export default function RevisitDashboard() {
         const patientName = revisit.patient?.name || 'Unknown Patient';
         const billNumber = (revisit.id || '').toUpperCase().substring(0, 8);
         const paymentType = (revisit.payment_mode || 'CASH').toUpperCase();
+        const consultingDoctorName = revisit.consulting_doctor_name || 'N/A';
 
         const bDate = new Date(revisit.visit_date);
         const billDateStr = bDate.toLocaleDateString('en-IN') + ' ' + (revisit.visit_time || '');
@@ -96,136 +97,137 @@ export default function RevisitDashboard() {
           <tr><td style="height: 10mm;"></td><td></td><td></td><td></td></tr>
         `;
 
-        const thermalContent = `
-          <html>
-            <head>
-              <title>Thermal Receipt - ${billNumber}</title>
-              <style>
-                @page { margin: 0; size: 72mm auto; }
-                body { 
-                  margin: 0; padding: 2mm; 
-                  font-family: 'Verdana', sans-serif; 
-                  width: 72mm; 
-                  color: #000;
-                  background: #fff;
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-                .container { border: 1px solid #000; padding: 1mm; }
-                .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
-                .logo { width: 50mm; height: auto; margin-bottom: 1mm; }
-                .hospital-name { font-size: 15px; font-weight: bold; display: block; }
-                .hospital-addr { font-size: 10px; display: block; }
-                .hospital-contact { font-size: 10px; display: block; }
-                .gst-no { font-size: 10px; font-weight: bold; margin-top: 1mm; display: block; }
-                
-                .invoice-title { 
-                    text-align: center; 
-                    font-size: 12px; 
-                    font-weight: bold; 
-                    border-top: 1px solid #000;
-                    border-bottom: 1px solid #000;
-                    padding: 1mm 0;
-                    margin-bottom: 1mm;
-                    letter-spacing: 2px;
-                }
-                
-                .info-table { width: 100%; font-size: 8px; border-collapse: collapse; margin-bottom: 2mm; }
-                .info-table td { padding: 0.5mm 0; vertical-align: top; }
-                .label { font-weight: bold; width: 25mm; }
-                .value { font-weight: normal; }
-                
-                .items-table { width: 100%; font-size: 9px; border-collapse: collapse; border: 1px solid #000; }
-                .items-table th { border: 1px solid #000; padding: 1mm 0.5mm; text-align: left; font-weight: bold; background: #eee; }
-                .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1mm 0.5mm; vertical-align: top; font-weight: bold; }
-                .text-center { text-align: center; }
-                .text-right { text-align: right; }
-                
-                .totals-section { border-top: 1px solid #000; margin-top: 0; padding-top: 1mm; }
-                .total-row { display: flex; justify-content: flex-end; font-size: 10px; margin-bottom: 0.5mm; }
-                .total-label { width: 40mm; text-align: right; padding-right: 2mm; font-weight: bold; }
-                .total-value { width: 20mm; text-align: right; font-weight: bold; }
-                .grand-total { font-size: 13px; font-weight: bold; margin-top: 1mm; border-top: 1px solid #000; padding-top: 1mm; }
-                
-                .footer { margin-top: 5mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; font-weight: bold; }
-                .footer-left { text-align: left; }
-                .footer-right { text-align: right; }
-                .sig-space { margin-top: 8mm; border-top: 1px solid #000; width: 35mm; display: inline-block; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <img src="/logo/annamHospital-bk.png" class="logo" />
-                  <span class="hospital-name">ANNAM HOSPITAL</span>
-                  <span class="hospital-addr">2/301, Raj Kanna Nagar, Veerapandian Patanam</span>
-                  <span class="hospital-addr">Tiruchendur – 628216</span>
-                  <span class="hospital-contact">Phone: 04639 252592, 94420 25259</span>
-                  <span class="gst-no">GST No: 33AAFCA5252P1Z5</span>
-                </div>
-                
-                <div class="invoice-title">REVISIT BILL</div>
-                
-                <table class="info-table">
-                  <tr>
-                    <td class="label">UHID</td><td class="value">: ${patientUhid}</td>
-                  </tr>
-                  <tr>
-                    <td class="label">Patient Name</td><td class="value">: ${patientName}</td>
-                  </tr>
-                  <tr>
-                    <td class="label">Bill No</td><td class="value">: ${billNumber}</td>
-                  </tr>
-                  <tr>
-                    <td class="label">Date</td><td class="value">: ${billDateStr}</td>
-                  </tr>
-                  <tr>
-                    <td class="label">Sales Type</td><td class="value">: ${paymentType}</td>
-                  </tr>
-                </table>
-                
-                <table class="items-table">
-                  <thead>
-                    <tr>
-                      <th width="10%" class="text-center">.No</th>
-                      <th width="50%">CHARGE NAME</th>
-                      <th width="15%" class="text-center">Qty</th>
-                      <th width="25%" class="text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${itemsHtml}
-                  </tbody>
-                </table>
-                
-                <div class="totals-section">
-                  <div class="total-row grand-total">
-                    <span class="total-label">Tot.Net.Amt :</span>
-                    <span class="total-value">₹${fee.toFixed(2)}</span>
-                  </div>
-                </div>
-                
-                <div class="footer">
-                  <div class="footer-left">
-                    PRINTED ON: ${printedDate}<br/>
-                    TIME: ${printedTime}
-                  </div>
-                  <div class="footer-right">
-                    <div class="sig-space"></div><br/>
-                    BILLING SIGNATURE
-                  </div>
-                </div>
-              </div>
+        const thermalContent = '<html>' +
+          '<head>' +
+            '<title>Thermal Receipt - ' + billNumber + '</title>' +
+            '<style>' +
+                '@page { margin: 3mm 8mm 3mm 3mm; size: 85mm 297mm; }' +
+                'body {' +
+                  'font-family: \'Verdana\', sans-serif;' +
+                  'font-weight: bold;' +
+                  'margin: 0;' +
+                  'padding: 2px;' +
+                  'font-size: 14px;' +
+                  'line-height: 1.2;' +
+                  'width: 85mm;' +
+                  'color: #000;' +
+                  '-webkit-print-color-adjust: exact;' +
+                  'print-color-adjust: exact;' +
+                '}' +
+                'html, body { background: #fff; }' +
+                '.header-14cm { font-size: 16pt; font-weight: bold; font-family: \'Verdana\', sans-serif; }' +
+                '.header-9cm { font-size: 11pt; font-weight: bold; font-family: \'Verdana\', sans-serif; }' +
+                '.header-10cm { font-size: 12pt; font-weight: bold; font-family: \'Verdana\', sans-serif; }' +
+                '.header-8cm { font-size: 10pt; font-weight: bold; font-family: \'Verdana\', sans-serif; }' +
+                '.items-8cm { font-size: 10pt; font-weight: bold; font-family: \'Verdana\', sans-serif; }' +
+                '.bill-info-10cm { font-size: 12pt; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.bill-info-bold { font-weight: bold; font-family: \'Verdana\', sans-serif; }' +
+                '.footer-7cm { font-size: 9pt; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.center { text-align: center; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.right { text-align: right; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.table { width: 100%; border-collapse: collapse; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.table td { padding: 1px; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.totals-line { display: flex; justify-content: space-between; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.footer { margin-top: 15px; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.signature-area { margin-top: 25px; font-family: \'Verdana\', sans-serif; font-weight: bold; }' +
+                '.logo { width: 300px; height: auto; margin-bottom: 5px; }' +
+                '.text-center { text-align: center; }' +
+                '.text-right { text-align: right; }' +
+              '</style>' +
+            '</head>' +
+            '<body>' +
+              '<div class="center">' +
+                '<img src="/logo/annamHospital-bk.png" alt="ANNAM LOGO" class="logo" />' +
+                '<div>2/301, Raj Kanna Nagar, Veerapandian Patanam, Tiruchendur – 628216</div>' +
+                '<div class="header-9cm">Phone- 04639 252592</div>' +
+                '<div class="footer-7cm">Gst No: 33AJWPR2713G2ZZ</div>' +
+                '<div style="margin-top: 5px; font-weight: bold;">REVISIT BILL</div>' +
+              '</div>' +
               
-              <script>
-                window.onload = function() {
-                  window.print();
-                  setTimeout(function() { window.close(); }, 500);
-                };
-              </script>
-            </body>
-          </html>
-        `;
+              '<div style="margin-top: 10px;">' +
+                '<table class="table">' +
+                  '<tr>' +
+                    '<td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>' +
+                    '<td class="bill-info-10cm bill-info-bold">' + billNumber + '</td>' +
+                  '</tr>' +
+                  '<tr>' +
+                    '<td class="bill-info-10cm">UHID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>' +
+                    '<td class="bill-info-10cm bill-info-bold">' + patientUhid + '</td>' +
+                  '</tr>' +
+                  '<tr>' +
+                    '<td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>' +
+                    '<td class="bill-info-10cm bill-info-bold">' + patientName + '</td>' +
+                  '</tr>' +
+                  '<tr>' +
+                    '<td class="bill-info-10cm">Bill No&nbsp;&nbsp;:&nbsp;&nbsp;</td>' +
+                    '<td class="bill-info-10cm bill-info-bold">' + billNumber + '</td>' +
+                  '</tr>' +
+                  '<tr>' +
+                    '<td class="header-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>' +
+                    '<td class="header-10cm bill-info-bold">' + new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + '</td>' +
+                  '</tr>' +
+                  '<tr>' +
+                    '<td class="header-10cm">Sales Type&nbsp;:&nbsp;&nbsp;</td>' +
+                    '<td class="header-10cm bill-info-bold">' + paymentType + '</td>' +
+                  '</tr>' +
+                  '<tr>' +
+                    '<td class="header-10cm">Consulting Dr&nbsp;:&nbsp;&nbsp;</td>' +
+                    '<td class="header-10cm bill-info-bold">Dr. ' + consultingDoctorName + '</td>' +
+                  '</tr>' +
+                '</table>' +
+              '</div>' +
+              
+              '<div style="margin-top: 10px;">' +
+                '<table class="table">' +
+                  '<tr style="border-bottom: 1px dashed #000;">' +
+                    '<td width="30%" class="items-8cm">S.No</td>' +
+                    '<td width="40%" class="items-8cm">CHARGE NAME</td>' +
+                    '<td width="15%" class="items-8cm text-center">Qty</td>' +
+                    '<td width="15%" class="items-8cm text-right">Amt</td>' +
+                  '</tr>' +
+                  itemsHtml +
+                '</table>' +
+              '</div>' +
+              
+              '<div style="margin-top: 10px;">' +
+                '<div class="totals-line items-8cm">' +
+                  '<span>Taxable Amount</span>' +
+                  '<span>' + fee.toFixed(2) + '</span>' +
+                '</div>' +
+                '<div class="totals-line items-8cm">' +
+                  '<span>&nbsp;&nbsp;&nbsp;&nbsp;Dist Amt</span>' +
+                  '<span>0.00</span>' +
+                '</div>' +
+                '<div class="totals-line items-8cm">' +
+                  '<span>&nbsp;&nbsp;&nbsp;&nbsp;CGST Amt</span>' +
+                  '<span>0.00</span>' +
+                '</div>' +
+                '<div class="totals-line items-8cm">' +
+                  '<span>&nbsp;&nbsp;&nbsp;&nbsp;SGST Amt</span>' +
+                  '<span>0.00</span>' +
+                '</div>' +
+                '<div class="totals-line items-8cm">' +
+                  '<span>&nbsp;&nbsp;&nbsp;&nbsp;Tax Amt</span>' +
+                  '<span>0.00</span>' +
+                '</div>' +
+                '<div class="totals-line items-8cm">' +
+                  '<span>&nbsp;&nbsp;&nbsp;&nbsp;Tot.Net.Amt</span>' +
+                  '<span>' + fee.toFixed(2) + '</span>' +
+                '</div>' +
+              
+              '<div class="footer">' +
+                '<div class="footer-left">' +
+                  'PRINTED ON: ' + printedDate + '<br/>' +
+                  'TIME: ' + printedTime +
+                '</div>' +
+                '<div class="footer-right">' +
+                  '<div class="signature-area"></div><br/>' +
+                  'BILLING SIGNATURE' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</body>' +
+        '</html>';
 
         const printWindow = window.open('', '_blank', 'width=450,height=650');
         if (printWindow) {

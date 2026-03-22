@@ -8,6 +8,7 @@ export interface PatientRevisit {
   visit_time: string;
   department?: string;
   doctor_id?: string;
+  consulting_doctor_name?: string;
   reason_for_visit: string;
   symptoms?: string;
   previous_diagnosis?: string;
@@ -30,6 +31,7 @@ export interface PatientRevisitData {
   visit_time: string;
   department?: string;
   doctor_id?: string;
+  consulting_doctor_name?: string;
   reason_for_visit: string;
   symptoms?: string;
   previous_diagnosis?: string;
@@ -235,6 +237,9 @@ export async function getRecentRevisits(limit: number = 20) {
       .select(`
         *,
         patient:patient_id(name, patient_id, phone),
+        doctor:doctor_id(
+          users!doctors_user_id_fkey(name)
+        ),
         staff:staff_id(first_name, last_name)
       `)
       .order('visit_date', { ascending: false })
@@ -244,15 +249,20 @@ export async function getRecentRevisits(limit: number = 20) {
     if (error) {
       // If table doesn't exist, return empty array
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        console.warn('patient_revisits table does not exist yet. Please run the SQL migration script.');
+        console.warn('patient_revisits table does not exist yet. Please run SQL migration script.');
         return [];
       }
       throw error;
     }
-    return data || [];
+
+    // Transform data to include consulting doctor name
+    return (data || []).map((revisit: any) => ({
+      ...revisit,
+      consulting_doctor_name: revisit.consulting_doctor_name || revisit.doctor?.users?.name || null
+    }));
   } catch (error: any) {
     if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
-      console.warn('patient_revisits table does not exist yet. Please run the SQL migration script.');
+      console.warn('patient_revisits table does not exist yet. Please run SQL migration script.');
       return [];
     }
     console.error('Error fetching recent revisits:', JSON.stringify(error, null, 2));
