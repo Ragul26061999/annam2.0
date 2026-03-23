@@ -178,6 +178,14 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
                 <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{summary.surgery_date ? formatDate(summary.surgery_date) : '-'}</span>
               </div>
               <div className="flex items-baseline">
+                <span className="font-bold w-36 shrink-0">Surgeon :</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.surgeon_doctor_name || '-'}</span>
+              </div>
+              <div className="flex items-baseline">
+                <span className="font-bold w-36 shrink-0">Anesthesiologist :</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.anesthesiologist_doctor || '-'}</span>
+              </div>
+              <div className="flex items-baseline">
                 <span className="font-bold w-36 shrink-0">Date of Discharge :</span>
                 <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{formatDate(summary.discharge_date)}</span>
               </div>
@@ -309,24 +317,10 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
             <div className="section-break">
               <div className="flex items-start gap-4">
                 <h3 className="font-bold uppercase text-sm text-blue-900 w-48 shrink-0 mt-1">Condition at Discharge :</h3>
-                <div className="flex-1 flex flex-wrap gap-6 py-2">
-                  {['Cured', 'Improved', 'Referred', 'Dis. at Request', 'Lama', 'Absconded'].map((cond) => (
-                    <div key={cond} className="flex items-center gap-2">
-                      <div className="w-5 h-5 border-2 border-black flex items-center justify-center relative">
-                        {summary.condition_at_discharge?.toLowerCase() === cond.toLowerCase() && (
-                          <Check className="w-6 h-6 text-black absolute -top-1 -left-0.5" strokeWidth={4} />
-                        )}
-                      </div>
-                      <span className="font-medium">{cond}</span>
-                    </div>
-                  ))}
-                  {/* Fallback for custom condition if it doesn't match standard ones */}
-                  {summary.condition_at_discharge && 
-                   !['Cured', 'Improved', 'Referred', 'Dis. at Request', 'Lama', 'Absconded'].some(c => c.toLowerCase() === summary.condition_at_discharge?.toLowerCase()) && (
-                    <div className="flex items-center gap-2 min-w-[100px] border-b-2 border-blue-900 border-dotted">
-                      <span className="font-bold text-blue-900 text-sm">{summary.condition_at_discharge}</span>
-                    </div>
-                  )}
+                <div className="flex-1 py-2">
+                  <p className="font-bold text-gray-900 border-b border-dotted border-gray-400 min-h-[1.5rem] pb-0.5">
+                    {summary.condition_at_discharge || '-'}
+                  </p>
                 </div>
               </div>
             </div>
