@@ -98,6 +98,8 @@ export default function DischargeSummary({ bedAllocationId, patient, bedAllocati
       text = caseSheetData?.present_complaints || '';
     } else if (field === 'physical_findings') {
       text = caseSheetData?.examination_notes || '';
+    } else if (field === 'past_history') {
+      text = caseSheetData?.past_history || '';
     }
 
     if (text) {
@@ -186,11 +188,13 @@ export default function DischargeSummary({ bedAllocationId, patient, bedAllocati
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
           {[
             { key: 'presenting_complaint', label: 'Presenting Complaint', rows: 3 },
+            { key: 'past_history', label: 'Past History', rows: 3 },
             { key: 'physical_findings', label: 'Physical Findings', rows: 4 },
             { key: 'investigations', label: 'Investigations', rows: 4 },
             { key: 'final_diagnosis', label: 'Final Diagnosis', rows: 2 },
             { key: 'treatment_given', label: 'Management / Procedure / Treatment', rows: 5 },
             { key: 'follow_up_advice', label: 'Follow-up Advice', rows: 3 },
+            { key: 'prescription', label: 'Prescription', rows: 4 },
           ].map((section) => (
             <div key={section.key} className="relative group">
               <div className="flex justify-between items-center mb-2">
@@ -214,6 +218,40 @@ export default function DischargeSummary({ bedAllocationId, patient, bedAllocati
               />
             </div>
           ))}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Anesthesiologist</label>
+              <input
+                type="text"
+                disabled={isFinal}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm disabled:bg-gray-50 disabled:text-gray-500"
+                value={summary.anesthesiologist || ''}
+                onChange={(e) => setSummary({...summary, anesthesiologist: e.target.value})}
+                placeholder="Enter anesthesiologist name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis Category</label>
+              <select
+                disabled={isFinal}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm disabled:bg-gray-50 disabled:text-gray-500"
+                value={summary.diagnosis_category || ''}
+                onChange={(e) => setSummary({...summary, diagnosis_category: e.target.value})}
+              >
+                <option value="">Select Category</option>
+                <option value="Infectious">Infectious</option>
+                <option value="Neoplastic">Neoplastic</option>
+                <option value="Immune">Immune</option>
+                <option value="Traumatic">Traumatic</option>
+                <option value="Metabolic">Metabolic</option>
+                <option value="Genetic">Genetic</option>
+                <option value="Degenerative">Degenerative</option>
+                <option value="Congenital">Congenital</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>

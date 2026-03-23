@@ -3,7 +3,7 @@ import { FileText, Stethoscope, User, FileOutput, History } from 'lucide-react';
 import CaseSheet from './CaseSheet';
 import DoctorOrders from './DoctorOrders';
 import NurseRecords from './NurseRecords';
-import DischargeSummary from './DischargeSummary';
+import ComprehensiveDischargeSummary from './ComprehensiveDischargeSummary';
 
 interface IPClinicalRecordsProps {
   allocations: any[];
@@ -113,7 +113,7 @@ export default function IPClinicalRecords({ allocations, patient, defaultTab = '
           />
         )}
         {activeTab === 'discharge_summary' && (
-          <DischargeSummary 
+          <ComprehensiveDischargeSummary 
             bedAllocationId={selectedAllocationId}
             patient={patient}
             bedAllocation={selectedAllocation}

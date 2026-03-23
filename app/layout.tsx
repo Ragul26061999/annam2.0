@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import ConditionalLayout from "@/src/components/ConditionalLayout";
-import EnterKeyHandler from "@/src/components/EnterKeyHandler";
-import ScrollButtons from "@/src/components/ScrollButtons";
+import ConditionalLayout from "../src/components/ConditionalLayout";
+import EnterKeyHandler from "../src/components/EnterKeyHandler";
+import ConditionalScrollButtons from "../src/components/ConditionalScrollButtons";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +32,7 @@ export default function RootLayout({
         <ConditionalLayout>
           {children}
         </ConditionalLayout>
-        <ScrollButtons />
+        <ConditionalScrollButtons />
       </body>
     </html>
   );

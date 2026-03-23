@@ -79,20 +79,68 @@ export interface IPDischargeSummary {
   admission_date?: string;
   discharge_date?: string;
   surgery_date?: string;
+  
+  // Patient & Administrative Info
+  uhid?: string;
+  patient_name?: string;
+  address?: string;
+  gender?: string;
+  age?: number;
+  ip_number?: string;
+  room_no?: string;
+  
+  // Clinical Vitals
+  bp?: string; // Blood pressure format "120/80"
+  pulse?: number;
+  bs?: number; // Blood Sugar
+  rr?: number; // Respiratory Rate
+  spo2?: number; // Oxygen Saturation
+  temp?: number; // Temperature
+  
+  // Clinical Narratives
   presenting_complaint?: string;
+  complaints?: string; // Main complaints/H/O
+  past_history?: string;
   physical_findings?: string;
+  on_examination?: string; // O/E findings
+  systemic_examination?: string; // S/E findings
   investigations?: string;
   final_diagnosis?: string;
-  treatment_given?: string;
+  diagnosis?: string; // Alternative diagnosis field
+  diagnosis_category?: string;
+  procedure_details?: string;
+  treatment_given?: string; // Treatment given
+  course_in_hospital?: string; // Course in Hospital
   condition_at_discharge?: string;
   follow_up_advice?: string;
+  prescription?: string;
+  prescription_table?: PrescriptionItem[] | null; // Structured prescription data
   review_date?: string;
+  
+  // Additional requested fields
+  surgery_notes?: string;
+  discharge_advice?: string;
+  consult_doctor_name?: string;
+  anesthesiologist_doctor?: string;
+  surgeon_doctor_name?: string;
+  
+  // Status fields
+  discharge_status?: string; // Discharged/Death
+  reconnect_status?: boolean; // Connection status
   status: 'draft' | 'final';
   finalized_at?: string;
   created_at: string;
   updated_at: string;
   created_by?: string;
   updated_by?: string;
+  anesthesiologist?: string;
+}
+
+export interface PrescriptionItem {
+  id: string;
+  drug_details: string;
+  per_day_time: string; // Format: "1-0-1"
+  nos: string; // Duration like "10 DAYS"
 }
 
 // --- Services ---
@@ -349,16 +397,77 @@ export async function createIPVital(
 // 5. IP Discharge Summary
 export async function getIPDischargeSummary(bedAllocationId: string) {
   const { data, error } = await supabase
-    .from('ip_discharge_summaries')
+    .from('discharge_summaries')
     .select('*')
-    .eq('bed_allocation_id', bedAllocationId)
+    .eq('allocation_id', bedAllocationId)
     .maybeSingle();
 
   if (error) {
     console.error('Error fetching discharge summary:', error);
     return null;
   }
-  return data as IPDischargeSummary | null;
+
+  if (!data) return null;
+
+  // Map database columns back to TypeScript interface
+  const mappedData: IPDischargeSummary = {
+    id: data.id,
+    bed_allocation_id: data.allocation_id,
+    consultant_name: data.consultant_name,
+    admission_date: data.admission_date,
+    discharge_date: data.discharge_date,
+    surgery_date: data.surgery_date,
+    uhid: data.uhid,
+    patient_name: data.patient_name,
+    address: data.address,
+    gender: data.gender,
+    age: data.age,
+    ip_number: data.ip_number,
+    room_no: data.room_no,
+    // Clinical Vitals
+    bp: data.bp,
+    pulse: data.pulse,
+    bs: data.bs,
+    rr: data.rr,
+    spo2: data.spo2,
+    temp: data.temp,
+    // Clinical Narratives
+    presenting_complaint: data.presenting_complaint,
+    complaints: data.complaints,
+    past_history: data.past_history,
+    physical_findings: data.physical_findings,
+    on_examination: data.on_examination,
+    systemic_examination: data.systemic_examination,
+    investigations: data.investigations,
+    final_diagnosis: data.final_diagnosis,
+    diagnosis: data.diagnosis,
+    diagnosis_category: data.diagnosis_category,
+    procedure_details: data.procedure_details,
+    treatment_given: data.treatment_given,
+    course_in_hospital: data.course_in_hospital,
+    condition_at_discharge: data.condition_at_discharge,
+    follow_up_advice: data.follow_up_advice,
+    prescription: data.prescription,
+    prescription_table: data.prescription_table,
+    review_date: data.review_on, // Map review_on to review_date
+    // Additional requested fields
+    surgery_notes: data.surgery_notes,
+    discharge_advice: data.discharge_advice,
+    consult_doctor_name: data.consult_doctor_name,
+    anesthesiologist_doctor: data.anesthesiologist_doctor,
+    surgeon_doctor_name: data.surgeon_doctor_name,
+    anesthesiologist: data.anesthesiologist,
+    // Status fields
+    discharge_status: data.discharge_status,
+    reconnect_status: data.reconnect_status,
+    status: 'draft', // Default to draft since status column doesn't exist in DB
+    finalized_at: data.finalized_at,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    created_by: data.created_by
+  };
+
+  return mappedData;
 }
 
 export async function createOrUpdateIPDischargeSummary(
@@ -367,30 +476,106 @@ export async function createOrUpdateIPDischargeSummary(
 ) {
   const existing = await getIPDischargeSummary(bedAllocationId);
 
+  // Map TypeScript interface fields to database column names
+  const dbUpdates: any = {
+    allocation_id: bedAllocationId,
+    uhid: updates.uhid,
+    patient_name: updates.patient_name,
+    address: updates.address,
+    gender: updates.gender,
+    age: updates.age,
+    ip_number: updates.ip_number,
+    room_no: updates.room_no,
+    admission_date: updates.admission_date,
+    surgery_date: updates.surgery_date,
+    discharge_date: updates.discharge_date,
+    presenting_complaint: updates.presenting_complaint,
+    complaints: updates.complaints,
+    physical_findings: updates.physical_findings,
+    on_examination: updates.on_examination,
+    systemic_examination: updates.systemic_examination,
+    investigations: updates.investigations,
+    past_history: updates.past_history,
+    final_diagnosis: updates.final_diagnosis,
+    diagnosis: updates.diagnosis,
+    diagnosis_category: updates.diagnosis_category,
+    procedure_details: updates.procedure_details,
+    treatment_given: updates.treatment_given,
+    course_in_hospital: updates.course_in_hospital,
+    surgery_notes: updates.surgery_notes,
+    discharge_advice: updates.discharge_advice,
+    condition_at_discharge: updates.condition_at_discharge,
+    follow_up_advice: updates.follow_up_advice,
+    review_on: updates.review_date,
+    prescription: updates.prescription,
+    prescription_table: updates.prescription_table,
+    // Clinical vitals
+    bp: updates.bp,
+    pulse: updates.pulse,
+    bs: updates.bs,
+    rr: updates.rr,
+    spo2: updates.spo2,
+    temp: updates.temp,
+    // Doctor information
+    consultant_name: updates.consultant_name || updates.consult_doctor_name,
+    consult_doctor_name: updates.consult_doctor_name,
+    surgeon_doctor_name: updates.surgeon_doctor_name,
+    anesthesiologist: updates.anesthesiologist,
+    anesthesiologist_doctor: updates.anesthesiologist_doctor,
+    // Status fields
+    discharge_status: updates.discharge_status,
+    reconnect_status: updates.reconnect_status,
+    finalized_at: updates.finalized_at,
+    // Only include fields that exist in the database
+    created_by: updates.created_by,
+    updated_at: new Date().toISOString()
+  };
+
+  // Remove undefined values to avoid database errors
+  Object.keys(dbUpdates).forEach(key => {
+    if (dbUpdates[key] === undefined) {
+      delete dbUpdates[key];
+    }
+  });
+
   if (existing) {
     const { data, error } = await supabase
-      .from('ip_discharge_summaries')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+      .from('discharge_summaries')
+      .update(dbUpdates)
       .eq('id', existing.id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error updating discharge summary:', error);
+      throw error;
+    }
     return data;
   } else {
+    // For new records, we need to ensure patient_id is provided
+    // This should come from the bed allocation
+    const { data: bedData, error: bedError } = await supabase
+      .from('bed_allocations')
+      .select('patient_id')
+      .eq('id', bedAllocationId)
+      .single();
+
+    if (bedError || !bedData?.patient_id) {
+      throw new Error('Patient ID not found for bed allocation');
+    }
+
+    dbUpdates.patient_id = bedData.patient_id;
+
     const { data, error } = await supabase
-      .from('ip_discharge_summaries')
-      .insert({
-        bed_allocation_id: bedAllocationId,
-        ...updates
-      })
+      .from('discharge_summaries')
+      .insert(dbUpdates)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error inserting discharge summary:', error);
+      throw error;
+    }
     return data;
   }
 }

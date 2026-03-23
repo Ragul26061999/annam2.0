@@ -7,11 +7,12 @@ import {
     ArrowLeft, Save, Printer, Loader2, AlertCircle,
     CheckCircle, User, Calendar, FileText, Stethoscope,
     Hash, MapPin, Heart, CalendarCheck, Building,
-    Pencil, CreditCard, Plus, X
+    Pencil, CreditCard, Plus, X, Activity
 } from 'lucide-react';
 import { supabase } from '../../../../src/lib/supabase';
 import { getBedAllocationById } from '../../../../src/lib/bedAllocationService';
 import { createDischargeSummary, getDischargeSummaryByAllocation, type DischargeSummaryData } from '../../../../src/lib/dischargeService';
+import { getIPDischargeSummary, type IPDischargeSummary } from '../../../../src/lib/ipClinicalService';
 import DischargeAttachments from '../../../../src/components/DischargeAttachments';
 
 type StaffOption = {
@@ -68,6 +69,7 @@ export default function DischargeSummaryPage() {
     const [dischargeError, setDischargeError] = useState<string | null>(null);
     const [dischargeSuccess, setDischargeSuccess] = useState(false);
     const [dischargeHistory, setDischargeHistory] = useState<any[]>([]);
+    const [comprehensiveSummary, setComprehensiveSummary] = useState<any>(null);
 
     const mapToLedgerMethod = (method: string) => {
         const m = String(method || '').toLowerCase();
@@ -157,23 +159,58 @@ export default function DischargeSummaryPage() {
                 prescription: '',
             }));
 
-            const existing = await getDischargeSummaryByAllocation(allocation.id);
+            // Load comprehensive discharge summary data first
+            const comprehensiveSummary = await getIPDischargeSummary(allocation.id);
+            setComprehensiveSummary(comprehensiveSummary);
+            
+            // Fall back to basic discharge summary if comprehensive doesn't exist
+            const existing = comprehensiveSummary || await getDischargeSummaryByAllocation(allocation.id);
+            
             if (existing) {
                 setCreatedSummaryId(existing.id);
+                
+                // Map comprehensive summary fields to form data
+                const mappedData = {
+                    allocation_id: allocation.id,
+                    patient_id: allocation.patient_id,
+                    uhid: existing.uhid || allocation.patient?.uhid || '',
+                    patient_name: existing.patient_name || allocation.patient?.name || '',
+                    address: existing.address || (allocation.patient as any)?.address || '',
+                    gender: existing.gender || allocation.patient?.gender || '',
+                    age: existing.age || allocation.patient?.age || 0,
+                    ip_number: existing.ip_number || allocation.ip_number || '',
+                    admission_date: existing.admission_date || allocation.admission_date || '',
+                    surgery_date: existing.surgery_date || '',
+                    discharge_date: existing.discharge_date || new Date().toISOString().split('T')[0],
+                    consultant_id: existing.consultant_name || '', // Map consultant_name to consultant_id
+                    presenting_complaint: existing.presenting_complaint || allocation.reason || '',
+                    physical_findings: existing.physical_findings || '',
+                    investigations: existing.investigations || '',
+                    anesthesiologist: existing.anesthesiologist_doctor || '',
+                    past_history: existing.past_history || (allocation.patient as any)?.medical_history || '',
+                    final_diagnosis: existing.final_diagnosis || allocation.patient?.diagnosis || '',
+                    diagnosis_category: existing.diagnosis_category || 'Treatment',
+                    condition_at_discharge: existing.condition_at_discharge || 'Improved',
+                    follow_up_advice: existing.follow_up_advice || '',
+                    review_on: existing.review_date || '',
+                    prescription: existing.prescription || '',
+                    created_by: existing.created_by
+                };
+                
                 setFormData(prev => ({
                     ...prev,
-                    ...existing,
-                    admission_date: existing.admission_date
-                        ? new Date(existing.admission_date).toISOString().split('T')[0]
+                    ...mappedData,
+                    admission_date: mappedData.admission_date
+                        ? new Date(mappedData.admission_date).toISOString().split('T')[0]
                         : prev.admission_date,
-                    surgery_date: existing.surgery_date
-                        ? new Date(existing.surgery_date).toISOString().split('T')[0]
+                    surgery_date: mappedData.surgery_date
+                        ? new Date(mappedData.surgery_date).toISOString().split('T')[0]
                         : prev.surgery_date,
-                    discharge_date: existing.discharge_date
-                        ? new Date(existing.discharge_date).toISOString().split('T')[0]
+                    discharge_date: mappedData.discharge_date
+                        ? new Date(mappedData.discharge_date).toISOString().split('T')[0]
                         : prev.discharge_date,
-                    review_on: existing.review_on
-                        ? new Date(existing.review_on).toISOString().split('T')[0]
+                    review_on: mappedData.review_on
+                        ? new Date(mappedData.review_on).toISOString().split('T')[0]
                         : prev.review_on,
                 }));
 
@@ -1004,6 +1041,150 @@ export default function DischargeSummaryPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Comprehensive Discharge Summary Data */}
+                    {comprehensiveSummary && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300">
+                            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-100 text-gray-700">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-white/50 rounded-lg">
+                                        <FileText className="h-4 w-4 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="font-semibold text-lg">Comprehensive Discharge Summary</h2>
+                                        <p className="text-blue-600 text-xs">Complete clinical data from patient records</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-6 space-y-6">
+                                {/* Clinical Vitals */}
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                        <Activity className="h-4 w-4 text-red-600" />
+                                        Clinical Vitals
+                                    </h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">BP (mmHg)</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.bp || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">Pulse</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.pulse || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">BS (mg/dL)</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.bs || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">RR</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.rr || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">SPO2 (%)</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.spo2 || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">Temp (°F)</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.temp || 'N/A'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Doctor Information */}
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                        <User className="h-4 w-4 text-purple-600" />
+                                        Doctor Information
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">Consulting Doctor</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.consult_doctor_name || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">Surgeon</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.surgeon_doctor_name || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">Anesthesiologist</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.anesthesiologist_doctor || comprehensiveSummary.anesthesiologist || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600">Review Date</label>
+                                            <div className="p-2 bg-white rounded border border-gray-200 text-sm font-medium">
+                                                {comprehensiveSummary.review_date ? new Date(comprehensiveSummary.review_date).toLocaleDateString() : 'N/A'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Clinical Notes */}
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-green-600" />
+                                        Clinical Notes
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {[
+                                            { key: 'complaints', label: 'Complaints / H/O' },
+                                            { key: 'past_history', label: 'Past History' },
+                                            { key: 'on_examination', label: 'O/E (On Examination)' },
+                                            { key: 'systemic_examination', label: 'S/E (Systemic Examination)' },
+                                            { key: 'investigations', label: 'Investigations' },
+                                            { key: 'diagnosis', label: 'Diagnosis' },
+                                        ].map((section) => (
+                                            <div key={section.key}>
+                                                <label className="text-xs font-medium text-gray-600">{section.label}</label>
+                                                <div className="p-2 bg-white rounded border border-gray-200 text-sm min-h-[60px]">
+                                                    {comprehensiveSummary[section.key] || 'N/A'}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Prescription Display */}
+                                {comprehensiveSummary.prescription_table && comprehensiveSummary.prescription_table.length > 0 && (
+                                    <div className="bg-gray-50 rounded-lg p-4">
+                                        <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                            <FileText className="h-4 w-4 text-green-600" />
+                                            Prescription
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {comprehensiveSummary.prescription_table.map((item: any, index: number) => (
+                                                <div key={item.id || index} className="bg-white p-3 rounded border border-gray-200 text-sm">
+                                                    <div className="grid grid-cols-12 gap-2">
+                                                        <div className="col-span-6 font-medium">{item.drug_details}</div>
+                                                        <div className="col-span-3">{item.per_day_time}</div>
+                                                        <div className="col-span-2">{item.nos}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Final Diagnosis & Condition Card */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300">
