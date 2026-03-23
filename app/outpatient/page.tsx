@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useRef } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -135,7 +135,9 @@ function OutpatientPageContent() {
   const [billingStartDate, setBillingStartDate] = useState<string>('');
   const [billingEndDate, setBillingEndDate] = useState<string>('');
   const [billingDateFilter, setBillingDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
+  const [billingStatusFilter, setBillingStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [selectedBill, setSelectedBill] = useState<BillingRecord | null>(null);
+
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showBillDetailsModal, setShowBillDetailsModal] = useState(false);
   const [showThermalModal, setShowThermalModal] = useState(false);
@@ -225,6 +227,43 @@ function OutpatientPageContent() {
       }, 5000);
     }
   }, [searchParams]);
+
+  // Outpatient Financial Analytics
+  const outpatientFinanceData = useMemo(() => {
+    const stats = {
+      cash: 0,
+      upi: 0,
+      card: 0,
+      pending: 0,
+      amountPaid: 0,
+      billedTotal: 0,
+      count: billingRecords.length
+    };
+
+    billingRecords.forEach(record => {
+      const billTotal = Number(record.total_amount || 0);
+      const paid = Number(record.amount_paid || 0);
+      stats.billedTotal += billTotal;
+      stats.amountPaid += paid;
+      stats.pending += Math.max(0, billTotal - paid);
+
+      const method = String(record.payment_method || '').toLowerCase();
+      // If fully paid, attribute to the primary method
+      if (record.payment_status === 'paid') {
+        if (method.includes('cash')) stats.cash += billTotal;
+        else if (method.includes('upi') || method.includes('gpay') || method.includes('phone') || method.includes('paytm')) stats.upi += billTotal;
+        else if (method.includes('card')) stats.card += billTotal;
+      } else if (paid > 0) {
+        // If partially paid, attribute the paid amount to the method
+        if (method.includes('cash')) stats.cash += paid;
+        else if (method.includes('upi') || method.includes('gpay')) stats.upi += paid;
+        else if (method.includes('card')) stats.card += paid;
+      }
+    });
+
+    return stats;
+  }, [billingRecords]);
+
   useEffect(() => {
     // Check environment variables first
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -944,11 +983,13 @@ function OutpatientPageContent() {
         }
       }
 
-      const result = await getBillingRecords(50, 0, {
+      const result = await getBillingRecords(100, 0, { // Increased limit to 100 for better analytics
         search: billingSearch,
+        status: billingStatusFilter === 'all' ? undefined : (billingStatusFilter === 'pending' ? 'pending' : 'paid'),
         dateFrom: startDate,
         dateTo: endDate
       });
+
 
       // Filter for outpatient records only
       const outpatientRecords = result.records.filter(record => 
@@ -963,12 +1004,12 @@ function OutpatientPageContent() {
     }
   };
 
-  // Load billing records when billing tab is active or search/date changes
   useEffect(() => {
     if (activeTab === 'billing') {
       loadBillingRecords();
     }
-  }, [activeTab, billingSearch, billingStartDate, billingEndDate, billingDateFilter]);
+  }, [activeTab, billingSearch, billingStartDate, billingEndDate, billingDateFilter, billingStatusFilter]);
+
 
   // Handle manual date input changes - reset the date filter to 'all'
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3626,7 +3667,33 @@ function OutpatientPageContent() {
               </select>
             </div>
 
+            <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl">
+              <button
+                onClick={() => setBillingStatusFilter(billingStatusFilter === 'paid' ? 'all' : 'paid')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  billingStatusFilter === 'paid'
+                    ? 'bg-white text-green-600 shadow-sm ring-1 ring-green-100'
+                    : 'text-gray-500 hover:bg-white hover:text-green-600'
+                }`}
+              >
+                <CheckCircle size={14} />
+                Paid
+              </button>
+              <button
+                onClick={() => setBillingStatusFilter(billingStatusFilter === 'pending' ? 'all' : 'pending')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  billingStatusFilter === 'pending'
+                    ? 'bg-white text-orange-600 shadow-sm ring-1 ring-orange-100'
+                    : 'text-gray-500 hover:bg-white hover:text-orange-600'
+                }`}
+              >
+                <Clock size={14} />
+                Unpaid
+              </button>
+            </div>
+
             <div className="flex gap-2">
+
               <input
                 type="date"
                 value={billingStartDate}
@@ -3643,6 +3710,73 @@ function OutpatientPageContent() {
               />
             </div>
           </div>
+
+          {/* Financial KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Cash Collection</p>
+                <p className="text-xl font-black text-slate-800">₹{outpatientFinanceData.cash.toLocaleString()}</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <CreditCard size={20} />
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">UPI / Digital</p>
+                <p className="text-xl font-black text-slate-800">₹{outpatientFinanceData.upi.toLocaleString()}</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                <Activity size={20} />
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-1">Card Payment</p>
+                <p className="text-xl font-black text-slate-800">₹{outpatientFinanceData.card.toLocaleString()}</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                <CreditCard size={20} />
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-rose-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">Pending Amount</p>
+                <p className="text-xl font-black text-slate-800">₹{outpatientFinanceData.pending.toLocaleString()}</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+                <AlertCircle size={20} />
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-2xl shadow-lg flex items-center justify-between text-white">
+              <div>
+                <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1">Total Realized (Paid)</p>
+                <p className="text-2xl font-black">₹{outpatientFinanceData.amountPaid.toLocaleString()}</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <TrendingUp size={20} />
+              </div>
+            </div>
+          </div>
+
+          {/* Real-time Summary Bar under Filters */}
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                <Receipt size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-blue-900 leading-none">Total for {outpatientFinanceData.count} Bills</p>
+                <p className="text-[10px] text-blue-500 font-medium mt-1 uppercase tracking-wider">Filtered records based on selection</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-blue-900 leading-none">Total Collective Amount</p>
+              <p className="text-2xl font-black text-blue-600">₹{outpatientFinanceData.billedTotal.toLocaleString()}</p>
+            </div>
+          </div>
+
 
           {/* Billing Records */}
           {billingLoading ? (

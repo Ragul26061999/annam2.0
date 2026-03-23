@@ -98,6 +98,8 @@ export default function LabXRayPage() {
     completedToday: 0
   });
   const [loading, setLoading] = useState(true);
+  const [diagFilterDate, setDiagFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [diagFilterCategory, setDiagFilterCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [urgencyFilter, setUrgencyFilter] = useState('all');
@@ -262,6 +264,72 @@ export default function LabXRayPage() {
         testName.includes(searchTerm.toLowerCase());
     });
   }, [activeSubTab, labOrders, radiologyOrders, scanOrders, searchTerm, statusFilter, urgencyFilter, completionFilter]);
+
+  // Financial and Filtering logic for Diagnostic Bills
+  const diagnosticFinanceData = useMemo(() => {
+    const filtered = billingItems.filter(bill => {
+      // Date filter
+      const matchesDate = !diagFilterDate || (bill.created_at && bill.created_at.startsWith(diagFilterDate));
+      
+      // Category filter (Lab, Xray, Scan)
+      let matchesCategory = true;
+      if (diagFilterCategory !== 'all') {
+        matchesCategory = String(bill.bill_type || '').toLowerCase() === diagFilterCategory.toLowerCase();
+      }
+
+      // Search filter (name, bill number)
+      const matchesSearch = !searchTerm || 
+        String(bill.patient?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(bill.patient?.patient_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(bill.bill_no || bill.bill_number || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+      return matchesDate && matchesCategory && matchesSearch;
+    });
+
+    const stats = {
+      cash: 0,
+      upi: 0,
+      card: 0,
+      amountPaid: 0,
+      billedTotal: 0,
+      pending: 0,
+      count: filtered.length
+    };
+
+    filtered.forEach(bill => {
+      const billTotal = Number(bill.total || 0);
+      stats.billedTotal += billTotal;
+      
+      const payments = bill.payments || [];
+      let paidOnThisBill = 0;
+
+      if (payments.length > 0) {
+        payments.forEach((p: any) => {
+          const method = String(p.payment_method || p.method || '').toLowerCase();
+          const amount = Number(p.amount) || 0;
+          if (method.includes('cash')) stats.cash += amount;
+          else if (method.includes('upi') || method.includes('gpay') || method.includes('phone') || method.includes('paytm')) stats.upi += amount;
+          else if (method.includes('card')) stats.card += amount;
+          stats.amountPaid += amount;
+          paidOnThisBill += amount;
+        });
+      } else {
+        // Fallback for bills with payment_method but no payment records (legacy)
+        const method = String(bill.payment_method || '').toLowerCase();
+        if (bill.payment_status === 'paid') {
+          if (method.includes('cash')) stats.cash += billTotal;
+          else if (method.includes('upi') || method.includes('gpay')) stats.upi += billTotal;
+          else if (method.includes('card')) stats.card += billTotal;
+          stats.amountPaid += billTotal;
+          paidOnThisBill = billTotal;
+        }
+      }
+
+      stats.pending += Math.max(0, billTotal - paidOnThisBill);
+    });
+
+    return { stats, filteredBills: filtered };
+  }, [billingItems, diagFilterDate, diagFilterCategory, searchTerm]);
 
   // Analytics Calculations
   const analyticsData = useMemo(() => {
@@ -671,76 +739,158 @@ export default function LabXRayPage() {
               </button>
             </div>
 
-            {/* Controls */}
-            {activeSubTab !== 'groups' && (
-              <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4">
-                <div className="flex-1 relative">
+            {/* Diagnostic Financial KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Cash Collection</p>
+                  <p className="text-xl font-black text-slate-800">₹{diagnosticFinanceData.stats.cash.toLocaleString()}</p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                   <CreditCard size={20} />
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">UPI / Digital</p>
+                  <p className="text-xl font-black text-slate-800">₹{diagnosticFinanceData.stats.upi.toLocaleString()}</p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                   <Zap size={20} />
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-1">Card Payment</p>
+                  <p className="text-xl font-black text-slate-800">₹{diagnosticFinanceData.stats.card.toLocaleString()}</p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                   <CreditCard size={20} />
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-2xl border border-rose-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">Total Pending</p>
+                  <p className="text-xl font-black text-slate-800">₹{diagnosticFinanceData.stats.pending.toLocaleString()}</p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+                   <AlertCircle size={20} />
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-lg flex items-center justify-between text-white">
+                <div>
+                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Net Diagnostic (Paid)</p>
+                  <p className="text-2xl font-black">₹{diagnosticFinanceData.stats.amountPaid.toLocaleString()}</p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+                   <TrendingUp size={20} />
+                </div>
+              </div>
+            </div>
+
+            {/* Controls with Date & Category Filters */}
+            <div className="space-y-4">
+              <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-wrap items-center gap-4">
+                <div className="min-w-[240px] flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4.5 w-4.5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search Patient Name, ID, or Order #"
+                    placeholder="Search Bills / Patients..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 transition-all outline-none"
+                    className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 transition-all outline-none"
                   />
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="date"
+                      value={diagFilterDate}
+                      onChange={(e) => setDiagFilterDate(e.target.value)}
+                      className="pl-10 pr-3 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none w-[160px]"
+                    />
+                  </div>
+                  <select
+                    value={diagFilterCategory}
+                    onChange={(e) => setDiagFilterCategory(e.target.value)}
+                    className="px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
+                  >
+                    <option value="all">All Services</option>
+                    <option value="lab">Laboratory</option>
+                    <option value="radiology">X-Ray (Radiology)</option>
+                    <option value="scan">Scans / Other</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl">
                   <button
                     onClick={() => setCompletionFilter(completionFilter === 'completed' ? 'all' : 'completed')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border ${
+                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
                       completionFilter === 'completed'
-                        ? 'bg-green-600 text-white border-green-600 shadow-md'
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-green-500'
+                        ? 'bg-white text-green-600 shadow-md ring-1 ring-green-100'
+                        : 'text-gray-500 hover:bg-white hover:text-green-600'
                     }`}
                   >
-                    <CheckCircle size={18} />
-                    Completed
+                    <CheckCircle size={14} />
+                    Paid
                   </button>
                   <button
                     onClick={() => setCompletionFilter(completionFilter === 'pending' ? 'all' : 'pending')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border ${
+                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
                       completionFilter === 'pending'
-                        ? 'bg-orange-600 text-white border-orange-600 shadow-md'
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-orange-500'
+                        ? 'bg-white text-orange-600 shadow-md ring-1 ring-orange-100'
+                        : 'text-gray-500 hover:bg-white hover:text-orange-600'
                     }`}
                   >
-                    <Clock size={18} />
-                    Pending
+                    <Clock size={14} />
+                    Unpaid
                   </button>
                 </div>
 
-                {activeSubTab !== 'billing' && activeSubTab !== 'orders' && (
-                  <div className="flex gap-2">
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
-                    >
-                      <option value="all">Any Status</option>
-                      <option value="ordered">Ordered</option>
-                      <option value="in_progress">Processing</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                    <select
-                      value={urgencyFilter}
-                      onChange={(e) => setUrgencyFilter(e.target.value)}
-                      className="px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
-                    >
-                      <option value="all">Any Urgency</option>
-                      <option value="routine">Routine</option>
-                      <option value="urgent">Urgent</option>
-                      <option value="stat">STAT</option>
-                    </select>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
+                  >
+                    <option value="all">Statuses</option>
+                    <option value="ordered">Ordered</option>
+                    <option value="in_progress">Processing</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                  <button 
+                    onClick={() => loadData(true)}
+                    className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+                  >
+                    <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                  </button>
+                </div>
               </div>
-            )}
+
+              {/* Real-time Summary Bar under Filters */}
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
+                       <BarChart3 size={20} />
+                    </div>
+                    <div>
+                       <p className="text-xs font-bold text-indigo-900 leading-none">Filtered Result Summary</p>
+                       <p className="text-[10px] text-indigo-500 font-medium">Showing {diagnosticFinanceData.stats.count} bills for {diagFilterCategory === 'all' ? 'All Diagnostic Services' : diagFilterCategory.toUpperCase()}</p>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-xs font-bold text-indigo-900 leading-none">Net Realized Value (Paid)</p>
+                    <p className="text-2xl font-black text-indigo-600">₹{diagnosticFinanceData.stats.amountPaid.toLocaleString()}</p>
+                 </div>
+              </div>
+            </div>
 
             {/* Orders Feed */}
             {activeSubTab === 'billing' && (
               <BillingList 
-                items={billingItems} 
+                items={diagnosticFinanceData.filteredBills} 
                 onRefresh={() => loadData(true)} 
                 searchTerm={searchTerm}
                 statusFilter={statusFilter}
@@ -757,7 +907,7 @@ export default function LabXRayPage() {
 
             {activeSubTab === 'orders' && (
               <OrdersFromBilling 
-                items={billingItems} 
+                items={diagnosticFinanceData.filteredBills} 
                 onRefresh={() => loadData(true)} 
                 searchTerm={searchTerm}
                 statusFilter={statusFilter}

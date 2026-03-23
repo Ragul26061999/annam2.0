@@ -146,7 +146,8 @@ export async function getDiagnosticBillsFromBilling(filters?: {
       .from('billing')
       .select(`
         *,
-        patient:patients(id, patient_id, name, phone, gender, date_of_birth)
+        patient:patients(id, patient_id, name, phone, gender, date_of_birth),
+        payments:billing_payments(*)
       `)
       .in('bill_type', billTypes)
       .order('created_at', { ascending: false });
