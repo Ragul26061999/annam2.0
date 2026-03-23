@@ -337,25 +337,33 @@ export default function PharmacyBillingPage() {
 
       // Helper function to determine payment status with roundoff consideration
       const getPaymentStatusWithRoundoff = (totalAmount: number, amountPaid: number, currentStatus: string, paymentMethod: string) => {
-        // If already marked as paid, keep it as paid unless it's a cancelled bill
-        if (currentStatus === 'paid' || currentStatus === 'cancelled') return currentStatus;
+        if (currentStatus === 'cancelled') return 'cancelled';
 
-        // Roundoff handling:
+        // Roundoff handling
         const roundedPayable = Math.round(totalAmount);
         const matchesRoundedPayable = Math.abs(roundedPayable - amountPaid) <= 0.1;
         const difference = Math.abs(totalAmount - amountPaid);
         const isFullyPaid = matchesRoundedPayable || difference <= 0.1 || amountPaid >= totalAmount;
 
-        // For credit payments, keep as pending only if not fully paid
-        if (paymentMethod === 'credit' && !isFullyPaid) return 'pending';
+        // For credit payments, keep as pending/partial until changed to cash/upi/card
+        if (paymentMethod?.toLowerCase() === 'credit') {
+          return amountPaid > 0.1 ? 'partial' : 'pending';
+        }
 
-        return isFullyPaid ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
+        return isFullyPaid ? 'paid' : (amountPaid > 0.1 ? 'partial' : 'pending');
       };
 
       // Map bills data with proper formatting and resolved UHIDs and staff names
       const mappedBills = (billsData || []).map((bill: any) => {
         const totalAmount = bill.total || 0;
-        const amountPaid = bill.amount_paid || 0;
+        
+        // Calculate REAL payments (excluding credit) for accurate status determination
+        const payments = paymentsMap[bill.id] || [];
+        const realPaid = payments
+          .filter((p: any) => p.method !== 'credit')
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+          
+        const amountPaid = realPaid; 
         const currentStatus = bill.payment_status || 'pending';
         const paymentMethod = bill.payment_method || 'cash';
 
@@ -426,12 +434,20 @@ export default function PharmacyBillingPage() {
       // This ensures UI + reports reflect "paid" instead of lingering "partial".
       // Also fix credit bills that were incorrectly marked as paid
       try {
-        // Fix credit bills that were incorrectly marked as paid
+        // Fix credit bills that were incorrectly marked as paid in DB
         const creditBillsToFix = (billsData || [])
           .filter((bill: any) => {
             const paymentMethod = bill.payment_method || 'cash';
             const currentStatus = bill.payment_status || 'pending';
-            return paymentMethod === 'credit' && currentStatus === 'paid';
+            
+            // Check real payments for this bill
+            const payments = paymentsMap[bill.id] || [];
+            const realPaid = payments
+              .filter((p: any) => p.method !== 'credit')
+              .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+            
+            // If it's labeled as credit and marked paid, but real money is insufficient, it needs fix
+            return paymentMethod === 'credit' && currentStatus === 'paid' && realPaid < (bill.total || 0) - 1;
           })
           .map((b: any) => b.id);
 
@@ -1826,7 +1842,9 @@ export default function PharmacyBillingPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex flex-col gap-1.5 group/payment relative">
                       {bill.payments && bill.payments.length > 0 ? (
-                        bill.payments.map((p: any, idx: number) => (
+                        bill.payments
+                          .filter((p: any) => !(bill.payment_status === 'paid' && p.method === 'credit'))
+                          .map((p: any, idx: number) => (
                           <div key={idx} className="flex items-center gap-2">
                             {getPaymentMethodIcon(p.method)}
                             <span className="capitalize text-[11px] font-medium text-gray-700">

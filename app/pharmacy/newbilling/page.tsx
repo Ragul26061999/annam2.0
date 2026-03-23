@@ -2042,7 +2042,18 @@ function NewBillingPageInner() {
           customer_type: customer.type,
           staff_id: validatedStaffId,
           bill_type: 'pharmacy',
-          payment_status: billTotals.totalAmount <= payments.reduce((sum, p) => sum + (p.amount || 0), 0) ? 'paid' : 'partial'
+          payment_status: (() => {
+            const hasCredit = payments.some(p => p.method === 'credit' && p.amount > 0);
+            const nonCreditPaid = payments
+              .filter(p => p.method !== 'credit')
+              .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+            if (!hasCredit && nonCreditPaid >= billTotals.totalAmount - 0.01) {
+              return 'paid';
+            }
+            if (nonCreditPaid > 0) return 'partial';
+            return 'pending';
+          })()
         } as any;
 
         // Insert billing record (total is a generated column, so we don't insert it)
