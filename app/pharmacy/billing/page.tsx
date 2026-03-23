@@ -22,7 +22,10 @@ import {
   Clock,
   Plus,
   RotateCcw,
-  FileText
+  FileText,
+  Smartphone,
+  BarChart3,
+  Wallet
 } from 'lucide-react'
 import { supabase } from '@/src/lib/supabase'
 import { getCurrentUserProfile } from '@/src/lib/supabase'
@@ -57,16 +60,18 @@ interface PharmacyBill {
 }
 
 interface DashboardStats {
-  todaysSales: number
-  pendingOrders: number
-  monthlyCollection: number
-  totalPayments: number
+  totalCollection: number
+  totalBillAmount: number
+  cashCollection: number
+  upiCollection: number
+  cardCollection: number
+  pendingDue: number
+  billCount: number
 }
 
 export default function PharmacyBillingPage() {
   const router = useRouter()
   const [bills, setBills] = useState<PharmacyBill[]>([])
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -332,24 +337,19 @@ export default function PharmacyBillingPage() {
 
       // Helper function to determine payment status with roundoff consideration
       const getPaymentStatusWithRoundoff = (totalAmount: number, amountPaid: number, currentStatus: string, paymentMethod: string) => {
-        // For credit payments, always keep as pending until explicitly marked as paid through payment system
-        if (paymentMethod === 'credit') return 'pending';
-
-        // If already marked as paid and not credit, keep it as paid
-        if (currentStatus === 'paid') return 'paid';
-
-        // If no amount paid, it's pending
-        if (!amountPaid || amountPaid <= 0) return 'pending';
+        // If already marked as paid, keep it as paid unless it's a cancelled bill
+        if (currentStatus === 'paid' || currentStatus === 'cancelled') return currentStatus;
 
         // Roundoff handling:
         const roundedPayable = Math.round(totalAmount);
-        const matchesRoundedPayable = Math.abs(roundedPayable - amountPaid) <= 0.01;
-
-        // Also allow tiny floating point differences
+        const matchesRoundedPayable = Math.abs(roundedPayable - amountPaid) <= 0.1;
         const difference = Math.abs(totalAmount - amountPaid);
-        const isFullyPaid = matchesRoundedPayable || difference <= 0.05;
+        const isFullyPaid = matchesRoundedPayable || difference <= 0.1 || amountPaid >= totalAmount;
 
-        return isFullyPaid ? 'paid' : 'partial';
+        // For credit payments, keep as pending only if not fully paid
+        if (paymentMethod === 'credit' && !isFullyPaid) return 'pending';
+
+        return isFullyPaid ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
       };
 
       // Map bills data with proper formatting and resolved UHIDs and staff names
@@ -477,34 +477,6 @@ export default function PharmacyBillingPage() {
       }
 
       setBills(mappedBills)
-
-      // Calculate KPI stats from the bills data
-      const today = new Date()
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-
-      const todaysCollection = mappedBills
-        .filter((bill: any) => new Date(bill.created_at) >= startOfToday && bill.payment_status === 'paid')
-        .reduce((sum: number, bill: any) => sum + bill.total_amount, 0)
-
-      const monthlyCollection = mappedBills
-        .filter((bill: any) => new Date(bill.created_at) >= startOfMonth && bill.payment_status === 'paid')
-        .reduce((sum: number, bill: any) => sum + bill.total_amount, 0)
-
-      const pendingDue = mappedBills
-        .filter((bill: any) => bill.payment_status === 'pending')
-        .reduce((sum: number, bill: any) => sum + bill.total_amount, 0)
-
-      const totalPayments = mappedBills
-        .filter((bill: any) => bill.payment_status === 'paid')
-        .reduce((sum: number, bill: any) => sum + bill.total_amount, 0)
-
-      setDashboardStats({
-        todaysSales: todaysCollection,
-        pendingOrders: pendingDue,
-        monthlyCollection: monthlyCollection,
-        totalPayments: totalPayments
-      })
     } catch (err) {
       setError('Failed to load billing data')
       console.error('Error loading billing data:', err)
@@ -571,13 +543,34 @@ export default function PharmacyBillingPage() {
     // For credit bills, amount_paid might already be equal to total_amount.
     // We treat the settle action as a new set of payments that replaces the credit.
     const isCreditBill = selectedBillForPayment.payment_method === 'credit'
-    const remainingBalance = isCreditBill ? totalAmount : (totalAmount - currentPaid)
+    const remainingBalance = totalAmount - currentPaid
     const isRefund = remainingBalance < 0
-
-    // Prevent overpayment if it's a regular payment (allow tiny rounding margin)
+    
+    // 1. Validation: Block overpayment
     if (!isRefund && totalPaymentAmount > remainingBalance + 0.1) {
-      alert(`Total payment amount (₹${totalPaymentAmount.toFixed(2)}) exceeds remaining balance (₹${remainingBalance.toFixed(2)}).`)
+      alert(`Total payment amount (₹${totalPaymentAmount.toFixed(2)}) exceeds remaining balance (₹${Math.max(0, remainingBalance).toFixed(2)}).`)
       return
+    }
+
+    // 2. Validation: Prevent duplicate payment entries in the current split (same method and amount)
+    const currentEntries = validPayments.map(p => `${p.method.toLowerCase()}-${parseFloat(p.amount).toFixed(2)}`);
+    if (new Set(currentEntries).size !== currentEntries.length) {
+      alert("You have entered the same amount and payment method multiple times in this split. Please combine them into a single entry.");
+      return;
+    }
+
+    // 3. Validation: Check against already recorded payments for this bill to prevent accidental duplicates
+    const existingPayments = selectedBillForPayment.payments || [];
+    for (const newP of validPayments) {
+      const isDuplicate = existingPayments.some(ep => 
+        ep.method.toLowerCase() === newP.method.toLowerCase() && 
+        Math.abs(Number(ep.amount) - Number(newP.amount)) < 0.1
+      );
+      if (isDuplicate) {
+        if (!confirm(`A payment of ₹${newP.amount} via ${newP.method} was already recorded for this bill earlier. Are you sure you want to add an identical second payment?`)) {
+          return;
+        }
+      }
     }
 
     // Prevent over-payment if it's already overpaid
@@ -1409,6 +1402,61 @@ export default function PharmacyBillingPage() {
     return matchesSearch && matchesStatus && matchesPayment && matchesBillType && matchesAttr && matchesTimeframe
   })
 
+  // Dynamic KPI Stats based on filtered bills
+  const dashboardStats = React.useMemo(() => {
+    let totalCollected = 0;
+    let totalBillAmount = 0;
+    let cash = 0;
+    let upi = 0;
+    let card = 0;
+    let others = 0;
+    let pending = 0;
+
+    filteredBills.forEach(bill => {
+      // Sum the actual amount paid
+      const paidAmount = Number(bill.amount_paid) || 0;
+      totalCollected += paidAmount;
+      
+      // Sum the total bill amount
+      totalBillAmount += (Number(bill.total_amount) || 0);
+      
+      // Calculate by payment records if they exist
+      if (bill.payments && bill.payments.length > 0) {
+        bill.payments.forEach((p: any) => {
+          const amt = Number(p.amount) || 0;
+          const method = (p.method || '').toLowerCase();
+          if (method === 'cash') cash += amt;
+          else if (method === 'upi') upi += amt;
+          else if (method === 'card') card += amt;
+          else others += amt;
+        });
+      } else {
+        // Fallback to primary payment method
+        const method = (bill.payment_method || '').toLowerCase();
+        if (method === 'cash') cash += paidAmount;
+        else if (method === 'upi') upi += paidAmount;
+        else if (method === 'card') card += paidAmount;
+        else if (method !== 'credit') others += paidAmount;
+      }
+
+      // Calculate pending (only for non-cancelled bills)
+      if (bill.payment_status !== 'cancelled') {
+        const diff = (Number(bill.total_amount) || 0) - paidAmount;
+        if (diff > 0) pending += diff;
+      }
+    });
+
+    return {
+      totalCollection: totalCollected,
+      totalBillAmount: totalBillAmount,
+      cashCollection: cash,
+      upiCollection: upi,
+      cardCollection: card,
+      pendingDue: pending,
+      billCount: filteredBills.length
+    };
+  }, [filteredBills]);
+
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
       case 'paid':
@@ -1480,15 +1528,15 @@ export default function PharmacyBillingPage() {
 
       {/* KPI Cards */}
       {dashboardStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Today's Collection</p>
-                <p className="text-2xl font-bold text-green-600">₹{Math.round(dashboardStats.todaysSales).toLocaleString()}</p>
+                <p className="text-sm font-medium text-gray-600">Net Collection</p>
+                <p className="text-2xl font-bold text-indigo-600">₹{Math.round(dashboardStats.totalCollection).toLocaleString()}</p>
               </div>
-              <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-green-600" />
+              <div className="h-12 w-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <BarChart3 className="h-6 w-6 text-indigo-600" />
               </div>
             </div>
           </div>
@@ -1496,11 +1544,35 @@ export default function PharmacyBillingPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Monthly Collection</p>
-                <p className="text-2xl font-bold text-blue-600">₹{Math.round(dashboardStats.monthlyCollection).toLocaleString()}</p>
+                <p className="text-sm font-medium text-gray-600">Cash Collection</p>
+                <p className="text-2xl font-bold text-green-600">₹{Math.round(dashboardStats.cashCollection).toLocaleString()}</p>
+              </div>
+              <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <IndianRupee className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">UPI Collection</p>
+                <p className="text-2xl font-bold text-purple-600">₹{Math.round(dashboardStats.upiCollection).toLocaleString()}</p>
+              </div>
+              <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Smartphone className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Card Collection</p>
+                <p className="text-2xl font-bold text-blue-600">₹{Math.round(dashboardStats.cardCollection).toLocaleString()}</p>
               </div>
               <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Calendar className="h-6 w-6 text-blue-600" />
+                <CreditCard className="h-6 w-6 text-blue-600" />
               </div>
             </div>
           </div>
@@ -1509,22 +1581,10 @@ export default function PharmacyBillingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Pending Due</p>
-                <p className="text-2xl font-bold text-orange-600">₹{dashboardStats.pendingOrders.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-orange-600">₹{Math.round(dashboardStats.pendingDue).toLocaleString()}</p>
               </div>
               <div className="h-12 w-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-orange-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Payments</p>
-                <p className="text-2xl font-bold text-purple-600">₹{Math.round(dashboardStats.totalPayments).toLocaleString()}</p>
-              </div>
-              <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Receipt className="h-6 w-6 text-purple-600" />
+                <AlertCircle className="h-6 w-6 text-orange-600" />
               </div>
             </div>
           </div>
@@ -1691,6 +1751,37 @@ export default function PharmacyBillingPage() {
         )}
       </div>
 
+      {/* Filtered Summary Card */}
+      <div className="flex justify-end mb-4 mr-2">
+        <div className="bg-white/80 backdrop-blur-sm border-2 border-blue-100 rounded-2xl px-6 py-4 flex items-center gap-8 shadow-md hover:shadow-lg transition-all duration-300">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+              <Receipt className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-tighter">Record Count</span>
+              <span className="text-sm font-bold text-blue-900 whitespace-nowrap">
+                {filteredBills.length} Bill{filteredBills.length !== 1 ? 's' : ''} Found
+              </span>
+            </div>
+          </div>
+          
+          <div className="h-10 w-[1px] bg-gray-200"></div>
+          
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-100 rounded-lg text-green-600">
+              <IndianRupee className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-extrabold text-green-400 uppercase tracking-tighter">Filtered Total</span>
+              <span className="text-2xl font-black text-green-700 leading-tight">
+                ₹{Math.round(dashboardStats.totalBillAmount).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Bills Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -1808,6 +1899,19 @@ export default function PharmacyBillingPage() {
                 </tr>
               ))}
             </tbody>
+            {filteredBills.length > 0 && (
+              <tfoot className="bg-blue-50/50">
+                <tr className="font-bold text-gray-900 border-t-2 border-blue-100">
+                  <td colSpan={3} className="px-6 py-4 text-right text-sm uppercase tracking-wider text-blue-800 font-semibold">
+                    Total for {filteredBills.length} Bill{filteredBills.length !== 1 ? 's' : ''}:
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-lg text-green-700 font-extrabold bg-green-50/30">
+                    ₹{Math.round(dashboardStats.totalBillAmount).toLocaleString()}
+                  </td>
+                  <td colSpan={4} className="px-6 py-4"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
@@ -2281,7 +2385,8 @@ export default function PharmacyBillingPage() {
                   <button
                     type="button"
                     onClick={() => setSplitPayments([...splitPayments, { method: 'cash', amount: '', reference: '' }])}
-                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+                    disabled={_remainingTotal <= 0.1}
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-3 h-3" /> Add Method
                   </button>

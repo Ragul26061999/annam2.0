@@ -3402,7 +3402,7 @@ function NewBillingPageInner() {
                     </div>
                   ) : (
                     <div className="border border-slate-100 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
+                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] bg-slate-100 text-xs font-bold text-slate-700 px-3 py-3 border-b">
                         <span>Sl.</span>
                         <span>Drug / Batch</span>
                         <span className="text-right">Rate</span>
@@ -3411,7 +3411,7 @@ function NewBillingPageInner() {
                         <span className="text-right">Total</span>
                         <span className="text-center">Action</span>
                       </div>
-                      <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100 text-[11px]">
+                      <div className="divide-y divide-slate-100 text-sm">
                         {billItems.map((item, index) => (
                           <div
                             key={`${item.medicine.id}-${item.batch.id}`}
@@ -3419,13 +3419,13 @@ function NewBillingPageInner() {
                           >
                             <span>{index + 1}</span>
                             <div className="flex flex-col">
-                              <span className="font-medium truncate">{item.medicine.name}</span>
-                              <span className="text-[10px] text-slate-500 truncate">Batch: {item.medicine.is_external ? 'EXT' : item.batch.batch_number.slice(-4)}</span>
+                              <span className="font-bold text-slate-900 truncate">{item.medicine.name}</span>
+                              <span className="text-xs text-slate-500 truncate">Batch: {item.medicine.is_external ? 'EXT' : item.batch.batch_number}</span>
                               {item.medicine.location && (
-                                <span className="text-[10px] text-blue-600 truncate">Shelf: {item.medicine.location}</span>
+                                <span className="text-xs text-blue-600 truncate font-medium">Shelf: {item.medicine.location}</span>
                               )}
                               {item.batch.rack_location && (
-                                <span className="text-[10px] text-green-600 truncate">Rack: {item.batch.rack_location}</span>
+                                <span className="text-xs text-green-600 truncate font-medium">Rack: {item.batch.rack_location}</span>
                               )}
                             </div>
                             {item.medicine.is_external ? (
@@ -3496,10 +3496,10 @@ function NewBillingPageInner() {
                                     }
                                   }
                                 }}
-                                className="w-14 rounded border border-slate-200 bg-white text-center text-[11px] py-1"
+                                className="w-16 rounded border border-slate-200 bg-white text-center text-sm py-1.5 font-medium"
                               />
                             </div>
-                            <span className="text-right font-semibold text-emerald-600">₹{item.total.toFixed(2)}</span>
+                            <span className="text-right font-bold text-emerald-700 text-base">₹{item.total.toFixed(2)}</span>
                             <div className="flex items-center justify-center">
                               <button
                                 type="button"
@@ -3511,6 +3511,20 @@ function NewBillingPageInner() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] items-center px-3 py-3 bg-slate-100 border-t-2 border-slate-200">
+                        <div className="col-span-1 text-center font-bold text-slate-500 text-xs text-opacity-70">
+                          #{billItems.length}
+                        </div>
+                        <div className="col-span-4 text-right pr-6 self-center">
+                          <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Grand Total Amount</span>
+                        </div>
+                        <div className="text-right px-1">
+                          <span className="text-2xl font-black text-emerald-700 tracking-tighter leading-none">
+                            ₹{formatTotalAmount(billTotals.totalAmount)}
+                          </span>
+                        </div>
+                        <div className="text-center"></div>
                       </div>
                     </div>
                   )}
@@ -3652,7 +3666,7 @@ function NewBillingPageInner() {
                     </div>
                   ) : (
                     <div className="border border-slate-100 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] bg-slate-50 text-[11px] font-medium text-slate-600 px-3 py-2">
+                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] bg-slate-100 text-xs font-bold text-slate-700 px-3 py-3 border-b">
                         <span>Sl.</span>
                         <span>Drug / Batch</span>
                         <span className="text-right">Rate</span>
@@ -3661,7 +3675,7 @@ function NewBillingPageInner() {
                         <span className="text-right">Total</span>
                         <span className="text-center">Action</span>
                       </div>
-                      <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100 text-[11px]">
+                      <div className="divide-y divide-slate-100 text-sm">
                         {billItems.map((item, index) => (
                           <div
                             key={`${item.medicine.id}-${item.batch.id}`}
@@ -3701,6 +3715,20 @@ function NewBillingPageInner() {
                             </button>
                           </div>
                         ))}
+                      </div>
+                      <div className="grid grid-cols-[40px,1.5fr,0.7fr,0.5fr,0.7fr,0.9fr,40px] items-center px-3 py-3 bg-slate-100 border-t-2 border-slate-200">
+                        <div className="col-span-1 text-center font-bold text-slate-500 text-xs text-opacity-70">
+                          #{billItems.length}
+                        </div>
+                        <div className="col-span-4 text-right pr-6 self-center">
+                          <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Total Transfer Value</span>
+                        </div>
+                        <div className="text-right px-1">
+                          <span className="text-2xl font-black text-purple-700 tracking-tighter leading-none">
+                            ₹{formatTotalAmount(billTotals.totalAmount)}
+                          </span>
+                        </div>
+                        <div className="text-center"></div>
                       </div>
                     </div>
                   )}
