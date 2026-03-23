@@ -63,7 +63,17 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
 
             @page {
               size: A4;
-              margin: 20mm;
+              margin: 15mm 20mm 15mm 20mm;
+            }
+
+            @media print {
+              /* Ensure the header container doesn't overlap with browser's default header text */
+              .print-header-container {
+                padding-top: 12mm;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+              }
             }
 
             .section-break {
@@ -80,7 +90,7 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
         `}</style>
 
         {/* Header Block */}
-        <div className="section-break">
+        <div className="section-break print-header-container">
           <div className="flex flex-col items-center justify-center mb-2">
             {/* Logo */}
             <div className="h-28 w-full flex items-center justify-center mb-2">
@@ -303,13 +313,20 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
                   {['Cured', 'Improved', 'Referred', 'Dis. at Request', 'Lama', 'Absconded'].map((cond) => (
                     <div key={cond} className="flex items-center gap-2">
                       <div className="w-5 h-5 border-2 border-black flex items-center justify-center relative">
-                        {summary.condition_at_discharge === cond && (
+                        {summary.condition_at_discharge?.toLowerCase() === cond.toLowerCase() && (
                           <Check className="w-6 h-6 text-black absolute -top-1 -left-0.5" strokeWidth={4} />
                         )}
                       </div>
                       <span className="font-medium">{cond}</span>
                     </div>
                   ))}
+                  {/* Fallback for custom condition if it doesn't match standard ones */}
+                  {summary.condition_at_discharge && 
+                   !['Cured', 'Improved', 'Referred', 'Dis. at Request', 'Lama', 'Absconded'].some(c => c.toLowerCase() === summary.condition_at_discharge?.toLowerCase()) && (
+                    <div className="flex items-center gap-2 min-w-[100px] border-b-2 border-blue-900 border-dotted">
+                      <span className="font-bold text-blue-900 text-sm">{summary.condition_at_discharge}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
