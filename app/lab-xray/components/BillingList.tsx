@@ -49,14 +49,17 @@ export default function BillingList({ items, onRefresh, searchTerm: globalSearch
       const matchesSearch = !term || billNo.includes(term) || patientName.includes(term) || patientId.includes(term);
       const matchesStatus = statusFilter === 'all' || getBillingStatus(bill) === statusFilter;
       
-      // Completion filter - this is a bit tricky for billing
-      // If any item is not completed, it's pending.
-      // If all items are completed, it's completed.
+      // Completion filter: maps to payment_status for billing
       let matchesCompletion = true;
       if (completionFilter && completionFilter !== 'all') {
-        const itemStatuses = (bill.items || []).map((it: any) => it.status); // This assumes status is present in bill items, which might not be true
-        // However, we can also check if the bill has ANY associated orders that are pending/completed.
-        // For now, let's keep it simple or skip if we don't have enough data.
+        const paymentStatus = String(bill.payment_status || 'pending').toLowerCase();
+        if (completionFilter === 'completed') {
+          // 'Paid' toggle — show only paid bills
+          matchesCompletion = paymentStatus === 'paid';
+        } else if (completionFilter === 'pending') {
+          // 'Unpaid' toggle — show pending or partial bills
+          matchesCompletion = paymentStatus === 'pending' || paymentStatus === 'partial';
+        }
       }
 
       return matchesSearch && matchesStatus && matchesCompletion;

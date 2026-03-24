@@ -101,7 +101,8 @@ export default function LabXRayPage() {
   const [diagFilterDate, setDiagFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [diagFilterCategory, setDiagFilterCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');       // For order tabs: ordered/in_progress/completed
+  const [billingStatusFilter, setBillingStatusFilter] = useState('all'); // For billing tab: pending/partial/paid
   const [urgencyFilter, setUrgencyFilter] = useState('all');
   const [completionFilter, setCompletionFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
@@ -243,15 +244,21 @@ export default function LabXRayPage() {
       orders = [];
     }
     return orders.filter(order => {
-      // Apply status and urgency filters
+      // Apply status filter (order status: ordered/in_progress/completed)
       if (statusFilter !== 'all' && order.status !== statusFilter) return false;
       if (urgencyFilter !== 'all' && order.urgency !== urgencyFilter) return false;
 
-      // Apply completion filter
+      // Apply completion filter (pending = not done, completed = finished)
       if (completionFilter === 'pending') {
         if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'rejected') return false;
       } else if (completionFilter === 'completed') {
         if (order.status !== 'completed' && order.status !== 'scan_completed') return false;
+      }
+
+      // Apply date filter to orders too
+      if (diagFilterDate && order.created_at) {
+        const orderDate = String(order.created_at).split('T')[0];
+        if (orderDate !== diagFilterDate) return false;
       }
 
       // Apply search term
@@ -283,7 +290,24 @@ export default function LabXRayPage() {
         String(bill.patient?.patient_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         String(bill.bill_no || bill.bill_number || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-      return matchesDate && matchesCategory && matchesSearch;
+      // Billing payment status filter
+      const paymentStatus = String(bill.payment_status || 'pending').toLowerCase();
+      let matchesBillingStatus = true;
+      if (billingStatusFilter !== 'all') {
+        matchesBillingStatus = paymentStatus === billingStatusFilter;
+      }
+
+      // Paid / Unpaid toggle filter (completionFilter used as paid/unpaid for billing)
+      let matchesCompletion = true;
+      if (completionFilter === 'completed') {
+        // 'Paid' button — show only paid bills
+        matchesCompletion = paymentStatus === 'paid';
+      } else if (completionFilter === 'pending') {
+        // 'Unpaid' button — show pending or partial bills
+        matchesCompletion = paymentStatus === 'pending' || paymentStatus === 'partial';
+      }
+
+      return matchesDate && matchesCategory && matchesSearch && matchesBillingStatus && matchesCompletion;
     });
 
     const stats = {
@@ -788,30 +812,34 @@ export default function LabXRayPage() {
               </div>
             </div>
 
-            {/* Controls with Date & Category Filters */}
+            {/* Controls with Context-Aware Filters */}
             <div className="space-y-4">
               <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-wrap items-center gap-4">
+                {/* Search — always visible */}
                 <div className="min-w-[240px] flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4.5 w-4.5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search Bills / Patients..."
+                    placeholder={activeSubTab === 'billing' || activeSubTab === 'orders' ? 'Search Bills / Patients...' : 'Search Orders / Patients...'}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 transition-all outline-none"
                   />
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="date"
-                      value={diagFilterDate}
-                      onChange={(e) => setDiagFilterDate(e.target.value)}
-                      className="pl-10 pr-3 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none w-[160px]"
-                    />
-                  </div>
+
+                {/* Date filter — always visible for all tabs */}
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="date"
+                    value={diagFilterDate}
+                    onChange={(e) => setDiagFilterDate(e.target.value)}
+                    className="pl-10 pr-3 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none w-[160px]"
+                  />
+                </div>
+
+                {/* Category filter — only for billing and orders tabs */}
+                {(activeSubTab === 'billing' || activeSubTab === 'orders') && (
                   <select
                     value={diagFilterCategory}
                     onChange={(e) => setDiagFilterCategory(e.target.value)}
@@ -822,51 +850,91 @@ export default function LabXRayPage() {
                     <option value="radiology">X-Ray (Radiology)</option>
                     <option value="scan">Scans / Other</option>
                   </select>
-                </div>
+                )}
 
-                <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl">
-                  <button
-                    onClick={() => setCompletionFilter(completionFilter === 'completed' ? 'all' : 'completed')}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
-                      completionFilter === 'completed'
-                        ? 'bg-white text-green-600 shadow-md ring-1 ring-green-100'
-                        : 'text-gray-500 hover:bg-white hover:text-green-600'
-                    }`}
-                  >
-                    <CheckCircle size={14} />
-                    Paid
-                  </button>
-                  <button
-                    onClick={() => setCompletionFilter(completionFilter === 'pending' ? 'all' : 'pending')}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
-                      completionFilter === 'pending'
-                        ? 'bg-white text-orange-600 shadow-md ring-1 ring-orange-100'
-                        : 'text-gray-500 hover:bg-white hover:text-orange-600'
-                    }`}
-                  >
-                    <Clock size={14} />
-                    Unpaid
-                  </button>
-                </div>
+                {/* Paid / Unpaid toggle — only for billing and orders tabs */}
+                {(activeSubTab === 'billing' || activeSubTab === 'orders') && (
+                  <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl">
+                    <button
+                      onClick={() => setCompletionFilter(completionFilter === 'completed' ? 'all' : 'completed')}
+                      className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+                        completionFilter === 'completed'
+                          ? 'bg-white text-green-600 shadow-md ring-1 ring-green-100'
+                          : 'text-gray-500 hover:bg-white hover:text-green-600'
+                      }`}
+                    >
+                      <CheckCircle size={14} />
+                      Paid
+                    </button>
+                    <button
+                      onClick={() => setCompletionFilter(completionFilter === 'pending' ? 'all' : 'pending')}
+                      className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+                        completionFilter === 'pending'
+                          ? 'bg-white text-orange-600 shadow-md ring-1 ring-orange-100'
+                          : 'text-gray-500 hover:bg-white hover:text-orange-600'
+                      }`}
+                    >
+                      <Clock size={14} />
+                      Unpaid
+                    </button>
+                  </div>
+                )}
 
-                <div className="flex items-center gap-2">
+                {/* Billing payment status dropdown — only for billing tab */}
+                {activeSubTab === 'billing' && (
                   <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    value={billingStatusFilter}
+                    onChange={(e) => setBillingStatusFilter(e.target.value)}
                     className="px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
                   >
-                    <option value="all">Statuses</option>
-                    <option value="ordered">Ordered</option>
-                    <option value="in_progress">Processing</option>
-                    <option value="completed">Completed</option>
+                    <option value="all">All Payment Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="partial">Partial</option>
+                    <option value="paid">Paid</option>
                   </select>
-                  <button 
-                    onClick={() => loadData(true)}
-                    className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
-                  >
-                    <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
-                  </button>
-                </div>
+                )}
+
+                {/* Order status filter — only for lab/radiology/scan order tabs */}
+                {(activeSubTab === 'lab' || activeSubTab === 'radiology' || activeSubTab === 'scan') && (
+                  <>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="ordered">Ordered</option>
+                      <option value="sample_pending">Sample Pending</option>
+                      <option value="sample_collected">Sample Collected</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="patient_arrived">Patient Arrived</option>
+                      <option value="scan_completed">Scan Completed</option>
+                      <option value="report_pending">Report Pending</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                    <select
+                      value={urgencyFilter}
+                      onChange={(e) => setUrgencyFilter(e.target.value)}
+                      className="px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
+                    >
+                      <option value="all">All Urgency</option>
+                      <option value="routine">Routine</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="stat">STAT</option>
+                      <option value="emergency">Emergency</option>
+                    </select>
+                  </>
+                )}
+
+                {/* Refresh button — always visible */}
+                <button 
+                  onClick={() => loadData(true)}
+                  className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors ml-auto"
+                >
+                  <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
               </div>
 
               {/* Real-time Summary Bar under Filters */}
@@ -893,7 +961,7 @@ export default function LabXRayPage() {
                 items={diagnosticFinanceData.filteredBills} 
                 onRefresh={() => loadData(true)} 
                 searchTerm={searchTerm}
-                statusFilter={statusFilter}
+                statusFilter={billingStatusFilter}
                 completionFilter={completionFilter}
               />
             )}
@@ -910,7 +978,7 @@ export default function LabXRayPage() {
                 items={diagnosticFinanceData.filteredBills} 
                 onRefresh={() => loadData(true)} 
                 searchTerm={searchTerm}
-                statusFilter={statusFilter}
+                statusFilter={billingStatusFilter}
                 completionFilter={completionFilter}
               />
             )}
