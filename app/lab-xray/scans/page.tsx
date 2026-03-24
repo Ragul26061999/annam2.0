@@ -362,8 +362,9 @@ export default function ScanOrderPage() {
   };
 
   const handlePaymentClose = () => {
+    // Payment was cancelled — just close the modal, stay on page so user can retry
     setShowPaymentModal(false);
-    setSuccess(true);
+    setSubmitting(false);
   };
 
   if (loading) {

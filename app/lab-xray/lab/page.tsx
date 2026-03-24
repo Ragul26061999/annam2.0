@@ -760,9 +760,9 @@ export default function LabOrderPage() {
     };
 
     const handlePaymentClose = () => {
-        // Even if payment is cancelled/skipped, show success modal because orders were created
+        // Payment was cancelled — just close the modal, stay on page so user can retry
         setShowPaymentModal(false);
-        setSuccess(true);
+        setSubmitting(false);
     };
 
     if (loading) {
