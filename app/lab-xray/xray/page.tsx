@@ -696,6 +696,7 @@ export default function XrayOrderPage() {
                     patient_id: patientDetails.id,
                     ordering_doctor_id: orderingDoctorId || undefined, // Make optional
                     test_catalog_id: test.testId,
+                    amount: test.amount,
                     clinical_indication: clinicalIndication,
                     urgency: urgency,
                     status: 'ordered',

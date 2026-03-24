@@ -716,6 +716,7 @@ export default function LabOrderPage() {
                     patient_id: patientDetails.id,
                     ordering_doctor_id: orderingDoctorId || undefined,
                     test_catalog_id: test.testId,
+                    amount: test.amount,
                     clinical_indication: clinicalIndication,
                     urgency: urgency,
                     status: 'ordered',

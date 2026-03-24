@@ -254,6 +254,7 @@ export interface LabTestOrder {
   preferred_collection_time?: string;
   status?: string;
   staff_id?: string;
+  amount?: number;
 }
 
 export interface ScanOrder {
@@ -294,6 +295,7 @@ export interface RadiologyTestOrder {
   preferred_scan_time?: string;
   status?: string;
   staff_id?: string;
+  amount?: number;
 }
 
 export interface LabTestResult {
@@ -993,10 +995,11 @@ export async function createLabTestOrder(orderData: LabTestOrder): Promise<any> 
   try {
     const orderNumber = generateLabOrderNumber();
 
+    const { amount, ...insertData } = orderData;
     const { data: order, error } = await supabase
       .from('lab_test_orders')
       .insert([{
-        ...orderData,
+        ...insertData,
         order_number: orderNumber,
         status: 'ordered',
         staff_id: orderData.staff_id
@@ -1021,7 +1024,7 @@ export async function createLabTestOrder(orderData: LabTestOrder): Promise<any> 
       if (catalogError) {
         console.error('Error fetching catalog for billing:', catalogError);
       } else if (catalog) {
-        await createDiagnosticBilling('lab', order.id, orderData.patient_id, catalog.test_name, catalog.test_cost);
+        await createDiagnosticBilling('lab', order.id, orderData.patient_id, catalog.test_name, orderData.amount || catalog.test_cost);
       }
     }
 
@@ -1047,6 +1050,7 @@ export async function createLabTestOrder(orderData: LabTestOrder): Promise<any> 
 
       return {
         ...order,
+        amount: orderData.amount,
         patient: patient.data,
         ordering_doctor: doctor.data,
         test_catalog: catalog.data
@@ -1407,10 +1411,11 @@ export async function createRadiologyTestOrder(orderData: RadiologyTestOrder): P
   try {
     const orderNumber = generateRadiologyOrderNumber();
 
+    const { amount, ...insertData } = orderData;
     const { data: order, error } = await supabase
       .from('radiology_test_orders')
       .insert([{
-        ...orderData,
+        ...insertData,
         order_number: orderNumber,
         status: 'ordered',
         staff_id: orderData.staff_id
@@ -1435,7 +1440,7 @@ export async function createRadiologyTestOrder(orderData: RadiologyTestOrder): P
       if (catalogError) {
         console.error('Error fetching catalog for billing:', catalogError);
       } else if (catalog) {
-        await createDiagnosticBilling('radiology', order.id, orderData.patient_id, catalog.test_name, catalog.test_cost);
+        await createDiagnosticBilling('radiology', order.id, orderData.patient_id, catalog.test_name, orderData.amount || catalog.test_cost);
       }
     }
 
@@ -1461,6 +1466,7 @@ export async function createRadiologyTestOrder(orderData: RadiologyTestOrder): P
 
       return {
         ...order,
+        amount: orderData.amount,
         patient: patient.data,
         ordering_doctor: doctor.data,
         test_catalog: catalog.data
@@ -2106,6 +2112,7 @@ export interface ScanTestOrder {
   preferred_scan_time?: string;
   status?: string;
   staff_id?: string;
+  amount?: number;
 }
 
 /**
@@ -2115,10 +2122,11 @@ export async function createScanTestOrder(orderData: ScanTestOrder): Promise<any
   try {
     const orderNumber = generateScanOrderNumber();
 
+    const { amount, ...insertData } = orderData;
     const { data: order, error } = await supabase
       .from('scan_test_orders')
       .insert([{
-        ...orderData,
+        ...insertData,
         order_number: orderNumber,
         status: 'ordered'
       }])
@@ -2142,7 +2150,7 @@ export async function createScanTestOrder(orderData: ScanTestOrder): Promise<any
       if (catalogError) {
         console.error('Error fetching catalog for billing:', catalogError);
       } else if (catalog) {
-        await createDiagnosticBilling('scan', order.id, orderData.patient_id, catalog.test_name, catalog.test_cost);
+        await createDiagnosticBilling('scan', order.id, orderData.patient_id, catalog.test_name, orderData.amount || catalog.test_cost);
       }
     }
 
@@ -2168,6 +2176,7 @@ export async function createScanTestOrder(orderData: ScanTestOrder): Promise<any
 
       return {
         ...order,
+        amount: orderData.amount,
         patient: patient.data,
         ordering_doctor: doctor.data,
         test_catalog: catalog.data

@@ -473,8 +473,8 @@ export async function createLabTestBill(
       singleOrders.map((order: any) => ({
         service_name: order.test_catalog?.test_name || 'Lab Test',
         quantity: 1,
-        unit_rate: Number(order.test_catalog?.test_cost) || 0,
-        total_amount: Number(order.test_catalog?.test_cost) || 0,
+        unit_rate: Number(order.amount || order.test_catalog?.test_cost) || 0,
+        total_amount: Number(order.amount || order.test_catalog?.test_cost) || 0,
         item_type: 'lab_test' as const,
         reference_id: order.id,
       }))
@@ -509,8 +509,8 @@ export async function createRadiologyBill(
   const items: PaymentItem[] = radiologyOrders.map(order => ({
     service_name: order.test_catalog?.test_name || 'Radiology Test',
     quantity: 1,
-    unit_rate: order.test_catalog?.test_cost || 0,
-    total_amount: order.test_catalog?.test_cost || 0,
+    unit_rate: Number(order.amount || order.test_catalog?.test_cost) || 0,
+    total_amount: Number(order.amount || order.test_catalog?.test_cost) || 0,
     item_type: 'radiology' as const,
     reference_id: order.id,
   }));
@@ -541,8 +541,8 @@ export async function createScanBill(
   const items: PaymentItem[] = scanOrders.map(order => ({
     service_name: order.test_catalog?.test_name || 'Scan Test',
     quantity: 1,
-    unit_rate: order.test_catalog?.test_cost || 0,
-    total_amount: order.test_catalog?.test_cost || 0,
+    unit_rate: Number(order.amount || order.test_catalog?.test_cost) || 0,
+    total_amount: Number(order.amount || order.test_catalog?.test_cost) || 0,
     item_type: 'scan' as const, // Using scan type for scans
     reference_id: order.id,
   }));
