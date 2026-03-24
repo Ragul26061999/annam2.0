@@ -184,12 +184,19 @@ export function IPBreakdownBillPrint({ billing }: IPBreakdownBillPrintProps) {
       });
     }
 
-    // Other Charges
+    // IP Entered Bill
     if (billing.summary.other_charges_total > 0) {
+      const otherChargeItems = (billing.other_charges || []).map((charge: any) => ({
+        description: charge.service_name,
+        quantity: charge.days || charge.quantity || 1,
+        unitPrice: charge.rate,
+        total: charge.amount
+      }));
+
       departments.push({
-        name: 'Other Services',
+        name: 'IP Entered Bill',
         charges: billing.summary.other_charges_total,
-        items: [
+        items: otherChargeItems.length > 0 ? otherChargeItems : [
           {
             description: 'Miscellaneous Charges',
             quantity: 1,
@@ -459,7 +466,8 @@ export function IPBreakdownBillPrint({ billing }: IPBreakdownBillPrintProps) {
                     {department.name === 'Professional Services' ? 'Service Category' : 
                      department.name === 'Pharmacy' ? 'Medicine Name' :
                      department.name === 'Laboratory' ? 'Test Name' :
-                     department.name === 'Radiology & Imaging' ? 'Scan Name' : 'Description'}
+                     department.name === 'Radiology & Imaging' ? 'Scan Name' : 
+                     department.name === 'IP Entered Bill' ? 'Charges Name' : 'Description'}
                   </th>
                   {department.name === 'Professional Services' && (
                     <th style={{width: '150'}}>Doctors</th>

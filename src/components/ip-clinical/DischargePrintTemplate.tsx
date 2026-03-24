@@ -118,18 +118,18 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
         </div>
 
         {/* Patient Identification */}
-        <div className="section-break mb-8">
-          <div className="flex gap-8 text-sm font-medium pt-4">
-            {/* Left Column */}
+        <div className="section-break mb-8">          {/* Identification Section */}
+          <div className="flex gap-10 text-sm font-medium pt-4">
+            {/* Left Column (Personal & Medical Team) */}
             <div className="w-1/2 flex flex-col gap-4">
               <div className="flex items-baseline">
-                <span className="font-bold w-24 shrink-0">Name :</span>
-                <span className="flex-1 uppercase border-b border-dotted border-gray-400 pb-1">
+                <span className="font-bold w-40 shrink-0">Name :</span>
+                <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
                   {(summary.patient_name || patient?.name) ? (summary.patient_name || patient?.name) : '______________________'}
                 </span>
               </div>
               <div className="flex items-start">
-                <span className="font-bold w-24 shrink-0 mt-1">Address :</span>
+                <span className="font-bold w-40 shrink-0 mt-1">Address :</span>
                 <span className="flex-1 min-h-[48px] whitespace-pre-wrap border-b border-dotted border-gray-400 pb-1">
                   {summary.address || (() => {
                     const addressParts = [];
@@ -141,52 +141,56 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
                   })()}
                 </span>
               </div>
-              <div className="flex items-baseline mt-auto">
-                <span className="font-bold w-24 shrink-0">Consultant :</span>
-                <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">{summary.consult_doctor_name || summary.consultant_name}</span>
+              <div className="flex items-baseline">
+                <span className="font-bold w-40 shrink-0">Consultant :</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.consult_doctor_name || summary.consultant_name || '-'}</span>
+              </div>
+              <div className="flex items-baseline">
+                <span className="font-bold w-40 shrink-0">Surgeon :</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.surgeon_doctor_name || '-'}</span>
+              </div>
+              <div className="flex items-baseline">
+                <span className="font-bold w-40 shrink-0">Anesthesiologist :</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.anesthesiologist_doctor || '-'}</span>
               </div>
             </div>
 
-            {/* Right Column */}
-            <div className="w-1/2 flex flex-col gap-3">
+            {/* Right Column (Administrative & Dates) */}
+            <div className="w-1/2 flex flex-col gap-4">
               <div className="flex items-baseline">
-                <span className="font-bold w-36 shrink-0">Age & Sex :</span>
+                <span className="font-bold w-44 shrink-0">Age & Sex :</span>
                 <span className="flex-1 border-b border-dotted border-gray-400 pb-1">
                   {String(summary.age || patient?.age || '__')} Yrs / {String(summary.gender || patient?.gender || '__')}
                 </span>
               </div>
+              
               <div className="flex items-center justify-between">
-                 <div className="flex items-baseline flex-1">
-                    <span className="font-bold w-20 shrink-0">O.P. No.</span>
-                    <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
-                      {String(patient?.patient_id || '______________________')}
-                    </span>
-                 </div>
-                 <div className="flex items-baseline flex-1 ml-4">
-                    <span className="font-bold w-16 shrink-0 text-right pr-2">I.P. No.</span>
-                    <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
-                      {bedAllocation?.ip_number || '______________________'}
-                    </span>
-                 </div>
+                <div className="flex items-baseline flex-1">
+                  <span className="font-bold w-20 shrink-0">O.P. No.</span>
+                  <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
+                    {String(patient?.patient_id || '______________________')}
+                  </span>
+                </div>
+                <div className="flex items-baseline flex-1 ml-4">
+                  <span className="font-bold w-16 shrink-0 text-right pr-2">I.P. No.</span>
+                  <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
+                    {bedAllocation?.ip_number || '______________________'}
+                  </span>
+                </div>
               </div>
+
               <div className="flex items-baseline">
-                <span className="font-bold w-36 shrink-0">Date of Admission :</span>
+                <span className="font-bold w-44 shrink-0">Date of Admission :</span>
                 <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{formatDate(bedAllocation?.admission_date)}</span>
               </div>
+              
               <div className="flex items-baseline">
-                <span className="font-bold w-36 shrink-0">Date of Surgery :</span>
+                <span className="font-bold w-44 shrink-0">Date of Surgery :</span>
                 <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{summary.surgery_date ? formatDate(summary.surgery_date) : '-'}</span>
               </div>
+
               <div className="flex items-baseline">
-                <span className="font-bold w-36 shrink-0">Surgeon :</span>
-                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.surgeon_doctor_name || '-'}</span>
-              </div>
-              <div className="flex items-baseline">
-                <span className="font-bold w-36 shrink-0">Anesthesiologist :</span>
-                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.anesthesiologist_doctor || '-'}</span>
-              </div>
-              <div className="flex items-baseline">
-                <span className="font-bold w-36 shrink-0">Date of Discharge :</span>
+                <span className="font-bold w-44 shrink-0">Date of Discharge :</span>
                 <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{formatDate(summary.discharge_date)}</span>
               </div>
             </div>

@@ -938,13 +938,36 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
           </div>
         )}
 
-        {/* Other Charges */}
+        {/* IP Entered Bill (Other Charges) */}
         {billing.other_charges.length > 0 && (
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Other Charges</h2>
+              <h2 className="text-xl font-bold text-gray-900">IP Entered Bill</h2>
               <span className="text-2xl font-bold text-blue-600">{formatCurrency(billing.summary.other_charges_total)}</span>
             </div>
+
+            {/* Added: Summary of IP Entered Bill limits */}
+            <div className="bg-blue-50/50 p-4 rounded-lg mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 border border-blue-100">
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Total Amount</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(billing.summary.other_charges_total)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Advance Used</p>
+                <p className="text-lg font-bold text-green-600">{formatCurrency(billing.summary.advance_paid || 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Concession</p>
+                <p className="text-lg font-bold text-orange-600">{formatCurrency(billing.summary.discount || 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Net Amount</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {formatCurrency(Math.max(0, billing.summary.other_charges_total - (billing.summary.advance_paid || 0) - (billing.summary.discount || 0)))}
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-3">
               {billing.other_charges.map((charge, idx) => (
                 <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
@@ -956,7 +979,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                           <span className="text-xs font-bold text-orange-700">$</span>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500 uppercase">Service</p>
+                          <p className="text-xs text-gray-500 uppercase">Charges Name</p>
                           <p className="font-semibold text-gray-900">{charge.service_name}</p>
                         </div>
                       </div>
@@ -967,8 +990,8 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                           <span className="text-xs font-bold text-gray-700">#</span>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500 uppercase">Quantity</p>
-                          <p className="font-medium text-gray-900">{charge.quantity}</p>
+                          <p className="text-xs text-gray-500 uppercase">Quantity / Days</p>
+                          <p className="font-medium text-gray-900">{charge.days || charge.quantity}</p>
                         </div>
                       </div>
 
@@ -987,7 +1010,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                       <div className="flex-1 max-w-xs">
                         <p className="text-xs text-gray-500 uppercase mb-1">Calculation</p>
                         <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded">
-                          <span className="text-sm text-gray-600">{charge.quantity}</span>
+                          <span className="text-sm text-gray-600">{charge.days || charge.quantity}</span>
                           <span className="text-gray-400">×</span>
                           <span className="text-sm text-gray-600">{formatCurrency(charge.rate)}</span>
                           <span className="text-gray-400">=</span>

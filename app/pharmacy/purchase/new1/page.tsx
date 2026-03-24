@@ -65,6 +65,14 @@ interface DrugLineItem {
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n)
 
+const fmtRound = (n: number) =>
+  new Intl.NumberFormat('en-IN', { 
+    style: 'currency', 
+    currency: 'INR', 
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0 
+  }).format(Math.round(n))
+
 const fmtNum = (n: number, decimals = 2) => Number(n).toFixed(decimals)
 
 const genKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -707,18 +715,19 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
       totalCgst += item.cgst_amount
       totalSgst += item.sgst_amount
     })
-    const netAmount = totalAmt
+    const totalAmtRounded = Math.round(totalAmt)
+    const netAmount = totalAmtRounded
     return {
       discount_percent: totalAmt > 0 ? (totalDisc / totalAmt * 100) : 0,
       total_discount: totalDisc,
       total_gst: totalGst,
-      total_amount: totalAmt,
+      total_amount: totalAmtRounded,
       paid_amount: header.bill_amount || 0,
       net_amount: netAmount,
       total_cgst: totalCgst,
       total_sgst: totalSgst,
     }
-  }, [items])
+  }, [items, header.bill_amount])
 
   // ─── Auto-fill header fields from summary ───────────────────────────────────
   useEffect(() => {
@@ -1597,9 +1606,9 @@ function EnhancedPurchaseEntryPageInner({ purchaseIdFromUrl }: { purchaseIdFromU
               <SummaryField label="Discount %" value={`${fmtNum(summary.discount_percent, 1)}%`} />
               <SummaryField label="Total Discount" value={fmt(summary.total_discount)} color="text-red-600" />
               <SummaryField label="Total GST" value={fmt(summary.total_gst)} color="text-green-600" />
-              <SummaryField label="Total Amount" value={fmt(summary.total_amount)} />
-              <SummaryField label="Paid Amount" value={fmt(summary.paid_amount)} />
-              <SummaryField label="Net Amount" value={fmt(summary.net_amount)} color="text-blue-700" highlight />
+              <SummaryField label="Total Amount" value={fmtRound(summary.total_amount)} />
+              <SummaryField label="Paid Amount" value={fmtRound(summary.paid_amount)} />
+              <SummaryField label="Net Amount" value={fmtRound(summary.net_amount)} color="text-blue-700" highlight />
             </div>
 
             {/* Remarks */}

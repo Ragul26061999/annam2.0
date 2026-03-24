@@ -280,7 +280,7 @@ export async function getIPComprehensiveBilling(
     try {
       const { data: ds, error: dsError } = await supabase
         .from('discharge_summaries')
-        .select('bed_days, bed_daily_rate, bed_total, doctor_consultation_days, doctor_consultation_fee, doctor_consultation_total')
+        .select('bed_days, bed_daily_rate, bed_total, doctor_consultation_days, doctor_consultation_fee, doctor_consultation_total, other_charges_json, discount_amount')
         .eq('allocation_id', bedAllocationId)
         .maybeSingle();
 
@@ -808,17 +808,43 @@ export async function getIPComprehensiveBilling(
       .eq('billing_status', 'pending')
       .order('created_at', { ascending: true });
 
-    // 9. Get other charges (from billing_items if exists)
+    // 9. Get other charges — prefer JSON saved in discharge_summaries (most up-to-date),
+    //    fall back to billing_item table if no saved JSON exists yet.
     let otherItems: any[] = [];
-    try {
-      // In this DB, billing_item uses ref_id to link to IP stay / other references.
-      const { data: oi, error: oiError } = await supabase
-        .from('billing_item')
-        .select('*')
-        .eq('ref_id', bedAllocationId);
-      if (!oiError) otherItems = oi || [];
-    } catch (e) {
-      otherItems = [];
+    if (dischargeSummary?.other_charges_json) {
+      try {
+        const parsed = typeof dischargeSummary.other_charges_json === 'string'
+          ? JSON.parse(dischargeSummary.other_charges_json)
+          : dischargeSummary.other_charges_json;
+        otherItems = Array.isArray(parsed) ? parsed.map((item: any) => ({
+          service_name: item.service_name,
+          rate: item.rate,
+          quantity: item.quantity || 1,
+          days: item.days || item.quantity || 1,
+          amount: item.amount
+        })) : [];
+      } catch (e) {
+        otherItems = [];
+      }
+    } else {
+      // Fallback: try billing_item table for older records
+      try {
+        const { data: oi, error: oiError } = await supabase
+          .from('billing_item')
+          .select('*')
+          .eq('ref_id', bedAllocationId);
+        if (!oiError && oi && oi.length > 0) {
+          otherItems = oi.map((item: any) => ({
+            service_name: item.description,
+            rate: item.unit_amount,
+            quantity: item.qty,
+            days: item.qty,
+            amount: item.total_amount
+          }));
+        }
+      } catch (e) {
+        otherItems = [];
+      }
     }
 
     // 10. Get Other Bills for this patient during IP stay
@@ -841,11 +867,13 @@ export async function getIPComprehensiveBilling(
     });
 
     const otherCharges: IPBillingItem[] = [
+      // otherItems are already normalized to { service_name, rate, quantity, days, amount } 
       ...(otherItems || []).map((item: any) => ({
-        service_name: item.description,
-        rate: item.unit_amount,
-        quantity: item.qty,
-        amount: item.total_amount
+        service_name: item.service_name,
+        rate: Number(item.rate || 0),
+        quantity: Number(item.quantity || item.qty || 1),
+        days: Number(item.days || item.quantity || item.qty || 1),
+        amount: Number(item.amount || item.total_amount || 0)
       })),
       ...(otherBillsWithStatus || []).map((bill: any) => ({
         service_name: `${bill.charge_category}: ${bill.charge_description}`,
@@ -1059,6 +1087,8 @@ export async function saveIPBilling(
       net_amount: billingData.summary.net_payable,
       paid_amount: paidAmount,
       pending_amount: pendingAmount,
+      // Store other_charges as JSON for reliable persistence without FK dependencies
+      other_charges_json: JSON.stringify(billingData.other_charges || []),
     };
 
     const { data: existingSummary, error: existingSummaryError } = await supabase
@@ -1068,23 +1098,39 @@ export async function saveIPBilling(
       .maybeSingle();
 
     let dischargeError: any = null;
-    if (!existingSummaryError && existingSummary?.id) {
-      const { error: updErr } = await supabase
-        .from('discharge_summaries')
-        .update(dischargePayload)
-        .eq('id', existingSummary.id);
-      dischargeError = updErr;
-    } else {
-      const { error: insErr } = await supabase
-        .from('discharge_summaries')
-        .insert(dischargePayload);
-      dischargeError = insErr;
+
+    const trySave = async (payload: any) => {
+      if (!existingSummaryError && existingSummary?.id) {
+        const { error } = await supabase
+          .from('discharge_summaries')
+          .update(payload)
+          .eq('id', existingSummary.id);
+        return error;
+      } else {
+        const { error } = await supabase
+          .from('discharge_summaries')
+          .insert(payload);
+        return error;
+      }
+    };
+
+    // First try with other_charges_json
+    dischargeError = await trySave(dischargePayload);
+
+    // If failed (possibly column doesn't exist yet), retry without it
+    if (dischargeError) {
+      console.warn('Save with other_charges_json failed, retrying without it:', dischargeError.message);
+      const { other_charges_json, ...fallbackPayload } = dischargePayload;
+      dischargeError = await trySave(fallbackPayload);
     }
 
     if (dischargeError) {
       console.error('Error saving IP billing:', dischargeError);
       throw dischargeError;
     }
+
+    // other_charges_json is already saved inside dischargePayload above.
+    // No separate insert into billing_item needed.
   } catch (error) {
     console.error('Error in saveIPBilling:', error);
     throw error;

@@ -308,7 +308,7 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
             {billing.summary.other_charges_total > 0 && (
               <tr>
                 <td>{6 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0) + (billing.summary.pharmacy_total > 0 ? 1 : 0) + (billing.summary.lab_total > 0 ? 1 : 0) + (billing.summary.radiology_total > 0 ? 1 : 0)}</td>
-                <td>Other Charges</td>
+                <td>IP Entered Bill</td>
                 <td className="text-right">{formatCurrency(billing.summary.other_charges_total)}</td>
               </tr>
             )}

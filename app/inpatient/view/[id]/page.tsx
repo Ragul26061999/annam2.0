@@ -1627,15 +1627,20 @@ export default function IPDetailPage() {
                 <p className="text-base font-semibold text-slate-800">Billing Details</p>
                 <p className="text-sm text-slate-400 mt-1">View detailed billing, itemized charges and payment history</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <Link href={`/inpatient/billing/${allocationId}`}>
-                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg transition-all">
+                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm hover:shadow-md">
                     <Receipt className="h-4 w-4" /> View Full Bill
                   </button>
                 </Link>
                 <Link href={`/inpatient/billing-breakdown/${allocationId}`}>
-                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-all">
+                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-all shadow-sm hover:shadow-md">
                     <FileText className="h-4 w-4" /> Breakdown Bill
+                  </button>
+                </Link>
+                <Link href={`/inpatient/billing/${allocationId}/create`}>
+                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm hover:shadow-md">
+                    <Plus className="h-4 w-4" /> IP Create Bill
                   </button>
                 </Link>
               </div>

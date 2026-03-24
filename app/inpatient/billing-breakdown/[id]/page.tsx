@@ -19,8 +19,12 @@ interface DepartmentSummary {
     quantity: number;
     unitPrice: number;
     total: number;
+    doctors?: string[];
   }>;
   color: string;
+  advance?: number;
+  concession?: number;
+  netAmount?: number;
 }
 
 export default function BreakdownBillPage() {
@@ -233,13 +237,20 @@ export default function BreakdownBillPage() {
       });
     }
 
-    // Other Charges
+    // IP Entered Bill (previously Other Charges)
     if (billing.summary.other_charges_total > 0) {
+      const otherChargeItems = (billing.other_charges || []).map((charge: any) => ({
+        description: charge.service_name,
+        quantity: charge.days || charge.quantity || 1,
+        unitPrice: charge.rate,
+        total: charge.amount
+      }));
+
       departments.push({
-        name: 'Other Services',
+        name: 'IP Entered Bill',
         icon: Activity,
         charges: billing.summary.other_charges_total,
-        items: [
+        items: otherChargeItems.length > 0 ? otherChargeItems : [
           {
             description: 'Miscellaneous Charges',
             quantity: 1,
@@ -247,7 +258,10 @@ export default function BreakdownBillPage() {
             total: billing.summary.other_charges_total
           }
         ],
-        color: 'gray'
+        color: 'orange',
+        advance: billing.summary.advance_paid || 0,
+        concession: billing.summary.discount || 0,
+        netAmount: Math.max(0, billing.summary.other_charges_total - (billing.summary.advance_paid || 0) - (billing.summary.discount || 0))
       });
     }
 
@@ -374,7 +388,8 @@ export default function BreakdownBillPage() {
                       department.name === 'Professional Services' ? 'Service Category' : 
                       department.name === 'Pharmacy' ? 'Medicine Name' :
                       department.name === 'Laboratory' ? 'Test Name' :
-                      department.name === 'Radiology & Imaging' ? 'Scan Name' : 'Description'
+                      department.name === 'Radiology & Imaging' ? 'Scan Name' : 
+                      department.name === 'IP Entered Bill' ? 'Charges Name' : 'Description'
                     }</th>
                     ${department.name === 'Professional Services' ? '<th>Doctors</th>' : ''}
                     <th style="width: 60px;" class="text-center">${
@@ -600,6 +615,28 @@ export default function BreakdownBillPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Additional Details for IP Entered Bill */}
+                {department.name === 'IP Entered Bill' && (
+                  <div className="bg-orange-50/50 p-4 border-b border-orange-100 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase font-semibold">Total Amount</p>
+                      <p className="text-lg font-bold text-gray-900">{formatCurrency(department.charges)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase font-semibold">Advance Used</p>
+                      <p className="text-lg font-bold text-green-600">{formatCurrency(department.advance || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase font-semibold">Concession</p>
+                      <p className="text-lg font-bold text-orange-600">{formatCurrency(department.concession || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase font-semibold">Net Amount</p>
+                      <p className="text-lg font-bold text-blue-600">{formatCurrency(department.netAmount || 0)}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Department Items */}
                 <div className="p-4">
