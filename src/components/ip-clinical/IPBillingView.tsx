@@ -9,19 +9,17 @@ import {
   IPPrescribedMedicine
 } from '../../lib/ipBillingService';
 import {
-  getBillingSummary,
-  getTotalAvailableAdvance,
-  getAvailableAdvances
+  getBillingSummary
 } from '../../lib/ipFlexibleBillingService';
 import IPBillingMedicinesEditor from './IPBillingMedicinesEditor';
 import IPBillingLabEditor from './IPBillingLabEditor';
 import IPPaymentReceiptModal from './IPPaymentReceiptModal';
-import IPAdvanceReceiptModal from './IPAdvanceReceiptModal';
+
 import IPBillWisePaymentModal from './IPBillWisePaymentModal';
 import OtherBillsPaymentModal from '../OtherBillsPaymentModal';
 import IPBillPaymentModal from './IPBillPaymentModal';
 import { IPBillingMultiPagePrint } from './IPBillingMultiPagePrint';
-import IPSurgeryChargesEditor from './IPSurgeryChargesEditor';
+import IPServiceChargesEditor from './IPServiceChargesEditor';
 import IPDoctorConsultationsEditor from './IPDoctorConsultationsEditor';
 
 interface IPBillingViewProps {
@@ -36,11 +34,9 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showBillWisePaymentModal, setShowBillWisePaymentModal] = useState(false);
   const [showOtherBillPaymentModal, setShowOtherBillPaymentModal] = useState(false);
   const [selectedOtherBill, setSelectedOtherBill] = useState<any | null>(null);
-  const [availableAdvance, setAvailableAdvance] = useState(0);
   const [flexibleBillingSummary, setFlexibleBillingSummary] = useState<any>(null);
   const [showBillPaymentModal, setShowBillPaymentModal] = useState(false);
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<any | null>(null);
@@ -57,15 +53,10 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
 
   const loadFlexibleBillingData = async () => {
     try {
-      const [summary, advance] = await Promise.all([
-        getBillingSummary(bedAllocationId),
-        getTotalAvailableAdvance(bedAllocationId)
-      ]);
+      const summary = await getBillingSummary(bedAllocationId);
       setFlexibleBillingSummary(summary);
-      setAvailableAdvance(advance);
     } catch (err) {
       console.error('Error loading flexible billing data:', err);
-      // Don't show error - new system might not be active yet
     }
   };
 
@@ -194,19 +185,20 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
       (summary.pharmacy_total || 0) +
       (summary.lab_total || 0) +
       (summary.radiology_total || 0) +
+      (summary.scan_total || 0) +
       (summary.other_charges_total || 0) +
       (summary.other_bills_total || 0);
 
     const paidTotal =
-      (summary.advance_paid || 0) +
       receiptsTotal +
       (summary.other_bills_paid_total || 0);
 
     const pendingAmount = Math.max(0, grossTotal - (summary.discount || 0) - paidTotal);
-    const netPayable = grossTotal - (summary.advance_paid || 0) - (summary.discount || 0);
+    const netPayable = grossTotal - (summary.discount || 0);
 
     const updatedSummary = {
       ...summary,
+      advance_paid: 0, // Force advance to 0 for this view
       gross_total: grossTotal,
       paid_total: paidTotal,
       net_payable: netPayable,
@@ -366,11 +358,11 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
           </div>
         </div>
 
-        {/* Surgery Charges */}
-        <IPSurgeryChargesEditor
+        {/* Service Charges */}
+        <IPServiceChargesEditor
           bedAllocationId={bedAllocationId}
           patientId={billing.patient.id}
-          isEditable={true}
+          billing={billing}
           onUpdate={loadBillingData}
         />
 
@@ -953,17 +945,9 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                 <p className="text-lg font-bold text-gray-900">{formatCurrency(billing.summary.other_charges_total)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 uppercase font-semibold">Advance Used</p>
-                <p className="text-lg font-bold text-green-600">{formatCurrency(billing.summary.advance_paid || 0)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-semibold">Concession</p>
-                <p className="text-lg font-bold text-orange-600">{formatCurrency(billing.summary.discount || 0)}</p>
-              </div>
-              <div>
                 <p className="text-xs text-gray-500 uppercase font-semibold">Net Amount</p>
                 <p className="text-lg font-bold text-blue-600">
-                  {formatCurrency(Math.max(0, billing.summary.other_charges_total - (billing.summary.advance_paid || 0) - (billing.summary.discount || 0)))}
+                  {formatCurrency(Math.max(0, billing.summary.other_charges_total - (billing.summary.discount || 0)))}
                 </p>
               </div>
             </div>
@@ -1207,13 +1191,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
               </div>
             )}
 
-            {/* Advance Amount Display */}
-            {(availableAdvance > 0 || billing.summary.advance_paid > 0) && (
-              <div className="flex justify-between text-lg">
-                <span className="text-purple-700 font-semibold">Advance Amount</span>
-                <span className="font-semibold text-purple-700">- {formatCurrency(availableAdvance || billing.summary.advance_paid)}</span>
-              </div>
-            )}
+
 
             <div className="flex justify-between text-lg">
               <span className="text-gray-700">Total Paid</span>
@@ -1277,34 +1255,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
               </div>
             )}
 
-            {/* Flexible Billing Summary (if available) */}
-            {flexibleBillingSummary && (
-              <div className="mt-4 bg-purple-50 rounded-lg border border-purple-200 overflow-hidden">
-                <div className="px-4 py-3 bg-purple-100 border-b border-purple-200">
-                  <h3 className="font-bold text-purple-900">Bill-wise Payment Summary</h3>
-                </div>
-                <div className="p-4 space-y-2">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Total Advance:</span>
-                      <span className="ml-2 font-semibold text-purple-700">{formatCurrency(flexibleBillingSummary.total_advance)}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Available Advance:</span>
-                      <span className="ml-2 font-semibold text-purple-700">{formatCurrency(flexibleBillingSummary.available_advance)}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Gross Total:</span>
-                      <span className="ml-2 font-semibold text-gray-900">{formatCurrency(flexibleBillingSummary.gross_total)}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Paid Total:</span>
-                      <span className="ml-2 font-semibold text-green-700">{formatCurrency(flexibleBillingSummary.paid_total)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+
           </div>
         </div>
       </div>
@@ -1327,17 +1278,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
         }}
       />
 
-      {/* Advance Receipt Modal */}
-      <IPAdvanceReceiptModal
-        isOpen={showAdvanceModal}
-        onClose={() => setShowAdvanceModal(false)}
-        bedAllocationId={bedAllocationId}
-        patientId={billing.patient.id}
-        patientName={billing.patient.name}
-        onSuccess={() => {
-          loadFlexibleBillingData();
-        }}
-      />
 
       {/* Bill-wise Payment Modal */}
       <IPBillWisePaymentModal

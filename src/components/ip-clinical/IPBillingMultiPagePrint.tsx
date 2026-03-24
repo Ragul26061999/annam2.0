@@ -316,12 +316,6 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
               <td colSpan={2} className="text-right">GROSS TOTAL:</td>
               <td className="text-right">{formatCurrency(billing.summary.gross_total)}</td>
             </tr>
-            {billing.summary.advance_paid > 0 && (
-              <tr>
-                <td colSpan={2} className="text-right">Less: Advance Paid</td>
-                <td className="text-right">- {formatCurrency(billing.summary.advance_paid)}</td>
-              </tr>
-            )}
             {billing.summary.discount > 0 && (
               <tr>
                 <td colSpan={2} className="text-right">Less: Discount</td>

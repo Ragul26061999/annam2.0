@@ -141,15 +141,15 @@ export default function IPSurgeryChargesEditor({
   const totalAmount = surgeries.reduce((sum, s) => sum + (s.total_amount || 0), 0);
 
   if (loading) {
-    return <div className="p-4 text-center text-gray-500">Loading surgery charges...</div>;
+    return <div className="p-4 text-center text-gray-500">Loading service charges...</div>;
   }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-bold text-gray-900">Surgery Charges</h3>
-          <p className="text-sm text-gray-600">Surgical procedures and related charges</p>
+          <h3 className="text-lg font-bold text-gray-900 uppercase">SERVICE CHARGES</h3>
+          <p className="text-sm text-gray-600 font-medium">Surgical procedures and related service charges</p>
         </div>
         {isEditable && (
           <button
@@ -157,18 +157,18 @@ export default function IPSurgeryChargesEditor({
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            Add Surgery
+            Add Service Charge
           </button>
         )}
       </div>
 
       {showAddForm && (
         <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-          <h4 className="font-semibold text-gray-800 mb-3">Add Surgery Charge</h4>
+          <h4 className="font-semibold text-gray-800 mb-3">Add Service Charge</h4>
           <div className="grid grid-cols-2 gap-3">
             <input
               type="text"
-              placeholder="Surgery Name *"
+              placeholder="Service Name *"
               value={formData.surgery_name}
               onChange={(e) => setFormData({ ...formData, surgery_name: e.target.value })}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
@@ -228,7 +228,7 @@ export default function IPSurgeryChargesEditor({
               disabled={!formData.surgery_name}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm"
             >
-              Save Surgery
+              Save Service Charge
             </button>
             <button
               onClick={() => setShowAddForm(false)}
@@ -242,7 +242,7 @@ export default function IPSurgeryChargesEditor({
 
       {surgeries.length === 0 ? (
         <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-          No surgery charges recorded
+          No service charges recorded
         </div>
       ) : (
         <div className="space-y-3">
@@ -300,7 +300,7 @@ export default function IPSurgeryChargesEditor({
           ))}
           <div className="pt-3 border-t border-gray-200">
             <div className="flex justify-between items-center">
-              <span className="text-lg font-semibold text-gray-700">Total Surgery Charges:</span>
+              <span className="text-lg font-semibold text-gray-700">Total Service Charges:</span>
               <span className="text-2xl font-bold text-purple-600">{formatCurrency(totalAmount)}</span>
             </div>
           </div>

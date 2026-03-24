@@ -2536,7 +2536,7 @@ export async function createGroupedLabOrder(params: CreateGroupedLabOrderParams)
         p_is_ip: params.is_ip || false,
         p_bed_allocation_id: params.bed_allocation_id || null,
         p_group_id: groupId,
-        p_group_name: params.group_name || null
+        p_group_name: params.group_name || `Lab Order - ${new Date().toLocaleDateString()}`
       });
 
       if (error) {

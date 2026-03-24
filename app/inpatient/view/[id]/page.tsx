@@ -33,10 +33,10 @@ export default function IPDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
   const [showPrescribeForm, setShowPrescribeForm] = useState(false);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loadingPrescriptions, setLoadingPrescriptions] = useState(false);
-
   // Lab / Scan / X-Ray tab state
   const [labOrders, setLabOrders] = useState<GroupedLabOrder[]>([]);
   const [loadingLabOrders, setLoadingLabOrders] = useState(false);
@@ -98,9 +98,27 @@ export default function IPDetailPage() {
       if (user) {
         const { data: profile } = await supabase
           .from('users').select('*').eq('auth_id', user.id).maybeSingle();
-        setCurrentUser(profile || { id: user.id, name: user.email });
+        
+        const userProfile = profile || { id: user.id, name: user.email };
+        setCurrentUser(userProfile);
+
+        // Fetch doctor ID for this user if it exists
+        if (userProfile?.id) {
+          const { data: doctor } = await supabase
+            .from('doctors')
+            .select('id')
+            .eq('user_id', userProfile.id)
+            .is('deleted_at', null)
+            .maybeSingle();
+          
+          if (doctor) {
+            setCurrentDoctorId(doctor.id);
+          }
+        }
       }
-    } catch {}
+    } catch (err) {
+      console.error('Error loading current user/doctor:', err);
+    }
   };
 
   const loadPrescriptions = async () => {
@@ -271,7 +289,7 @@ export default function IPDetailPage() {
         is_ip: true,
         clinical_indication: labIndication.trim(),
         urgency: labUrgency,
-        ordering_doctor_id: currentUser?.id,
+        ordering_doctor_id: currentDoctorId || allocation?.doctor_id || undefined,
         service_items: selectedTests.map((t, i) => ({
           service_type: t.type,
           catalog_id: t.id,

@@ -134,7 +134,7 @@ const Sidebar: React.FC = () => {
     },
     {
       href: '/surgery-charges',
-      label: 'Surgery Charges',
+      label: 'Service Charges',
       icon: <Scissors size={18} />,
       color: 'text-purple-600'
     },
