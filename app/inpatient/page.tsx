@@ -59,7 +59,8 @@ export default function InpatientPage() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [billingSearchTerm, setBillingSearchTerm] = useState('');
   const [billingStatusFilter, setBillingStatusFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState<'overview' | 'beds' | 'billing'>('overview');
+  const [dischargedSearchTerm, setDischargedSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'overview' | 'beds' | 'billing' | 'discharged'>('overview');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -115,10 +116,13 @@ export default function InpatientPage() {
         todayAdmissions: a.allocations.filter((x: any) => x.admission_date?.startsWith(today)).length,
       });
       setAllocations(a.allocations);
-      setAllAllocations(aa.allocations);
-      if (a.allocations.length > 0) {
+      // Fetch more allocations for Billing and Discharged tabs
+      const { allocations: largerAllocations } = await getBedAllocations({ status: undefined, limit: 1000 });
+      setAllAllocations(largerAllocations);
+      const combinedIds = Array.from(new Set([...a.allocations.map((x: any) => x.id), ...largerAllocations.map((x: any) => x.id)]));
+      if (combinedIds.length > 0) {
         try {
-          const allocationIds = a.allocations.map((x: any) => x.id);
+          const allocationIds = combinedIds;
           const map = await getDischargeSummaryIdsByAllocations(allocationIds);
           setDischargeSummaryByAllocation(map);
           const { data: advRows } = await supabase
@@ -158,6 +162,16 @@ export default function InpatientPage() {
   const filteredAllocations = allocations.filter(a => {
     if (!searchTerm) return true;
     const q = searchTerm.toLowerCase();
+    return (a.patient?.name || '').toLowerCase().includes(q) ||
+      (a.patient?.uhid || '').toLowerCase().includes(q) ||
+      (a.bed?.bed_number || '').toLowerCase().includes(q) ||
+      (a.ip_number || '').toLowerCase().includes(q);
+  });
+
+  const dischargedAllocations = allAllocations.filter(a => {
+    if (a.status !== 'discharged') return false;
+    if (!dischargedSearchTerm) return true;
+    const q = dischargedSearchTerm.toLowerCase();
     return (a.patient?.name || '').toLowerCase().includes(q) ||
       (a.patient?.uhid || '').toLowerCase().includes(q) ||
       (a.bed?.bed_number || '').toLowerCase().includes(q) ||
@@ -233,9 +247,10 @@ export default function InpatientPage() {
         {/* Tab bar */}
         <div className="px-6 flex gap-0 -mb-px">
           {([
-            { id: 'overview', label: 'Patients', icon: Users },
-            { id: 'beds',     label: 'Bed Map',  icon: BedDouble },
-            { id: 'billing',  label: 'Billing',  icon: Receipt },
+            { id: 'overview',   label: 'Patients',           icon: Users },
+            { id: 'beds',       label: 'Bed Map',            icon: BedDouble },
+            { id: 'billing',    label: 'Billing',            icon: Receipt },
+            { id: 'discharged', label: 'Discharged Patient', icon: LogOut },
           ] as const).map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setActiveTab(id)}
               className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-all ${
@@ -349,18 +364,8 @@ export default function InpatientPage() {
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-slate-700">
-                  {filteredAllocations.length} Patient{filteredAllocations.length !== 1 ? 's' : ''}
+                  {filteredAllocations.length} Active Patient{filteredAllocations.length !== 1 ? 's' : ''}
                 </h2>
-                <div className="flex gap-1 p-0.5 bg-slate-100 rounded-lg">
-                  {(['active', 'all', 'discharged'] as const).map(s => (
-                    <button key={s} onClick={() => setStatusFilter(s)}
-                      className={`px-3 py-1 text-[11px] font-semibold rounded-md capitalize transition-all ${
-                        statusFilter === s
-                          ? 'bg-white text-slate-800 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}>{s === 'active' ? 'Active' : s === 'all' ? 'All' : 'Discharged'}</button>
-                  ))}
-                </div>
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
@@ -610,6 +615,219 @@ export default function InpatientPage() {
           </div>
         )}
 
+        {/* ══ DISCHARGED PATIENT TAB ══ */}
+        {activeTab === 'discharged' && (
+          <div className="space-y-4">
+            {/* Controls */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-700">
+                  {dischargedAllocations.length} Discharged Record{dischargedAllocations.length !== 1 ? 's' : ''}
+                </h2>
+                <span className="text-xs text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full font-medium">All Periods</span>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search name, UHID, IP Number…"
+                  value={dischargedSearchTerm}
+                  onChange={e => setDischargedSearchTerm(e.target.value)}
+                  className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white w-64 placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+
+            {/* Patient cards grid */}
+            {dischargedAllocations.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-100 py-20 flex flex-col items-center gap-4 text-center shadow-sm">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                  <BedDouble className="h-8 w-8 text-indigo-300" />
+                </div>
+                <div>
+                  <p className="text-base font-bold text-slate-700">No discharged patients found</p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {searchTerm ? 'Try adjusting your search' : 'No patients for this filter'}
+                  </p>
+                </div>
+                <Link href="/inpatient/create-inpatient">
+                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow-md transition-all">
+                    <Plus className="h-4 w-4" /> Admit New Patient
+                  </button>
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                {dischargedAllocations.map(allocation => {
+                  const name = (allocation.patient?.name || '').trim() || 'Unknown';
+                  const uhid = allocation.patient?.uhid || '';
+                  const ipNum = allocation.ip_number || '';
+                  const bed = allocation.bed?.bed_number || '—';
+                  const bedType = allocation.bed?.bed_type || 'general';
+                  const floor = allocation.bed?.floor_number;
+                  const room = allocation.bed?.room_number;
+                  const rate = allocation.bed?.daily_rate;
+                  const doctor = getDoctor(allocation);
+                  const d = days(allocation.admission_date, allocation.discharge_date, allocation.status);
+                  const isActive = false; // Always false in discharged tab
+                  const isCritical = allocation.patient?.is_critical;
+                  const gender = (allocation.patient as any)?.gender;
+                  const age = (allocation.patient as any)?.age;
+                  const phone = allocation.patient?.phone;
+                  const diagnosis = allocation.patient?.diagnosis;
+                  const advance = advanceByAllocation[allocation.id] ?? 0;
+                  const hasSummary = !!dischargeSummaryByAllocation[allocation.id];
+                  const admitDate = new Date(allocation.admission_date);
+                  const dischargeDate = allocation.discharge_date ? new Date(allocation.discharge_date) : null;
+                  const bStyle = bedStyle(bedType);
+                  const initials = name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+
+                  return (
+                    <div
+                      key={allocation.id}
+                      className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col overflow-hidden group relative"
+                    >
+                      {/* Top accent gradient */}
+                      <div className="h-1 bg-gradient-to-r from-slate-400 via-slate-500 to-slate-600" />
+
+                      <div className="p-4 flex flex-col gap-0 flex-1">
+
+                        {/* ── Row 1: Avatar + Name + IP HIGHLIGHT ── */}
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0 shadow-sm bg-gradient-to-br from-slate-500 to-slate-600">
+                            {initials}
+                          </div>
+
+                          <div className="flex-1 min-w-0 pt-0.5">
+                            <p className="text-sm font-bold text-slate-800 truncate leading-tight">{name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {age && <span className="text-[10px] text-slate-400 font-medium">{age}y</span>}
+                              {gender && <span className="text-[10px] text-slate-400 capitalize">{gender}</span>}
+                              {uhid && <span className="text-[10px] font-mono text-slate-400">UHID: {uhid}</span>}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm">
+                              {ipNum}
+                            </span>
+                            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border bg-slate-100 text-slate-500 border-slate-200">
+                              Discharged
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* ── Row 2: Bed History ── */}
+                        <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 mb-3 border ${bStyle.bg} border-opacity-50`}
+                          style={{ borderColor: 'transparent' }}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-2 h-2 rounded-full ${bStyle.dot}`} />
+                              <p className="text-sm font-black text-slate-800">Bed {bed}</p>
+                              <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md ${bStyle.bg} ${bStyle.text}`}>
+                                {bedType}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {floor && <span className="text-[10px] text-slate-500">Floor {floor}</span>}
+                              {room && <span className="text-[10px] text-slate-400">· Rm {room}</span>}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-lg font-black text-indigo-600 leading-none">{d}</p>
+                            <p className="text-[9px] text-slate-400 mt-0.5">total day{d !== 1 ? 's' : ''}</p>
+                          </div>
+                        </div>
+
+                        {/* ── Row 3: Stay Period ── */}
+                        <div className="flex items-center gap-2 mb-3 px-1">
+                          <div className="flex-1">
+                            <p className="text-[10px] text-slate-400 font-medium leading-none">Admission</p>
+                            <p className="text-[11px] font-semibold text-slate-700 mt-1">
+                              {admitDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-3 w-3 text-slate-300" />
+                          <div className="flex-1 text-right">
+                            <p className="text-[10px] text-slate-400 font-medium leading-none">Discharge</p>
+                            <p className="text-[11px] font-semibold text-slate-700 mt-1">
+                              {dischargeDate ? dischargeDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* ── Row 4: Doctor ── */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-6 h-6 rounded-lg bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                            <Stethoscope className="h-3 w-3 text-sky-500" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] text-slate-400 font-medium leading-none">Attending Doctor</p>
+                            <p className="text-xs font-semibold text-slate-700 truncate mt-0.5">Dr. {doctor}</p>
+                          </div>
+                        </div>
+
+                        {/* ── Row 5: Diagnosis ── */}
+                        {diagnosis && (
+                          <div className="flex items-start gap-2 bg-violet-50 border border-violet-100 rounded-xl px-3 py-2 mb-3">
+                            <Activity className="h-3 w-3 text-violet-400 shrink-0 mt-0.5" />
+                            <p className="text-[11px] text-violet-800 font-medium line-clamp-1 leading-tight flex-1">{diagnosis}</p>
+                          </div>
+                        )}
+
+                        {/* ── Row 6: Action buttons ── */}
+                        <div className="pt-2.5 border-t border-slate-100 mt-auto flex items-center gap-1.5">
+                          <Link href={`/inpatient/view/${allocation.id}`} className="flex-1">
+                            <button className="w-full flex items-center justify-center gap-1.5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition-all shadow-sm">
+                              <Eye className="h-3.5 w-3.5" /> View Case
+                            </button>
+                          </Link>
+                          <div className="relative">
+                            <button
+                              onClick={e => { e.stopPropagation(); setCardMenuOpen(cardMenuOpen === allocation.id ? null : allocation.id); }}
+                              className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all border border-slate-100"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                            {cardMenuOpen === allocation.id && (
+                              <div className="absolute right-0 bottom-10 bg-white border border-slate-150 rounded-xl shadow-xl z-30 py-1 min-w-[160px]"
+                                onClick={e => e.stopPropagation()}>
+                                <Link href={`/inpatient/billing/${allocation.id}`}>
+                                  <button className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 font-medium">
+                                    <Receipt className="h-3.5 w-3.5 text-sky-500" /> Final Bill
+                                  </button>
+                                </Link>
+                                <Link href={`/patients/${allocation.patient_id}?tab=clinical-records&allocation=${allocation.id}`}>
+                                  <button className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 font-medium">
+                                    <ClipboardList className="h-3.5 w-3.5 text-violet-500" /> Clinical Records
+                                  </button>
+                                </Link>
+                                {hasSummary && (
+                                  <Link href={`/inpatient/discharge/${allocation.id}?view=1`}>
+                                    <button className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 font-medium">
+                                      <FileText className="h-3.5 w-3.5 text-emerald-500" /> Discharge Summary
+                                    </button>
+                                  </Link>
+                                )}
+                                <Link href={`/patients/${allocation.patient_id}`}>
+                                  <button className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 font-medium">
+                                    <Users className="h-3.5 w-3.5 text-indigo-500" /> Patient Profile
+                                  </button>
+                                </Link>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        
         {/* ══ BED MAP TAB ══ */}
         {activeTab === 'beds' && (
           <div className="space-y-4">

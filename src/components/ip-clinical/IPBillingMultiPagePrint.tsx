@@ -260,54 +260,44 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>1</td>
-                <td>Bed Charges ({billing.bed_charges.bed_type} - {billing.bed_charges.days} days)</td>
-                <td className="text-right">{formatCurrency(billing.summary.bed_charges_total)}</td>
-              </tr>
-              <tr>
-                <td>2</td>
-                <td>Doctor Consultation ({billing.doctor_consultation.doctor_name})</td>
-                <td className="text-right">{formatCurrency(billing.summary.doctor_consultation_total)}</td>
-              </tr>
             {billing.summary.doctor_services_total > 0 && (
               <tr>
-                <td>3</td>
+                <td>1</td>
                 <td>Doctor Services</td>
                 <td className="text-right">{formatCurrency(billing.summary.doctor_services_total)}</td>
               </tr>
             )}
             {billing.summary.prescribed_medicines_total > 0 && (
               <tr>
-                <td>{3 + (billing.summary.doctor_services_total > 0 ? 1 : 0)}</td>
+                <td>{1 + (billing.summary.doctor_services_total > 0 ? 1 : 0)}</td>
                 <td>Prescribed Medicines</td>
                 <td className="text-right">{formatCurrency(billing.summary.prescribed_medicines_total)}</td>
               </tr>
             )}
             {billing.summary.pharmacy_total > 0 && (
               <tr>
-                <td>{3 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0)}</td>
+                <td>{1 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0)}</td>
                 <td>Pharmacy Bills</td>
                 <td className="text-right">{formatCurrency(billing.summary.pharmacy_total)}</td>
               </tr>
             )}
             {billing.summary.lab_total > 0 && (
               <tr>
-                <td>{4 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0) + (billing.summary.pharmacy_total > 0 ? 1 : 0)}</td>
+                <td>{2 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0) + (billing.summary.pharmacy_total > 0 ? 1 : 0)}</td>
                 <td>Laboratory Tests</td>
                 <td className="text-right">{formatCurrency(billing.summary.lab_total)}</td>
               </tr>
             )}
             {billing.summary.radiology_total > 0 && (
               <tr>
-                <td>{5 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0) + (billing.summary.pharmacy_total > 0 ? 1 : 0) + (billing.summary.lab_total > 0 ? 1 : 0)}</td>
+                <td>{3 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0) + (billing.summary.pharmacy_total > 0 ? 1 : 0) + (billing.summary.lab_total > 0 ? 1 : 0)}</td>
                 <td>Radiology/X-Ray</td>
                 <td className="text-right">{formatCurrency(billing.summary.radiology_total)}</td>
               </tr>
             )}
             {billing.summary.other_charges_total > 0 && (
               <tr>
-                <td>{6 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0) + (billing.summary.pharmacy_total > 0 ? 1 : 0) + (billing.summary.lab_total > 0 ? 1 : 0) + (billing.summary.radiology_total > 0 ? 1 : 0)}</td>
+                <td>{4 + (billing.summary.doctor_services_total > 0 ? 1 : 0) + (billing.summary.prescribed_medicines_total > 0 ? 1 : 0) + (billing.summary.pharmacy_total > 0 ? 1 : 0) + (billing.summary.lab_total > 0 ? 1 : 0) + (billing.summary.radiology_total > 0 ? 1 : 0)}</td>
                 <td>IP Entered Bill</td>
                 <td className="text-right">{formatCurrency(billing.summary.other_charges_total)}</td>
               </tr>

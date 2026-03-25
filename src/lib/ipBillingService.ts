@@ -316,33 +316,32 @@ export async function getIPComprehensiveBilling(
     console.log('IP Billing Debug - Admission Date:', admissionDateOnly);
     console.log('IP Billing Debug - Discharge Date:', dischargeDateOnly);
     
-    const { data: pharmacyBills, error: pharmacyError } = await supabase
-      .from('pharmacy_bills')
+    // 4. Get pharmacy billing from general billing table
+    const { data: pharmacyBillsFromBilling, error: pharmacyError } = await supabase
+      .from('billing')
       .select(`
         id,
-        bill_number, 
-        bill_date, 
-        total_amount,
+        bill_number,
+        created_at,
         payment_status,
-        patient_type,
-        customer_name,
-        items:pharmacy_bill_items(
-          medicine_name,
-          quantity,
-          unit_price,
-          total_amount
+        total,
+        items:billing_item(
+          id,
+          description,
+          qty,
+          unit_amount,
+          total_amount,
+          batch_number
         )
       `)
+      .eq('bill_type', 'pharmacy')
       .eq('patient_id', patient.id)
-      .gte('bill_date', admissionDateOnly)
-      .lte('bill_date', dischargeDateOnly)
-      .order('bill_date', { ascending: false });
+      .gte('created_at', admissionDate)
+      .lte('created_at', dischargeDate)
+      .order('created_at', { ascending: false });
 
-    console.log('IP Billing Debug - Pharmacy Bills Found:', pharmacyBills?.length || 0);
-    console.log('IP Billing Debug - Pharmacy Bills:', pharmacyBills);
-
-    const pharmacyBilling: IPPharmacyBilling[] = (pharmacyError ? [] : (pharmacyBills || [])).map((bill: any) => {
-      const totalAmount = Number(bill.total_amount || 0);
+    const pharmacyBilling: IPPharmacyBilling[] = (pharmacyError ? [] : (pharmacyBillsFromBilling || [])).map((bill: any) => {
+      const totalAmount = Number(bill.total || 0);
       const paymentStatus = bill.payment_status || 'pending';
       const paidAmount = paymentStatus === 'paid' ? totalAmount : 0;
       const balanceAmount = paymentStatus === 'paid' ? 0 : totalAmount;
@@ -350,11 +349,11 @@ export async function getIPComprehensiveBilling(
       return {
         id: bill.id,
         bill_number: bill.bill_number,
-        bill_date: bill.bill_date,
+        bill_date: bill.created_at,
         items: (bill.items || []).map((item: any) => ({
-          medicine_name: item.medicine_name,
-          quantity: item.quantity,
-          unit_price: Number(item.unit_price),
+          medicine_name: item.description,
+          quantity: item.qty,
+          unit_price: Number(item.unit_amount),
           total: Number(item.total_amount)
         })),
         total_amount: totalAmount,

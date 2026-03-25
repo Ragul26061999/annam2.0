@@ -167,8 +167,6 @@ export default function IPServiceChargesEditor({
       updatedBilling.summary.other_charges_total = totalGridAmount;
       
       updatedBilling.summary.gross_total = 
-         (updatedBilling.summary.bed_charges_total || 0) + 
-         (updatedBilling.summary.doctor_consultation_total || 0) + 
          (updatedBilling.summary.doctor_services_total || 0) + 
          totalGridAmount + 
          (updatedBilling.summary.pharmacy_total || 0) + 

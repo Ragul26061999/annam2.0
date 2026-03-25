@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Printer, DollarSign, Edit2, Save, X, Wallet, FileText } from 'lucide-react';
+import { Loader2, Printer, DollarSign, Edit2, Save, X, Wallet, FileText, Pill } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { 
   getIPComprehensiveBilling, 
@@ -40,11 +40,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
   const [flexibleBillingSummary, setFlexibleBillingSummary] = useState<any>(null);
   const [showBillPaymentModal, setShowBillPaymentModal] = useState(false);
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<any | null>(null);
-
-  const [editingBedCharges, setEditingBedCharges] = useState(false);
-  const [editingDoctorConsultation, setEditingDoctorConsultation] = useState(false);
-  const [bedChargesDraft, setBedChargesDraft] = useState<{ daily_rate: number; days: number } | null>(null);
-  const [doctorConsultDraft, setDoctorConsultDraft] = useState<{ consultation_fee: number; days: number } | null>(null);
 
   useEffect(() => {
     loadBillingData();
@@ -116,8 +111,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
       
       // Recalculate gross total
       updatedBilling.summary.gross_total = 
-        updatedBilling.summary.bed_charges_total +
-        updatedBilling.summary.doctor_consultation_total +
         updatedBilling.summary.doctor_services_total +
         updatedBilling.summary.prescribed_medicines_total +
         updatedBilling.summary.pharmacy_total +
@@ -178,8 +171,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
     };
 
     const grossTotal =
-      (summary.bed_charges_total || 0) +
-      (summary.doctor_consultation_total || 0) +
       (summary.doctor_services_total || 0) +
       (summary.prescribed_medicines_total || 0) +
       (summary.pharmacy_total || 0) +
@@ -217,67 +208,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
     };
   };
 
-  const handleStartEditBedCharges = () => {
-    if (!billing) return;
-    setBedChargesDraft({
-      daily_rate: Number(billing.bed_charges.daily_rate || 0),
-      days: Number(billing.bed_charges.days || 0),
-    });
-    setEditingBedCharges(true);
-  };
-
-  const handleCancelEditBedCharges = () => {
-    setEditingBedCharges(false);
-    setBedChargesDraft(null);
-  };
-
-  const handleSaveBedCharges = async () => {
-    if (!billing || !bedChargesDraft) return;
-    const updatedBilling = recalculateBillingTotals({
-      ...billing,
-      bed_charges: {
-        ...billing.bed_charges,
-        daily_rate: Number(bedChargesDraft.daily_rate || 0),
-        days: Number(bedChargesDraft.days || 0),
-      },
-    });
-
-    await handleSaveBilling(updatedBilling);
-    setEditingBedCharges(false);
-    setBedChargesDraft(null);
-    await loadBillingData();
-  };
-
-  const handleStartEditDoctorConsultation = () => {
-    if (!billing) return;
-    setDoctorConsultDraft({
-      consultation_fee: Number(billing.doctor_consultation.consultation_fee || 0),
-      days: Number(billing.doctor_consultation.days || 0),
-    });
-    setEditingDoctorConsultation(true);
-  };
-
-  const handleCancelEditDoctorConsultation = () => {
-    setEditingDoctorConsultation(false);
-    setDoctorConsultDraft(null);
-  };
-
-  const handleSaveDoctorConsultation = async () => {
-    if (!billing || !doctorConsultDraft) return;
-    const updatedBilling = recalculateBillingTotals({
-      ...billing,
-      doctor_consultation: {
-        ...billing.doctor_consultation,
-        consultation_fee: Number(doctorConsultDraft.consultation_fee || 0),
-        days: Number(doctorConsultDraft.days || 0),
-      },
-    });
-
-    await handleSaveBilling(updatedBilling);
-    setEditingDoctorConsultation(false);
-    setDoctorConsultDraft(null);
-    await loadBillingData();
-  };
 
   if (loading) {
     return (
@@ -366,192 +296,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
           onUpdate={loadBillingData}
         />
 
-        {/* Bed Charges */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Bed Charges</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold text-blue-600">{formatCurrency(billing.summary.bed_charges_total)}</span>
-              {!editingBedCharges ? (
-                <button
-                  onClick={handleStartEditBedCharges}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-lg shadow-sm border border-gray-200 hover:bg-blue-50 transition-colors"
-                >
-                  <Edit2 className="h-4 w-4" />
-                  Edit
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSaveBedCharges}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Save className="h-4 w-4" />
-                    Save
-                  </button>
-                  <button
-                    onClick={handleCancelEditBedCharges}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-gray-600">Bed Type</p>
-                <p className="font-semibold text-gray-900">{billing.bed_charges.bed_type}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Daily Rate</p>
-                {editingBedCharges ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={bedChargesDraft?.daily_rate ?? 0}
-                    onChange={(e) => setBedChargesDraft(prev => ({ daily_rate: Number(e.target.value || 0), days: prev?.days ?? billing.bed_charges.days }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <p className="font-semibold text-gray-900">{formatCurrency(billing.bed_charges.daily_rate)}/day</p>
-                )}
-              </div>
-              <div>
-                <p className="text-gray-600">Days</p>
-                {editingBedCharges ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={bedChargesDraft?.days ?? 0}
-                    onChange={(e) => setBedChargesDraft(prev => ({ daily_rate: prev?.daily_rate ?? billing.bed_charges.daily_rate, days: Number(e.target.value || 0) }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <p className="font-semibold text-gray-900">{billing.bed_charges.days} days</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Doctor Consultation & Services */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Doctor Consultation & Services</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold text-blue-600">
-                {formatCurrency(billing.summary.doctor_consultation_total + billing.summary.doctor_services_total)}
-              </span>
-              {!editingDoctorConsultation ? (
-                <button
-                  onClick={handleStartEditDoctorConsultation}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-lg shadow-sm border border-gray-200 hover:bg-blue-50 transition-colors"
-                >
-                  <Edit2 className="h-4 w-4" />
-                  Edit
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSaveDoctorConsultation}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Save className="h-4 w-4" />
-                    Save
-                  </button>
-                  <button
-                    onClick={handleCancelEditDoctorConsultation}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Primary Doctor Consultation */}
-          <div className="bg-green-50 p-4 rounded-lg mb-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase mb-3">Primary Doctor Consultation</h3>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-gray-600">Doctor Name</p>
-                <p className="font-semibold text-gray-900">{billing.doctor_consultation.doctor_name}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Fee / Day</p>
-                {editingDoctorConsultation ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={doctorConsultDraft?.consultation_fee ?? 0}
-                    onChange={(e) => setDoctorConsultDraft(prev => ({ consultation_fee: Number(e.target.value || 0), days: prev?.days ?? billing.doctor_consultation.days }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <p className="font-semibold text-gray-900">{formatCurrency(billing.doctor_consultation.consultation_fee)}</p>
-                )}
-              </div>
-              <div>
-                <p className="text-gray-600">Days</p>
-                {editingDoctorConsultation ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={doctorConsultDraft?.days ?? 0}
-                    onChange={(e) => setDoctorConsultDraft(prev => ({ consultation_fee: prev?.consultation_fee ?? billing.doctor_consultation.consultation_fee, days: Number(e.target.value || 0) }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <p className="font-semibold text-gray-900">{billing.doctor_consultation.days}</p>
-                )}
-              </div>
-            </div>
-            <div className="mt-3 flex justify-end text-sm">
-              <span className="text-gray-600 mr-2">Subtotal:</span>
-              <span className="font-bold text-green-700">{formatCurrency(billing.doctor_consultation.total_amount)}</span>
-            </div>
-          </div>
-
-          {/* Professional Services */}
-          {billing.doctor_services.length > 0 && (
-            <div className="space-y-2 mb-4">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase">Professional Services</h3>
-              {billing.doctor_services.map((service, idx) => (
-                <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold text-gray-900">{service.doctor_name}</p>
-                    <p className="text-sm text-gray-600">{service.service_type}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">{formatCurrency(service.total_amount)}</p>
-                    <p className="text-xs text-gray-500">{formatCurrency(service.fee)} × {service.quantity}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Additional Doctor Consultations */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 uppercase mb-2">Additional Doctor Consultations</h3>
-            <IPDoctorConsultationsEditor
-              bedAllocationId={bedAllocationId}
-              patientId={billing.patient.id}
-              isEditable={true}
-              onUpdate={loadBillingData}
-            />
-          </div>
-        </div>
 
         {/* Other Bills */}
         {billing.other_bills?.length > 0 && (
@@ -645,113 +389,115 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
         />
 
         {/* Pharmacy Bills */}
-        {billing.pharmacy_billing.length > 0 && (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Pharmacy Bills</h2>
-              <span className="text-2xl font-bold text-blue-600">{formatCurrency(billing.summary.pharmacy_total)}</span>
-            </div>
-            <div className="space-y-3">
-              {billing.pharmacy_billing.map((pb, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-center p-4 bg-white">
-                    <div className="flex items-center gap-6 flex-1">
-                      {/* Bill Number */}
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-bold text-purple-700">#</span>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase">Bill</p>
-                          <p className="font-semibold text-gray-900">{pb.bill_number}</p>
-                        </div>
-                      </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Pill className="h-5 w-5 text-purple-600" />
+              </div>
+              Pharmacy Bills
+            </h2>
+            <span className="text-2xl font-bold text-purple-600 bg-purple-50 px-4 py-1 rounded-lg border border-purple-100">
+              {formatCurrency(billing.summary.pharmacy_total)}
+            </span>
+          </div>
 
-                      {/* Date */}
-                      <div className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase">Date</p>
-                          <p className="font-medium text-gray-900">
-                            {new Date(pb.bill_date).toLocaleDateString('en-IN', { 
-                              day: '2-digit', 
-                              month: '2-digit', 
-                              year: 'numeric' 
-                            })}
-                          </p>
-                        </div>
+          <div className="space-y-6">
+            {billing.pharmacy_billing.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 border-2 border-dashed border-gray-100 rounded-xl">
+                No pharmacy bills found for this patient stay.
+              </div>
+            ) : (
+              billing.pharmacy_billing.map((pb, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+                  {/* Bill Header */}
+                  <div className="bg-gray-50/80 px-4 py-3 border-b border-gray-200 flex flex-wrap justify-between items-center gap-4">
+                    <div className="flex items-center gap-6">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold text-gray-400">Bill Number</span>
+                        <span className="font-bold text-gray-900 tracking-tight">{pb.bill_number}</span>
                       </div>
-
-                      {/* Medicines */}
-                      <div className="flex-1 max-w-md">
-                        <p className="text-xs text-gray-500 uppercase mb-1">Medicines</p>
-                        <div className="flex flex-wrap gap-2">
-                          {pb.items.map((item, itemIdx) => (
-                            <div key={itemIdx} className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded text-sm">
-                              <span className="font-medium text-gray-700 text-xs">{item.medicine_name}</span>
-                              <span className="text-gray-500 text-xs">×{item.quantity}</span>
-                              <span className="text-blue-600 font-semibold text-xs">{formatCurrency(item.total)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Item Count */}
-                      <div className="text-center">
-                        <p className="text-xs text-gray-500 uppercase">Items</p>
-                        <div className="bg-purple-100 px-3 py-1 rounded-full inline-block mt-1">
-                          <span className="text-sm font-bold text-purple-800">
-                            {pb.items.length} item{pb.items.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bill Total & Payment */}
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500 uppercase">Total</p>
-                        <p className="text-xl font-bold text-blue-600">{formatCurrency(pb.total_amount)}</p>
-                      </div>
-                      <div className="text-center">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          pb.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
-                          pb.payment_status === 'partial' ? 'bg-orange-100 text-orange-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {(pb.payment_status || 'pending').toUpperCase()}
+                      <div className="h-6 w-px bg-gray-200"></div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold text-gray-400">Billing Date</span>
+                        <span className="text-sm font-semibold text-gray-700">
+                          {new Date(pb.bill_date).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
                         </span>
                       </div>
-                      {pb.payment_status !== 'paid' && Math.round((pb.balance_amount || pb.total_amount) - (pb.paid_amount || 0)) > 0 && (
-                        <button
-                          onClick={() => {
-                            const pendingAmt = Math.round((pb.balance_amount || pb.total_amount) - (pb.paid_amount || 0));
-                            setSelectedBillForPayment({
-                              id: pb.id,
-                              bill_type: 'pharmacy',
-                              bill_number: pb.bill_number,
-                              description: `Pharmacy Bill #${pb.bill_number}`,
-                              total_amount: Math.round(pb.total_amount),
-                              paid_amount: Math.round(pb.paid_amount || 0),
-                              pending_amount: pendingAmt
-                            });
-                            setShowBillPaymentModal(true);
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                        >
-                          <DollarSign className="h-4 w-4" />
-                          Pay
-                        </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          pb.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
+                          pb.payment_status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {pb.payment_status || 'pending'}
+                        </span>
+                      </div>
+                      {pb.payment_status !== 'paid' && (
+                         <button
+                           onClick={() => {
+                             const pendingAmt = Math.round((pb.balance_amount || pb.total_amount) - (pb.paid_amount || 0));
+                             setSelectedBillForPayment({
+                               id: pb.id,
+                               bill_type: 'pharmacy',
+                               bill_number: pb.bill_number,
+                               description: `Pharmacy Bill #${pb.bill_number}`,
+                               total_amount: Math.round(pb.total_amount),
+                               paid_amount: Math.round(pb.paid_amount || 0),
+                               pending_amount: pendingAmt
+                             });
+                             setShowBillPaymentModal(true);
+                           }}
+                           className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-bold text-xs ring-4 ring-green-50 shadow-sm"
+                         >
+                           <DollarSign className="h-4 w-4" />
+                           Pay Now
+                         </button>
                       )}
                     </div>
                   </div>
+
+                  {/* Bill Items Table */}
+                  <div className="p-0">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-white border-b border-gray-100 text-gray-400 font-bold uppercase tracking-widest text-[9px]">
+                          <th className="px-6 py-3">Medicine Name</th>
+                          <th className="px-6 py-3 text-center">Qty</th>
+                          <th className="px-6 py-3 text-right">Unit Price</th>
+                          <th className="px-6 py-3 text-right">Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {pb.items.map((item, itemIdx) => (
+                          <tr key={itemIdx} className="hover:bg-purple-50/10 transition-colors">
+                            <td className="px-6 py-3 font-bold text-gray-800 uppercase tracking-tight">{item.medicine_name}</td>
+                            <td className="px-6 py-3 text-center font-mono font-bold text-purple-700">× {item.quantity}</td>
+                            <td className="px-6 py-3 text-right text-gray-500 font-mono italic">{formatCurrency(item.unit_price)}</td>
+                            <td className="px-6 py-3 text-right font-black text-gray-900 font-mono">{formatCurrency(item.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-purple-50/30 border-t border-purple-100/50">
+                          <td colSpan={3} className="px-6 py-3 text-right text-[10px] font-black text-purple-400 uppercase tracking-[.2em]">Total Bill Amount</td>
+                          <td className="px-6 py-3 text-right text-base font-black text-purple-700 font-mono tracking-tighter">{formatCurrency(pb.total_amount)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        )}
+        </div>
 
         {/* Laboratory Tests */}
         <IPBillingLabEditor
@@ -1017,88 +763,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
           </div>
         )}
 
-        {/* Diagnostic Billing Items (Missing Lab/Radiology Bills) */}
-        {billing.diagnostic_billing_items && billing.diagnostic_billing_items.length > 0 && (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Pending Diagnostic Bills</h2>
-              <span className="text-2xl font-bold text-blue-600">
-                {formatCurrency(billing.diagnostic_billing_items.reduce((sum, item) => sum + item.amount, 0))}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {billing.diagnostic_billing_items.map((item, idx) => (
-                <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-center p-4 bg-white">
-                    <div className="flex items-center gap-6 flex-1">
-                      {/* Bill Number */}
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-bold text-red-700">#</span>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase">Bill</p>
-                          <p className="font-semibold text-gray-900">
-                            {item.order_type.toUpperCase()}-{idx + 1}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Test Name */}
-                      <div className="flex-1 max-w-md">
-                        <p className="text-xs text-gray-500 uppercase mb-1">Test/Scan</p>
-                        <p className="font-medium text-gray-700 text-sm">{item.test_name}</p>
-                      </div>
-
-                      {/* Type */}
-                      <div className="text-center">
-                        <p className="text-xs text-gray-500 uppercase">Type</p>
-                        <div className={`px-3 py-1 rounded-full inline-block mt-1 text-xs font-bold ${
-                          item.order_type === 'lab' ? 'bg-blue-100 text-blue-800' :
-                          item.order_type === 'radiology' ? 'bg-indigo-100 text-indigo-800' :
-                          'bg-purple-100 text-purple-800'
-                        }`}>
-                          {item.order_type.toUpperCase()}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Amount & Payment */}
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500 uppercase">Amount</p>
-                        <p className="text-xl font-bold text-blue-600">{formatCurrency(item.amount)}</p>
-                      </div>
-                      <div className="text-center">
-                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-                          PENDING
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelectedBillForPayment({
-                            id: item.id,
-                            bill_type: item.order_type === 'lab' ? 'lab' : 'radiology',
-                            bill_number: `${item.order_type.toUpperCase()}-${idx + 1}`,
-                            description: `${item.order_type}: ${item.test_name}`,
-                            total_amount: Math.round(item.amount),
-                            paid_amount: 0,
-                            pending_amount: Math.round(item.amount)
-                          });
-                          setShowBillPaymentModal(true);
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Pay
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Other Bills */}
         {billing.other_bills.length > 0 && (
