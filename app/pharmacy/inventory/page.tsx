@@ -73,6 +73,7 @@ interface NewBatch {
   selling_price: number
   supplier: string
   notes: string
+  batch_barcode?: string
 }
 
 export default function InventoryPage() {
@@ -252,7 +253,7 @@ export default function InventoryPage() {
                   received_quantity: Number(b.received_quantity ?? 0),
                   status: b.status || 'active',
                   notes: b.notes || '',
-                  batch_barcode: b.batch_barcode || ''
+                  batch_barcode: b.batch_barcode || b.batch_number || ''
                 })
                 console.log('Set form after DB fetch:', JSON.stringify({
                   current_quantity: Number(b.current_quantity ?? 0),
@@ -389,7 +390,9 @@ export default function InventoryPage() {
               manufacturing_date: sanitizeDate(editBatchForm.manufacturing_date),
               expiry_date: sanitizeDate(editBatchForm.expiry_date) ?? defaultExpiry(),
               received_date: sanitizeDate(editBatchForm.received_date),
-              notes: editBatchForm.notes?.trim() || null
+              notes: editBatchForm.notes?.trim() || null,
+              batch_number: editBatchForm.batch_number?.trim() || null,
+              batch_barcode: editBatchForm.batch_barcode?.trim() || null,
             }
             const { error } = await supabase
               .from('medicine_batches')
@@ -599,7 +602,8 @@ export default function InventoryPage() {
             supplier: suppliersMap[b.supplier_id] || '-',
             status: (b.status as any) || 'active',
             received_date: b.received_date || b.manufacturing_date || '',
-            total_medicine_count: totalMedicineCount
+            total_medicine_count: totalMedicineCount,
+            batch_barcode: b.batch_barcode || b.batch_number || ''
           }
         })
 
@@ -1237,7 +1241,7 @@ export default function InventoryPage() {
         received_quantity: receivedQty,
         status: b.status || f.status || 'active',
         notes: f.notes || '',
-        batch_barcode: b.batch_barcode || f.batch_barcode || ''
+        batch_barcode: b.batch_barcode || f.batch_barcode || batch.batch_number || ''
       }
     })
     setShowEditBatch(true)
@@ -1551,9 +1555,15 @@ export default function InventoryPage() {
                         <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
                           <Package className="w-7 h-7 text-white" />
                         </div>
-                        <div>
-                          <div className="text-xs text-slate-500 uppercase tracking-wider font-medium">Batch Number</div>
-                          <div className="text-xl font-bold text-slate-800 font-mono">{editBatchForm.batch_number || editingBatch.batch_number || '—'}</div>
+                        <div className="flex-1 w-full max-w-[200px] ml-4">
+                          <label className="text-xs text-slate-500 uppercase tracking-wider font-medium mb-1 block">Batch Number</label>
+                          <input
+                            type="text"
+                            value={editBatchForm.batch_number || ''}
+                            onChange={e => setEditBatchForm(f => ({ ...f, batch_number: e.target.value }))}
+                            className="text-lg font-bold text-slate-800 font-mono bg-white border border-slate-300 rounded-lg px-3 py-1 w-full focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="Batch No."
+                          />
                         </div>
                       </div>
                       <div className="text-right space-y-1">
@@ -1571,11 +1581,18 @@ export default function InventoryPage() {
                         </div>
                       </div>
                     </div>
-                    {editBatchForm.batch_barcode && (
-                      <div className="mt-3 pt-3 border-t border-slate-200">
-                        <div className="text-xs text-slate-500">Barcode: <span className="font-mono text-slate-700">{editBatchForm.batch_barcode}</span></div>
+                    <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-4">
+                      <div className="flex-1">
+                        <label className="text-xs text-slate-500 uppercase tracking-wider font-medium mb-1 block"><Barcode className="w-3 h-3 inline-block mr-1"/> Barcode</label>
+                        <input
+                          type="text"
+                          value={editBatchForm.batch_barcode || ''}
+                          onChange={e => setEditBatchForm(f => ({ ...f, batch_barcode: e.target.value }))}
+                          className="font-mono text-sm bg-white border border-slate-300 rounded-lg px-3 py-1.5 w-full focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="Scan or enter barcode"
+                        />
                       </div>
-                    )}
+                    </div>
                   </div>
 
                   {/* Error/Success Messages */}
@@ -1771,6 +1788,8 @@ export default function InventoryPage() {
                             current_quantity: Number.isFinite(editBatchForm.current_quantity) ? editBatchForm.current_quantity : null,
                             received_quantity: Number.isFinite(editBatchForm.received_quantity) ? editBatchForm.received_quantity : null,
                             notes: editBatchForm.notes?.trim() || null,
+                            batch_number: editBatchForm.batch_number?.trim() || null,
+                            batch_barcode: editBatchForm.batch_barcode?.trim() || null,
                           };
 
                           // Handle Medication Stock Updates
@@ -2756,7 +2775,13 @@ export default function InventoryPage() {
                             <div className="flex justify-between items-start">
                               <div>
                                 <h4 className="text-lg font-semibold text-gray-900">{batch.batch_number}</h4>
-                                <p className="text-sm text-gray-500">Supplier: {batch.supplier_name || batch.supplier}</p>
+                                {batch.batch_barcode && (
+                                  <div className="flex items-center gap-1 mt-1 font-mono text-sm text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md inline-flex">
+                                    <Barcode className="w-3 h-3" />
+                                    <span>{batch.batch_barcode}</span>
+                                  </div>
+                                )}
+                                <p className="text-sm text-gray-500 mt-1">Supplier: {batch.supplier_name || batch.supplier}</p>
                               </div>
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(derivedStatus)}`}>
                                 {derivedStatus.replace('_', ' ')}

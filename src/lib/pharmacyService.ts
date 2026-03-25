@@ -2325,6 +2325,7 @@ export interface ComprehensiveMedicineData {
     sold_quantity: number;
     status: string;
     days_to_expiry: number;
+    batch_barcode?: string;
   }>;
   purchase_history: Array<{
     id: string;
@@ -2490,7 +2491,8 @@ export async function getComprehensiveMedicineData(medicationId: string): Promis
         retail_value: currentStock * sellingPrice,
         sold_quantity: soldQuantity,
         status: batch.status || 'active',
-        days_to_expiry: daysToExpiry
+        days_to_expiry: daysToExpiry,
+        batch_barcode: batch.batch_barcode || batch.batch_number || ''
       };
     });
 

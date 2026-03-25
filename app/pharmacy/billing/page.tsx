@@ -1362,24 +1362,39 @@ export default function PharmacyBillingPage() {
             @page { size: auto; margin: 5mm 10mm; }
             body { 
               font-family: 'Courier New', Courier, monospace; 
-              font-size: 13px;
-              line-height: 1.4;
+              font-size: 14px;
+              line-height: 1.5;
               width: 750px; /* Suitable for 80 column */
               margin: 0 auto;
               padding: 10px;
               color: #000;
+              font-weight: 900 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
-            .header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-            .bill-info { width: 100%; margin-bottom: 10px; font-size: 13px; }
+            * {
+              font-weight: 900 !important;
+              color: #000 !important;
+            }
+            strong, b, th, h2, .title {
+              font-weight: 900 !important;
+            }
+            .header { text-align: center; margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 10px; }
+            .bill-info { width: 100%; margin-bottom: 10px; font-size: 14px; }
             .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-            .items-table th { border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 8px 2px; text-align: left; font-size: 13px; }
+            .items-table th { border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 10px 2px; text-align: left; font-size: 14px; }
+            .items-table td { padding: 6px 2px; border-bottom: 1px dashed #000; }
             .totals-table { width: 100%; margin-top: 10px; }
-            .totals-table td { text-align: right; padding: 3px; font-size: 13px; }
-            .dashed-line { border-top: 1px dashed #000; margin: 15px 0; }
-            .title { font-size: 16px; font-weight: bold; text-decoration: underline; margin-top: 5px; }
+            .totals-table td { text-align: right; padding: 4px; font-size: 14px; }
+            .dashed-line { border-top: 2px dashed #000; margin: 15px 0; }
+            .title { font-size: 16px; text-decoration: underline; margin-top: 5px; }
             @media print {
               .no-print { display: none; }
               body { width: 100%; }
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
             }
           </style>
         </head>
