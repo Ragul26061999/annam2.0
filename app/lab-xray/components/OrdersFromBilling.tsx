@@ -2,9 +2,11 @@
 
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, FileText, Paperclip, Printer, RefreshCw, Search, Trash2, Upload, X, Loader2 } from 'lucide-react';
+import { Eye, FileText, Paperclip, Printer, RefreshCw, Search, Trash2, Upload, X, Loader2, CreditCard } from 'lucide-react';
 import { supabase } from '../../../src/lib/supabase';
 import LabOrderFileUpload from './LabOrderFileUpload';
+import UniversalPaymentModal from '../../../src/components/UniversalPaymentModal';
+import type { PaymentRecord } from '../../../src/lib/universalPaymentService';
 
 interface OrdersFromBillingProps {
   items: any[];
@@ -28,6 +30,7 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
   const searchTerm = globalSearchTerm !== undefined ? globalSearchTerm : localSearchTerm;
   const statusFilter = globalStatusFilter !== undefined ? (globalStatusFilter as any) : localStatusFilter;
   const [selectedBill, setSelectedBill] = useState<any>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [attachmentsByBillId, setAttachmentsByBillId] = useState<AttachmentMap>({});
@@ -41,6 +44,43 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
     const status = String(bill?.payment_status || '').toLowerCase();
     if (status === 'paid' || status === 'partial' || status === 'pending') return status;
     return 'pending';
+  };
+
+  const toPaymentRecord = (bill: any): PaymentRecord => {
+    const billTotal = Number(bill.total ?? bill.subtotal ?? 0);
+    const tax = Number(bill.tax ?? 0);
+    const discount = Number(bill.discount ?? 0);
+    const subtotal = Number(bill.subtotal ?? 0);
+    const itemsForModal = (bill.items || []).map((it: any) => ({
+      service_name: it.description,
+      quantity: Number(it.qty) || 1,
+      unit_rate: Number(it.unit_amount) || 0,
+      total_amount: Number(it.total_amount) || 0,
+      item_type: 'service' as const,
+      reference_id: it.ref_id || null,
+    }));
+
+    const amount_paid = Number(bill.amount_paid || bill.paid_amount || 0);
+    const balance_due = Number(bill.balance_due ?? (billTotal - amount_paid));
+
+    return {
+      id: bill.id,
+      bill_id: bill.bill_no ?? bill.bill_number ?? bill.id,
+      patient_id: bill.patient_id,
+      bill_date: bill.issued_at ? String(bill.issued_at).split('T')[0] : new Date().toISOString().split('T')[0],
+      items: itemsForModal,
+      subtotal,
+      tax_amount: tax,
+      discount_amount: discount,
+      total_amount: billTotal,
+      amount_paid: amount_paid,
+      balance_due: balance_due,
+      payment_status: bill.payment_status || 'pending',
+      payment_method: bill.payment_method || undefined,
+      payment_date: bill.issued_at || undefined,
+      created_at: bill.created_at || new Date().toISOString(),
+      updated_at: bill.updated_at || new Date().toISOString(),
+    };
   };
 
   const getStatusColor = (status: PaymentStatus) => {
@@ -240,8 +280,14 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
       const matchesStatus = statusFilter === 'all' || getBillingStatus(bill) === statusFilter;
       
       let matchesCompletion = true;
-      // In OrdersFromBilling, we could potentially filter by the completion status of associated lab orders.
-      // But for now, we'll let it pass through if completionFilter is 'all'.
+      if (completionFilter && completionFilter !== 'all') {
+        const paymentStatus = String(bill.payment_status || 'pending').toLowerCase();
+        if (completionFilter === 'completed') {
+          matchesCompletion = paymentStatus === 'paid';
+        } else if (completionFilter === 'pending') {
+          matchesCompletion = paymentStatus === 'pending' || paymentStatus === 'partial';
+        }
+      }
       
       return matchesSearch && matchesStatus && matchesCompletion;
     });
@@ -627,8 +673,8 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">All Orders</h2>
-          <p className="text-gray-600 mt-1">Same list as Billing + services list + file upload</p>
+          <h2 className="text-2xl font-bold text-gray-900">Orders & Billing</h2>
+          <p className="text-gray-600 mt-1">Manage orders, upload results, and process payments</p>
         </div>
         <button
           onClick={() => onRefresh && onRefresh()}
@@ -723,6 +769,17 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
+                    onClick={() => {
+                      setSelectedBill(bill);
+                      setShowPaymentModal(true);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-gray-900 text-white text-xs font-black hover:bg-black inline-flex items-center gap-2"
+                    title="Pay"
+                  >
+                    <CreditCard size={16} />
+                    Pay
+                  </button>
+                  <button
                     onClick={() => openViewBill(bill)}
                     className="px-3 py-2 rounded-xl bg-gray-100 text-gray-900 text-xs font-black hover:bg-gray-200 inline-flex items-center gap-2"
                     title="View"
@@ -745,6 +802,22 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
           })
         )}
       </div>
+
+      {showPaymentModal && selectedBill && (
+        <UniversalPaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedBill(null);
+          }}
+          bill={toPaymentRecord(selectedBill)}
+          onSuccess={() => {
+            setShowPaymentModal(false);
+            setSelectedBill(null);
+            if (onRefresh) onRefresh();
+          }}
+        />
+      )}
 
       {showViewModal && selectedBill && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

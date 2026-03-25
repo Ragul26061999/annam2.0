@@ -46,7 +46,6 @@ import {
   getDiagnosticBillsFromBilling
 } from '../../src/lib/labXrayService';
 import { supabase } from '../../src/lib/supabase';
-import BillingList from './components/BillingList';
 import DiagnosticGroups from './components/DiagnosticGroups';
 import GroupedLabServices from './components/GroupedLabServices';
 import OrdersFromBilling from './components/OrdersFromBilling';
@@ -680,23 +679,9 @@ export default function LabXRayPage() {
               >
                 <div className="flex items-center gap-2">
                   <Activity size={18} />
-                  ORDERS
+                  ORDERS & BILLING
                 </div>
                 {activeSubTab === 'orders' && <motion.div layoutId="activeSubTabUnderline" className="absolute bottom-0 left-0 w-full h-[2px] bg-indigo-600" />}
-              </button>
-              
-              <button
-                onClick={() => setActiveSubTab('billing')}
-                className={`px-8 py-4 text-sm font-bold transition-all border-b-2 relative ${activeSubTab === 'billing'
-                  ? 'border-green-600 text-green-600 bg-green-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-              >
-                <div className="flex items-center gap-2">
-                  <CreditCard size={18} />
-                  BILLING
-                </div>
-                {activeSubTab === 'billing' && <motion.div layoutId="activeSubTabUnderline" className="absolute bottom-0 left-0 w-full h-[2px] bg-green-600" />}
               </button>
 
               <button
@@ -820,7 +805,7 @@ export default function LabXRayPage() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4.5 w-4.5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder={activeSubTab === 'billing' || activeSubTab === 'orders' ? 'Search Bills / Patients...' : 'Search Orders / Patients...'}
+                    placeholder={activeSubTab === 'orders' ? 'Search Bills / Patients...' : 'Search Orders / Patients...'}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 transition-all outline-none"
@@ -839,7 +824,7 @@ export default function LabXRayPage() {
                 </div>
 
                 {/* Category filter — only for billing and orders tabs */}
-                {(activeSubTab === 'billing' || activeSubTab === 'orders') && (
+                {activeSubTab === 'orders' && (
                   <select
                     value={diagFilterCategory}
                     onChange={(e) => setDiagFilterCategory(e.target.value)}
@@ -853,7 +838,7 @@ export default function LabXRayPage() {
                 )}
 
                 {/* Paid / Unpaid toggle — only for billing and orders tabs */}
-                {(activeSubTab === 'billing' || activeSubTab === 'orders') && (
+                {activeSubTab === 'orders' && (
                   <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl">
                     <button
                       onClick={() => setCompletionFilter(completionFilter === 'completed' ? 'all' : 'completed')}
@@ -881,7 +866,7 @@ export default function LabXRayPage() {
                 )}
 
                 {/* Billing payment status dropdown — only for billing tab */}
-                {activeSubTab === 'billing' && (
+                {activeSubTab === 'orders' && (
                   <select
                     value={billingStatusFilter}
                     onChange={(e) => setBillingStatusFilter(e.target.value)}
@@ -956,15 +941,6 @@ export default function LabXRayPage() {
             </div>
 
             {/* Orders Feed */}
-            {activeSubTab === 'billing' && (
-              <BillingList 
-                items={diagnosticFinanceData.filteredBills} 
-                onRefresh={() => loadData(true)} 
-                searchTerm={searchTerm}
-                statusFilter={billingStatusFilter}
-                completionFilter={completionFilter}
-              />
-            )}
 
             {activeSubTab === 'groups' && (
               <div className="space-y-6">
@@ -983,7 +959,7 @@ export default function LabXRayPage() {
               />
             )}
 
-            {activeSubTab !== 'billing' && activeSubTab !== 'groups' && activeSubTab !== 'orders' && (
+            {activeSubTab !== 'groups' && activeSubTab !== 'orders' && (
             <div className="space-y-4">
               {filteredOrders.length === 0 ? (
                 <div className="text-center py-24 bg-white rounded-3xl border-2 border-dashed border-gray-200">

@@ -1315,6 +1315,167 @@ export default function PharmacyBillingPage() {
     }
   };
 
+  const showDotMatrixPreview = () => {
+    if (!selectedBill || !viewItems.length) return;
+
+    const { name, address, contact_number, gst_number } = hospital;
+    const patientUhid = selectedBill.patient_uhid || 'WALK-IN';
+    const salesType = selectedBill.payment_method?.toUpperCase() || 'CASH';
+    const now = new Date();
+    const printedDate = now.toLocaleDateString('en-GB').replace(/\//g, '-');
+    const printedTime = now.toLocaleTimeString('en-GB');
+
+    const itemsHtml = viewItems.map((item: any, index: number) => `
+      <tr>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #000;">${(index + 1).toString().padStart(2, ' ')}</td>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #000; text-transform: uppercase;">${(item.description || item.name || 'Unknown').substring(0, 45)}</td>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #000; text-align: center;">${(item.qty || 1).toString().padStart(4, ' ')}</td>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #000; text-align: right;">${Number(item.total_amount || 0).toFixed(2).padStart(10, ' ')}</td>
+      </tr>
+    `).join('');
+
+    const totalAmount = Number(selectedBill.total_amount || 0);
+    const discount = Number(selectedBill.discount || 0);
+    let cgst = Number(selectedBill.cgst_amount || 0);
+    let sgst = Number(selectedBill.sgst_amount || 0);
+    let tax = Number(selectedBill.tax || 0);
+
+    if (cgst <= 0 && sgst <= 0) {
+      if (tax > 0) {
+        cgst = tax / 2;
+        sgst = tax / 2;
+      } else if (totalAmount > 0) {
+        const percent = selectedBill.tax_percent || 12;
+        const taxable = totalAmount / (1 + (percent / 100));
+        tax = totalAmount - taxable;
+        cgst = tax / 2;
+        sgst = tax / 2;
+      }
+    }
+    const taxableAmount = totalAmount - (cgst + sgst);
+
+    const dotMatrixContent = `
+      <html>
+        <head>
+          <title>Dot Matrix Print - ${selectedBill.bill_number}</title>
+          <style>
+            @page { size: auto; margin: 5mm 10mm; }
+            body { 
+              font-family: 'Courier New', Courier, monospace; 
+              font-size: 13px;
+              line-height: 1.4;
+              width: 750px; /* Suitable for 80 column */
+              margin: 0 auto;
+              padding: 10px;
+              color: #000;
+            }
+            .header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .bill-info { width: 100%; margin-bottom: 10px; font-size: 13px; }
+            .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+            .items-table th { border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 8px 2px; text-align: left; font-size: 13px; }
+            .totals-table { width: 100%; margin-top: 10px; }
+            .totals-table td { text-align: right; padding: 3px; font-size: 13px; }
+            .dashed-line { border-top: 1px dashed #000; margin: 15px 0; }
+            .title { font-size: 16px; font-weight: bold; text-decoration: underline; margin-top: 5px; }
+            @media print {
+              .no-print { display: none; }
+              body { width: 100%; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2 style="margin: 0; text-transform: uppercase;">${name}</h2>
+            <div style="font-size: 12px; margin-top: 4px;">${address}</div>
+            <div style="font-size: 12px;">${contact_number}</div>
+            <div style="font-size: 12px; font-weight: bold;">GSTIN: ${gst_number}</div>
+            <div class="title">PHARMACY BILL / INVOICE</div>
+          </div>
+
+          <table class="bill-info">
+            <tr>
+              <td style="width: 50%;"><strong>BILL NO:</strong> ${selectedBill.bill_number}</td>
+              <td style="width: 50%; text-align: right;"><strong>DATE:</strong> ${new Date(selectedBill.created_at).toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td><strong>UHID:</strong> ${patientUhid}</td>
+              <td style="text-align: right;"><strong>SALES TYPE:</strong> ${salesType}</td>
+            </tr>
+            <tr>
+              <td colspan="2"><strong>CUSTOMER:</strong> ${selectedBill.customer_name || 'WALK-IN CUSTOMER'}</td>
+            </tr>
+          </table>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width: 10%;">SL.NO</th>
+                <th style="width: 55%;">DRUG DESCRIPTION</th>
+                <th style="width: 15%; text-align: center;">QTY</th>
+                <th style="width: 20%; text-align: right;">AMOUNT (Rs.)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div style="display: flex; justify-content: flex-end;">
+            <table class="totals-table" style="width: 45%;">
+              <tr>
+                <td style="text-align: left;">Taxable Amount:</td>
+                <td>${taxableAmount.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td style="text-align: left;">Discount Amount:</td>
+                <td>${discount.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td style="text-align: left;">CGST Amount:</td>
+                <td>${cgst.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td style="text-align: left;">SGST Amount:</td>
+                <td>${sgst.toFixed(2)}</td>
+              </tr>
+              <tr style="font-weight: bold; border-top: 2px solid #000; font-size: 15px;">
+                <td style="text-align: left; padding-top: 8px;">NET PAYABLE:</td>
+                <td style="padding-top: 8px;">Rs. ${totalAmount.toFixed(2)}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="dashed-line"></div>
+          
+          <div style="display: flex; justify-content: space-between; margin-top: 30px; font-size: 12px;">
+            <div>
+              <p>Printed on: ${printedDate} ${printedTime}</p>
+              <p style="font-style: italic;">Thank you for your visit!</p>
+            </div>
+            <div style="text-align: right;">
+              <div style="height: 40px;"></div>
+              <p style="font-weight: bold; border-top: 1px solid #000; padding-top: 5px;">AUTHORISED SIGNATORY</p>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { 
+              setTimeout(function() {
+                window.print();
+              }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (printWindow) {
+      printWindow.document.write(dotMatrixContent);
+      printWindow.document.close();
+    }
+  };
+
   const handleUpdatePaymentMethod = async () => {
     if (!selectedBill || !newPaymentMethod) return
 
@@ -2097,6 +2258,10 @@ export default function PharmacyBillingPage() {
             </div>
             <div className="mt-4 flex gap-3">
               <button onClick={showThermalPreviewWithLogo} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Thermal Print</button>
+              <button onClick={showDotMatrixPreview} className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Dot Matrix Print
+              </button>
               {isAdmin && (
                 <button
                   onClick={() => {
