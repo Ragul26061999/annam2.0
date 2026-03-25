@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Save, X } from 'lucide-react';
-import PatientEditForm from '../../../../src/components/PatientEditForm';
+import PatientEditForm, { PatientEditData } from '../../../../src/components/PatientEditForm';
 import { getPatientWithRelatedData } from '../../../../src/lib/patientService';
 
 interface Patient {
@@ -10,6 +10,7 @@ interface Patient {
   firstName: string;
   lastName: string;
   dateOfBirth: string;
+  age?: number;
   gender: string;
   maritalStatus?: string;
   phone: string;
@@ -78,16 +79,47 @@ export default function PatientEditPage() {
     }
   }, [patientId]);
 
-  const handleSave = async (updatedData: Partial<Patient>) => {
+  const handleSave = async (updatedData: PatientEditData) => {
     try {
       setSaving(true);
+      
+      // Convert PatientEditData to Partial<Patient> format
+      const patientUpdateData: Partial<Patient> = {
+        firstName: updatedData.firstName,
+        lastName: updatedData.lastName,
+        dateOfBirth: updatedData.dateOfBirth,
+        age: updatedData.age ? parseInt(updatedData.age, 10) : undefined,
+        gender: updatedData.gender,
+        phone: updatedData.phone,
+        email: updatedData.email,
+        address: updatedData.address,
+        maritalStatus: updatedData.maritalStatus,
+        bloodGroup: updatedData.bloodGroup,
+        allergies: updatedData.allergies,
+        medicalHistory: updatedData.medicalHistory,
+        currentMedications: updatedData.currentMedications,
+        chronicConditions: updatedData.chronicConditions,
+        previousSurgeries: updatedData.previousSurgeries,
+        primaryComplaint: updatedData.primaryComplaint,
+        initialSymptoms: updatedData.initialSymptoms,
+        guardianName: updatedData.guardianName,
+        guardianRelationship: updatedData.guardianRelationship,
+        guardianPhone: updatedData.guardianPhone,
+        guardianAddress: updatedData.guardianAddress,
+        emergencyContactName: updatedData.emergencyContactName,
+        emergencyContactPhone: updatedData.emergencyContactPhone,
+        emergencyContactRelationship: updatedData.emergencyContactRelationship,
+        insuranceProvider: updatedData.insuranceProvider,
+        insuranceNumber: updatedData.insuranceNumber,
+        referredBy: updatedData.referredBy
+      };
       
       const response = await fetch(`/api/patients/${patientId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedData),
+        body: JSON.stringify(patientUpdateData),
       });
 
       if (!response.ok) {

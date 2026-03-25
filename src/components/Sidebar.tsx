@@ -138,12 +138,6 @@ const Sidebar: React.FC = () => {
       icon: <Scissors size={18} />,
       color: 'text-purple-600'
     },
-    {
-      href: '/inpatient/billing',
-      label: 'IP Billing',
-      icon: <Receipt size={18} />,
-      color: 'text-emerald-700'
-    },
   ];
 
   const pharmacyNavItems: NavItem[] = [
@@ -233,8 +227,8 @@ const Sidebar: React.FC = () => {
       nurse: ['/dashboard', '/patients', '/inpatient', '/outpatient', '/beds'],
       pharmacist: ['/dashboard', '/pharmacy', '/pharmacy/purchase', '/pharmacy/purchase-return', '/pharmacy/department-issue', '/pharmacy/newbilling', '/pharmacy/sales-return-v2', '/pharmacy/drug-broken', '/pharmacy/reports', '/pharmacy/reports?tab=gst', '/pharmacy/reports?tab=stock', '/pharmacy/cash-collection'],
       technician: ['/dashboard', '/lab-xray'],
-      receptionist: ['/dashboard', '/patients', '/appointments', '/finance', '/other-bills', '/inpatient/billing'],
-      accountant: ['/dashboard', '/finance', '/other-bills', '/inpatient/billing'],
+      receptionist: ['/dashboard', '/patients', '/appointments', '/finance', '/other-bills'],
+      accountant: ['/dashboard', '/finance', '/other-bills'],
       patient: ['/dashboard', '/appointments']
     };
     

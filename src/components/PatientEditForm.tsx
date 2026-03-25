@@ -19,11 +19,12 @@ import {
   ClipboardList
 } from 'lucide-react';
 
-interface PatientEditData {
+export interface PatientEditData {
   // Personal Information
   firstName: string;
   lastName: string;
   dateOfBirth: string;
+  age: string;
   gender: string;
   phone: string;
   email: string;
@@ -74,6 +75,7 @@ export default function PatientEditForm({ patient, onSave, onCancel, isLoading =
     firstName: '',
     lastName: '',
     dateOfBirth: '',
+    age: '',
     gender: '',
     phone: '',
     email: '',
@@ -115,6 +117,7 @@ export default function PatientEditForm({ patient, onSave, onCancel, isLoading =
         firstName,
         lastName,
         dateOfBirth: patient.date_of_birth || '',
+        age: patient.age?.toString() || '',
         gender: patient.gender || '',
         phone: patient.phone || '',
         email: patient.email || '',
@@ -232,6 +235,22 @@ export default function PatientEditForm({ patient, onSave, onCancel, isLoading =
             value={formData.dateOfBirth}
             onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
+            Age
+          </label>
+          <input
+            type="number"
+            id="age"
+            value={formData.age}
+            onChange={(e) => handleInputChange('age', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter age"
+            min="0"
+            max="150"
           />
         </div>
 

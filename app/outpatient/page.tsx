@@ -10,7 +10,7 @@ import {
   TrendingUp, Activity, User, X as CloseIcon,
   MoreVertical, Edit3, Trash2, Printer, FileText,
   Receipt, CreditCard, IndianRupee, Download, Syringe,
-  MapPin
+  MapPin, History
 } from 'lucide-react';
 import { getDashboardStats } from '../../src/lib/dashboardService';
 import { getAppointments, getRecentPatients, type Appointment } from '../../src/lib/appointmentService';
@@ -112,7 +112,7 @@ function OutpatientPageContent() {
   // Dropdown menu state
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   // Tab state for queue management
-  const [activeTab, setActiveTab] = useState<'outpatient' | 'queue' | 'injection' | 'appointments' | 'patients' | 'recent' | 'billing' | 'lab_tests'>('outpatient');
+  const [activeTab, setActiveTab] = useState<'outpatient' | 'queue' | 'injection' | 'appointments' | 'patients' | 'recent' | 'billing' | 'lab_tests' | 'history'>('outpatient');
   const [queueStats, setQueueStats] = useState({ totalWaiting: 0, totalInProgress: 0, totalCompleted: 0, averageWaitTime: 0 });
 
   // Injection queue state
@@ -124,6 +124,14 @@ function OutpatientPageContent() {
   const [labTestPrescriptions, setLabTestPrescriptions] = useState<any[]>([]);
   const [labTestLoading, setLabTestLoading] = useState(false);
 
+  // Patient history state
+  const [patientHistory, setPatientHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyDateFilter, setHistoryDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
+  const [historyStartDate, setHistoryStartDate] = useState<string>('');
+  const [historyEndDate, setHistoryEndDate] = useState<string>('');
+
   // Outpatient queue state for Today's Queue tab
   const [outpatientQueueEntries, setOutpatientQueueEntries] = useState<QueueEntry[]>([]);
   const [queueEntriesLoading, setQueueEntriesLoading] = useState(false);
@@ -134,7 +142,8 @@ function OutpatientPageContent() {
   const [billingSearch, setBillingSearch] = useState('');
   const [billingStartDate, setBillingStartDate] = useState<string>('');
   const [billingEndDate, setBillingEndDate] = useState<string>('');
-  const [billingDateFilter, setBillingDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
+  const [billingSingleDate, setBillingSingleDate] = useState<string>('');
+  const [billingDateFilter, setBillingDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly' | 'single'>('all');
   const [billingStatusFilter, setBillingStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [selectedBill, setSelectedBill] = useState<BillingRecord | null>(null);
 
@@ -172,7 +181,7 @@ function OutpatientPageContent() {
 
   // Effect to update date inputs when date filter changes
   useEffect(() => {
-    if (billingDateFilter !== 'all' && !billingStartDate && !billingEndDate) {
+    if (billingDateFilter !== 'all' && !billingStartDate && !billingEndDate && !billingSingleDate) {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -194,6 +203,9 @@ function OutpatientPageContent() {
           const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
           setBillingStartDate(monthStart.toISOString().split('T')[0]);
           setBillingEndDate(monthEnd.toISOString().split('T')[0]);
+          break;
+        case 'single':
+          // Don't auto-set single date, let user choose
           break;
       }
     }
@@ -770,6 +782,7 @@ function OutpatientPageContent() {
     // Get patient UHID
     const patientUhid = bill.patient?.patient_id || 'WALK-IN';
     const patientName = bill.patient?.name || 'Unknown Patient';
+    const patientAge = bill.patient?.age || 'N/A';
     const billNumber = bill.bill_id || 'N/A';
     const consultingDoctorName = bill.consulting_doctor_name || 'N/A';
     
@@ -875,6 +888,9 @@ function OutpatientPageContent() {
               </tr>
               <tr>
                 <td class="label">Patient Name</td><td class="value">: ${patientName}</td>
+              </tr>
+              <tr>
+                <td class="label">Age</td><td class="value">: ${patientAge}</td>
               </tr>
               <tr>
                 <td class="label">Bill No</td><td class="value">: ${billNumber}</td>
@@ -983,6 +999,12 @@ function OutpatientPageContent() {
         }
       }
 
+      // Handle single date filter
+      if (billingDateFilter === 'single' && billingSingleDate) {
+        startDate = billingSingleDate;
+        endDate = billingSingleDate;
+      }
+
       const result = await getBillingRecords(100, 0, { // Increased limit to 100 for better analytics
         search: billingSearch,
         status: billingStatusFilter === 'all' ? undefined : (billingStatusFilter === 'pending' ? 'pending' : 'paid'),
@@ -1008,7 +1030,13 @@ function OutpatientPageContent() {
     if (activeTab === 'billing') {
       loadBillingRecords();
     }
-  }, [activeTab, billingSearch, billingStartDate, billingEndDate, billingDateFilter, billingStatusFilter]);
+  }, [activeTab, billingSearch, billingStartDate, billingEndDate, billingSingleDate, billingDateFilter, billingStatusFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      loadPatientHistory();
+    }
+  }, [activeTab, historyDateFilter, historyStartDate, historyEndDate]);
 
 
   // Handle manual date input changes - reset the date filter to 'all'
@@ -1023,6 +1051,200 @@ function OutpatientPageContent() {
     setBillingEndDate(e.target.value);
     if (billingDateFilter !== 'all') {
       setBillingDateFilter('all');
+    }
+  };
+
+  const handleSingleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBillingSingleDate(e.target.value);
+  };
+
+  const handleDeleteBill = async (billId: string) => {
+    if (!confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('billing')
+        .delete()
+        .eq('id', billId);
+
+      if (error) {
+        console.error('Error deleting bill:', error);
+        alert('Failed to delete bill: ' + error.message);
+        return;
+      }
+
+      // Refresh billing records
+      await loadBillingRecords();
+      alert('Bill deleted successfully');
+    } catch (error) {
+      console.error('Error deleting bill:', error);
+      alert('Failed to delete bill');
+    }
+  };
+
+  const loadPatientHistory = async () => {
+    try {
+      setHistoryLoading(true);
+
+      // Calculate date range based on filter
+      const today = new Date();
+      let startDate: string;
+      let endDate: string;
+
+      switch (historyDateFilter) {
+        case 'today':
+          startDate = today.toISOString().split('T')[0];
+          endDate = today.toISOString().split('T')[0];
+          break;
+        case 'week':
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - today.getDay()); // Sunday
+          startDate = weekStart.toISOString().split('T')[0];
+          endDate = today.toISOString().split('T')[0];
+          break;
+        case 'month':
+          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+          startDate = monthStart.toISOString().split('T')[0];
+          endDate = today.toISOString().split('T')[0];
+          break;
+        case 'year':
+          const yearStart = new Date(today.getFullYear(), 0, 1);
+          startDate = yearStart.toISOString().split('T')[0];
+          endDate = today.toISOString().split('T')[0];
+          break;
+        case 'all':
+        default:
+          // Default to last 30 days for 'all'
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          startDate = thirtyDaysAgo.toISOString().split('T')[0];
+          endDate = today.toISOString().split('T')[0];
+          break;
+      }
+
+      // Use custom date range if provided
+      const finalStartDate = historyStartDate || startDate;
+      const finalEndDate = historyEndDate || endDate;
+
+      // 1. Get recent registrations (full registration)
+      const { data: recentRegistrations, error: regError } = await supabase
+        .from('patients')
+        .select(`
+          id,
+          patient_id,
+          name,
+          phone,
+          date_of_birth,
+          gender,
+          created_at
+        `)
+        .gte('created_at', `${finalStartDate}T00:00:00`)
+        .lte('created_at', `${finalEndDate}T23:59:59`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      // 2. Get quick registrations (with error handling)
+      let quickRegistrations = [];
+      try {
+        const { data: quickData, error: quickError } = await supabase
+          .from('quick_registrations')
+          .select(`
+            id,
+            patient_id,
+            name,
+            phone,
+            created_at
+          `)
+          .gte('created_at', `${finalStartDate}T00:00:00`)
+          .lte('created_at', `${finalEndDate}T23:59:59`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        
+        if (!quickError) {
+          quickRegistrations = quickData || [];
+        }
+      } catch (error) {
+        console.log('Quick registrations table not available');
+      }
+
+      // 3. Get revisit records (with error handling)
+      let revisitRecords = [];
+      try {
+        const { data: revisitData, error: revisitError } = await supabase
+          .from('patient_revisits')
+          .select(`
+            id,
+            patient_id,
+            visit_date,
+            visit_time,
+            created_at,
+            patients!inner(
+              name,
+              phone,
+              date_of_birth,
+              gender
+            )
+          `)
+          .gte('created_at', `${finalStartDate}T00:00:00`)
+          .lte('created_at', `${finalEndDate}T23:59:59`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        
+        if (!revisitError) {
+          revisitRecords = revisitData || [];
+        }
+      } catch (error) {
+        console.log('Patient revisits table not available');
+      }
+
+      // Combine all records
+      const allHistory = [];
+      
+      // Add recent registrations
+      if (recentRegistrations && !regError) {
+        allHistory.push(...recentRegistrations.map((reg: any) => ({
+          ...reg,
+          registration_type: 'New Patient',
+          visit_date: reg.created_at,
+          patient_name: reg.name,
+          patient_phone: reg.phone,
+          patient_id: reg.patient_id
+        })));
+      }
+
+      // Add quick registrations
+      if (quickRegistrations.length > 0) {
+        allHistory.push(...quickRegistrations.map((reg: any) => ({
+          ...reg,
+          registration_type: 'Quick Register',
+          visit_date: reg.created_at,
+          patient_name: reg.name,
+          patient_phone: reg.phone,
+          patient_id: reg.patient_id
+        })));
+      }
+
+      // Add revisit records
+      if (revisitRecords.length > 0) {
+        allHistory.push(...revisitRecords.map((reg: any) => ({
+          ...reg,
+          registration_type: 'Revisit Patient',
+          visit_date: reg.visit_date || reg.created_at,
+          patient_name: reg.patients?.name || 'Unknown',
+          patient_phone: reg.patients?.phone || 'N/A',
+          patient_id: reg.patient_id
+        })));
+      }
+
+      // Sort by date (most recent first)
+      allHistory.sort((a, b) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime());
+
+      setPatientHistory(allHistory);
+    } catch (error) {
+      console.error('Error loading patient history:', error);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -1878,10 +2100,13 @@ function OutpatientPageContent() {
             
             <table class="info-table">
               <tr>
-                <td class="label">UHID</td><td class="value">: ${patientUhid}</td>
+                <td class="label">UHID</td><td class="value">: ${selectedBill.patient?.patient_id || 'WALK-IN'}</td>
               </tr>
               <tr>
-                <td class="label">Patient Name</td><td class="value">: ${patientName}</td>
+                <td class="label">Patient Name</td><td class="value">: ${selectedBill.patient?.name || 'Unknown Patient'}</td>
+              </tr>
+              <tr>
+                <td class="label">Age</td><td class="value">: N/A</td>
               </tr>
               <tr>
                 <td class="label">Bill No</td><td class="value">: ${billNumber}</td>
@@ -2087,6 +2312,10 @@ function OutpatientPageContent() {
                 <tr>
                   <td class="bill-info-10cm">Patient Name&nbsp;:&nbsp;&nbsp;</td>
                   <td class="bill-info-10cm bill-info-bold">${patient.name}</td>
+                </tr>
+                <tr>
+                  <td class="bill-info-10cm">Age&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                  <td class="bill-info-10cm bill-info-bold">${patient.age || 'N/A'}</td>
                 </tr>
                 <tr>
                   <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
@@ -2427,6 +2656,16 @@ function OutpatientPageContent() {
             >
               <Activity className="h-4 w-4" />
               Waiting for Lab/X-ray/Scan ({labTestPrescriptions.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${activeTab === 'history'
+                ? 'bg-orange-100 text-orange-700'
+                : 'text-gray-600 hover:bg-gray-100'
+                }`}
+            >
+              <History className="h-4 w-4" />
+              Patient History
             </button>
           </div>
         </div>
@@ -3340,6 +3579,10 @@ function OutpatientPageContent() {
                             </div>
                             <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
                               <span className="flex items-center gap-1">
+                                <Calendar size={12} />
+                                {new Date(appointment.appointment_date).toLocaleDateString('en-IN')}
+                              </span>
+                              <span className="flex items-center gap-1">
                                 <Clock size={12} />
                                 {appointment.appointment_time}
                               </span>
@@ -3398,6 +3641,10 @@ function OutpatientPageContent() {
                               </span>
                             </div>
                             <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                              <span className="flex items-center gap-1">
+                                <Calendar size={12} />
+                                {new Date(queueEntry.registration_date).toLocaleDateString('en-IN')}
+                              </span>
                               <span className="flex items-center gap-1">
                                 <User size={12} />
                                 UHID: {patient.patient_id}
@@ -3623,6 +3870,248 @@ function OutpatientPageContent() {
         </div>
       )}
 
+      {/* Patient History Tab */}
+      {activeTab === 'history' && (
+        <div className="space-y-4">
+          {/* History Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Patient History</h3>
+              <p className="text-sm text-gray-600">Recent patient visits (New, Revisit, Quick Register)</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  placeholder="Search patients..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+                />
+              </div>
+              <button
+                onClick={() => loadPatientHistory()}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+              >
+                <RefreshCw size={16} />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Date Filters */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Date Filter:</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setHistoryDateFilter('all');
+                      setHistoryStartDate('');
+                      setHistoryEndDate('');
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      historyDateFilter === 'all'
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                    }`}
+                  >
+                    All (30 days)
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHistoryDateFilter('today');
+                      setHistoryStartDate('');
+                      setHistoryEndDate('');
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      historyDateFilter === 'today'
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                    }`}
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHistoryDateFilter('week');
+                      setHistoryStartDate('');
+                      setHistoryEndDate('');
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      historyDateFilter === 'week'
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                    }`}
+                  >
+                    This Week
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHistoryDateFilter('month');
+                      setHistoryStartDate('');
+                      setHistoryEndDate('');
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      historyDateFilter === 'month'
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                    }`}
+                  >
+                    This Month
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHistoryDateFilter('year');
+                      setHistoryStartDate('');
+                      setHistoryEndDate('');
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      historyDateFilter === 'year'
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                    }`}
+                  >
+                    This Year
+                  </button>
+                </div>
+              </div>
+              
+              {/* Custom Date Range */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Custom Range:</span>
+                <input
+                  type="date"
+                  value={historyStartDate}
+                  onChange={(e) => {
+                    setHistoryStartDate(e.target.value);
+                    setHistoryDateFilter('all'); // Reset to custom mode
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-500">to</span>
+                <input
+                  type="date"
+                  value={historyEndDate}
+                  onChange={(e) => {
+                    setHistoryEndDate(e.target.value);
+                    setHistoryDateFilter('all'); // Reset to custom mode
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* History List */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+            {historyLoading ? (
+              <div className="text-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
+                <p className="text-gray-600 mt-2">Loading patient history...</p>
+              </div>
+            ) : patientHistory.length === 0 ? (
+              <div className="text-center py-12">
+                <History className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Patient History Found</h3>
+                <p className="text-gray-600">No patient visits recorded in the last 30 days.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient Info</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Visit Type</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {patientHistory
+                      .filter(record => 
+                        historySearch === '' || 
+                        record.patient_name?.toLowerCase().includes(historySearch.toLowerCase()) ||
+                        record.patient_id?.toLowerCase().includes(historySearch.toLowerCase()) ||
+                        record.patient_phone?.includes(historySearch)
+                      )
+                      .map((record, index) => (
+                        <tr key={`${record.id}-${index}`} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm">
+                              <div className="font-medium text-gray-900">{record.patient_name}</div>
+                              <div className="text-gray-500">{record.patient_id}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              record.registration_type === 'New Patient' 
+                                ? 'bg-blue-100 text-blue-800'
+                                : record.registration_type === 'Revisit Patient'
+                                ? 'bg-green-100 text-green-800'
+                                : record.registration_type === 'Quick Register'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {record.registration_type}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {new Date(record.visit_date).toLocaleDateString('en-IN')}
+                            <br />
+                            <span className="text-xs text-gray-500">
+                              {new Date(record.visit_date).toLocaleTimeString('en-IN', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {record.patient_phone}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {record.chief_complaint && (
+                              <div className="max-w-xs truncate" title={record.chief_complaint}>
+                                {record.chief_complaint}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => {
+                                // Copy phone number for feedback/contact
+                                if (record.patient_phone) {
+                                  navigator.clipboard.writeText(record.patient_phone);
+                                  alert('Phone number copied to clipboard for contact');
+                                }
+                              }}
+                              className="text-green-600 hover:text-green-900 mr-3"
+                              title="Copy Phone Number"
+                            >
+                              <Phone size={16} />
+                            </button>
+                            {record.patient_id && (
+                              <Link href={`/patients/${record.patient_id}`}>
+                                <button className="text-blue-600 hover:text-blue-900" title="View Patient Details">
+                                  <Eye size={16} />
+                                </button>
+                              </Link>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Billing Tab */}
       {activeTab === 'billing' && (
         <div className="space-y-4">
@@ -3657,15 +4146,47 @@ function OutpatientPageContent() {
             <div className="flex gap-2">
               <select
                 value={billingDateFilter}
-                onChange={(e) => setBillingDateFilter(e.target.value as 'all' | 'daily' | 'weekly' | 'monthly')}
+                onChange={(e) => setBillingDateFilter(e.target.value as 'all' | 'daily' | 'weekly' | 'monthly' | 'single')}
                 className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
               >
                 <option value="all">All Time</option>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
+                <option value="single">Single Date</option>
               </select>
             </div>
+
+            {billingDateFilter === 'single' && (
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={billingSingleDate}
+                  onChange={handleSingleDateChange}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                  placeholder="Select Date"
+                />
+              </div>
+            )}
+
+            {billingDateFilter !== 'single' && (
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={billingStartDate}
+                  onChange={handleStartDateChange}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                  placeholder="From Date"
+                />
+                <input
+                  type="date"
+                  value={billingEndDate}
+                  onChange={handleEndDateChange}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                  placeholder="To Date"
+                />
+              </div>
+            )}
 
             <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl">
               <button
@@ -3690,24 +4211,6 @@ function OutpatientPageContent() {
                 <Clock size={14} />
                 Unpaid
               </button>
-            </div>
-
-            <div className="flex gap-2">
-
-              <input
-                type="date"
-                value={billingStartDate}
-                onChange={handleStartDateChange}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-                placeholder="From Date"
-              />
-              <input
-                type="date"
-                value={billingEndDate}
-                onChange={handleEndDateChange}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-                placeholder="To Date"
-              />
             </div>
           </div>
 
@@ -3879,6 +4382,13 @@ function OutpatientPageContent() {
                               title="View Details"
                             >
                               <Eye size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBill(record.id)}
+                              className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50"
+                              title="Delete Bill"
+                            >
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>

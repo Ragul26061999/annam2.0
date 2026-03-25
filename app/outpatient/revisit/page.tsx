@@ -448,6 +448,10 @@ export default function OutpatientRevisitPage() {
                 <td class="bill-info-10cm bill-info-bold">${selectedPatient.name || 'Unknown Patient'}</td>
               </tr>
               <tr>
+                <td class="bill-info-10cm">Age&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+                <td class="bill-info-10cm bill-info-bold">${selectedPatient.age || 'N/A'}</td>
+              </tr>
+              <tr>
                 <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
                 <td class="bill-info-10cm bill-info-bold">${(() => {
                   const raw = currentBill.bill_date || (currentBill as any).issued_at || (currentBill as any).created_at || new Date().toISOString();

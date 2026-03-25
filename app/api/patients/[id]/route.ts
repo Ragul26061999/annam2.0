@@ -70,7 +70,7 @@ export async function PATCH(
     }
 
     // Map frontend fields to database fields
-    const mappedData: Record<string, string | undefined | null> = {};
+    const mappedData: Record<string, string | number | null | undefined> = {};
     
     // Combine firstName and lastName into name field
     if (updateData.firstName || updateData.lastName) {
@@ -104,6 +104,11 @@ export async function PATCH(
     
     // Direct field mappings (same name in frontend and database)
     const directFields = ['gender', 'phone', 'email', 'address', 'allergies', 'status'];
+    
+    // Handle age field separately (convert to number or null)
+    if (updateData.age !== undefined) {
+      mappedData.age = updateData.age && updateData.age.trim() !== '' ? parseInt(updateData.age, 10) : null;
+    }
     
     // Map fields with different names
     Object.entries(fieldMapping).forEach(([frontendField, dbField]) => {
