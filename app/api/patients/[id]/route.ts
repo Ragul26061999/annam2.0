@@ -43,7 +43,11 @@ export async function PATCH(
   try {
     const { id } = await params;
     
+    console.log('=== API PATCH DEBUG ===');
+    console.log('Patient ID:', id);
+    
     if (!id) {
+      console.log('ERROR: Patient ID is required');
       return NextResponse.json(
         { error: 'Patient ID is required' },
         { status: 400 }
@@ -55,6 +59,7 @@ export async function PATCH(
     console.log('Raw update data:', JSON.stringify(updateData, null, 2));
     
     if (!updateData || Object.keys(updateData).length === 0) {
+      console.log('ERROR: Update data is required');
       return NextResponse.json(
         { error: 'Update data is required' },
         { status: 400 }
@@ -63,11 +68,14 @@ export async function PATCH(
 
     // Validate required fields - only firstName is mandatory
     if (updateData.firstName !== undefined && (!updateData.firstName || updateData.firstName.trim() === '')) {
+      console.log('ERROR: First name is required');
       return NextResponse.json(
         { error: 'First name is required' },
         { status: 400 }
       );
     }
+
+    console.log('Validation passed, proceeding with field mapping...');
 
     // Map frontend fields to database fields
     const mappedData: Record<string, string | number | null | undefined> = {};
@@ -77,6 +85,7 @@ export async function PATCH(
       const firstName = updateData.firstName || '';
       const lastName = updateData.lastName || '';
       mappedData.name = `${firstName} ${lastName}`.trim();
+      console.log('Combined name:', mappedData.name);
     }
     
     // Map other fields that exist in database
@@ -107,7 +116,8 @@ export async function PATCH(
     
     // Handle age field separately (convert to number or null)
     if (updateData.age !== undefined) {
-      mappedData.age = updateData.age && updateData.age.trim() !== '' ? parseInt(updateData.age, 10) : null;
+      mappedData.age = updateData.age && updateData.age.toString().trim() !== '' ? parseInt(updateData.age.toString(), 10) : null;
+      console.log('Mapped age:', mappedData.age);
     }
     
     // Map fields with different names
@@ -131,6 +141,7 @@ export async function PATCH(
         } else {
           mappedData[dbField] = value;
         }
+        console.log(`Mapped ${frontendField} -> ${dbField}:`, mappedData[dbField]);
       }
     });
     
@@ -149,13 +160,15 @@ export async function PATCH(
         } else {
           mappedData[field] = value;
         }
+        console.log(`Direct mapped ${field}:`, mappedData[field]);
       }
     });
     
     // Add updated timestamp
     mappedData.updated_at = new Date().toISOString();
 
-    console.log('Mapped data being sent to database:', JSON.stringify(mappedData, null, 2));
+    console.log('Final mapped data being sent to database:', JSON.stringify(mappedData, null, 2));
+    console.log('Calling updatePatientRecord function...');
     
     // Additional validation before sending to database
     console.log('Validating mapped data against constraints...');
@@ -169,13 +182,21 @@ export async function PATCH(
       console.log('status value:', mappedData.status);
     }
     
+    console.log('========================');
+    
     const updatedPatient = await updatePatientRecord(id, mappedData);
     
+    console.log('Update successful, returning result');
     return NextResponse.json(updatedPatient);
   } catch (error) {
+    console.error('=== API ERROR ===');
     console.error('Error updating patient:', error);
+    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('==================');
+    
     return NextResponse.json(
-      { error: 'Failed to update patient' },
+      { error: 'Failed to update patient', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

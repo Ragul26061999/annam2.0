@@ -1241,6 +1241,7 @@ export async function updatePatientRecord(
   updateData: any
 ): Promise<any> {
   try {
+    console.log('=== updatePatientRecord DEBUG ===');
     console.log('Updating patient record for ID/UHID:', idOrUhid);
     console.log('Update data:', JSON.stringify(updateData, null, 2));
     
@@ -1255,9 +1256,14 @@ export async function updatePatientRecord(
       query = query.eq('patient_id', idOrUhid);
     }
 
+    console.log('Executing database query...');
     const { data: patient, error } = await query
       .select()
       .single();
+
+    console.log('Query completed');
+    console.log('Error:', error);
+    console.log('Patient data:', patient);
 
     if (error) {
       console.error('Error updating patient record:', error);
@@ -1266,9 +1272,15 @@ export async function updatePatientRecord(
     }
 
     console.log('Patient updated successfully:', patient);
+    console.log('===============================');
     return patient;
   } catch (error) {
+    console.error('=== updatePatientRecord ERROR ===');
     console.error('Error updating patient record:', error);
+    console.error('Error type:', typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('==================================');
     throw error;
   }
 }

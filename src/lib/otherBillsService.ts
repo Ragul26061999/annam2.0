@@ -304,8 +304,9 @@ export async function createOtherBill(
       patient_type: normalizedFormData.patient_type,
       patient_name: normalizedFormData.patient_name,
       patient_phone: normalizedFormData.patient_phone || null,
-      doctor_id: normalizedFormData.doctor_id || null,
-      doctor_name: normalizedFormData.doctor_name || null,
+      // Handle doctor_id - if "self" is selected, set to null instead of trying to validate as UUID
+      doctor_id: normalizedFormData.doctor_id === 'self' ? null : normalizedFormData.doctor_id || null,
+      doctor_name: normalizedFormData.doctor_id === 'self' ? null : normalizedFormData.doctor_name || null,
       staff_id: normalizedFormData.staff_id || null,
       staff_name: normalizedFormData.staff_name || null,
       // Set main bill fields from first item for backward compatibility

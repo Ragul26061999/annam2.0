@@ -442,6 +442,7 @@ export default function OtherBillsForm({ isOpen, onClose, onSuccess, initialData
                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
                   >
                     <option value="">Select Doctor</option>
+                    <option value="self">Self</option>
                     {doctors.map(doc => (
                       <option key={doc.id} value={doc.id}>
                         {doc.user?.name || 'Unnamed Doctor'}

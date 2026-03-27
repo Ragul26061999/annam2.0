@@ -146,8 +146,33 @@ export default function PatientEditForm({ patient, onSave, onCancel, isLoading =
     }
   }, [patient]);
 
+  const calculateAge = (dateOfBirth: string): string => {
+    if (!dateOfBirth) return '';
+    
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    
+    if (birthDate > today) return '';
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age.toString();
+  };
+
   const handleInputChange = (field: keyof PatientEditData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Auto-calculate age when date of birth changes
+    if (field === 'dateOfBirth') {
+      const calculatedAge = calculateAge(value);
+      setFormData(prev => ({ ...prev, [field]: value, age: calculatedAge }));
+    }
+    
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -169,12 +194,17 @@ export default function PatientEditForm({ patient, onSave, onCancel, isLoading =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('=== FORM SUBMISSION DEBUG ===');
+    console.log('Current form data:', JSON.stringify(formData, null, 2));
+    console.log('Form errors:', errors);
+    
     if (!validateForm()) {
       console.log('Form validation failed:', errors);
       return;
     }
 
-    console.log('Submitting form data:', JSON.stringify(formData, null, 2));
+    console.log('Form validation passed, submitting data:', JSON.stringify(formData, null, 2));
+    console.log('============================');
 
     try {
       await onSave(formData);
@@ -240,18 +270,20 @@ export default function PatientEditForm({ patient, onSave, onCancel, isLoading =
 
         <div>
           <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
-            Age
+            Age <span className="text-xs text-gray-500">(Auto-calculated)</span>
           </label>
           <input
             type="number"
             id="age"
             value={formData.age}
             onChange={(e) => handleInputChange('age', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter age"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 text-gray-700"
+            placeholder="Auto-calculated from DOB"
             min="0"
             max="150"
+            readOnly
           />
+          <p className="text-xs text-gray-500 mt-1">Age is automatically calculated based on date of birth</p>
         </div>
 
         <div>

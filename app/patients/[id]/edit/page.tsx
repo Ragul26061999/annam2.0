@@ -42,6 +42,7 @@ interface Patient {
   insuranceNumber?: string;
   initialSymptoms?: string;
   referredBy?: string;
+  status?: string;
 }
 
 export default function PatientEditPage() {
@@ -83,6 +84,9 @@ export default function PatientEditPage() {
     try {
       setSaving(true);
       
+      console.log('=== PATIENT UPDATE DEBUG ===');
+      console.log('Received updatedData:', JSON.stringify(updatedData, null, 2));
+      
       // Convert PatientEditData to Partial<Patient> format
       const patientUpdateData: Partial<Patient> = {
         firstName: updatedData.firstName,
@@ -111,23 +115,54 @@ export default function PatientEditPage() {
         emergencyContactRelationship: updatedData.emergencyContactRelationship,
         insuranceProvider: updatedData.insuranceProvider,
         insuranceNumber: updatedData.insuranceNumber,
-        referredBy: updatedData.referredBy
+        referredBy: updatedData.referredBy,
+        status: updatedData.status || 'active'
       };
+      
+      console.log('Converted patientUpdateData:', JSON.stringify(patientUpdateData, null, 2));
+      
+      // Remove undefined values to avoid sending unnecessary data
+      const cleanedUpdateData: any = { ...patientUpdateData };
+      Object.keys(cleanedUpdateData).forEach((key: string) => {
+        if (cleanedUpdateData[key] === undefined || cleanedUpdateData[key] === '') {
+          delete cleanedUpdateData[key];
+        }
+      });
+      
+      console.log('Final cleanedUpdateData:', JSON.stringify(cleanedUpdateData, null, 2));
+      console.log('Patient ID:', patientId);
+      console.log('==========================');
       
       const response = await fetch(`/api/patients/${patientId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(patientUpdateData),
+        body: JSON.stringify(cleanedUpdateData),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      console.log('Response headers:', response.headers);
+
+      // Try to get the response text first to see what's actually returned
+      const responseText = await response.text();
+      console.log('Raw response text:', responseText);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update patient');
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Failed to parse error response as JSON:', parseError);
+          errorData = { error: 'Invalid JSON response', rawResponse: responseText };
+        }
+        console.error('API Error Response:', errorData);
+        throw new Error(errorData.error || `Failed to update patient (Status: ${response.status})`);
       }
 
-      const result = await response.json();
+      const result = JSON.parse(responseText);
+      console.log('Update successful:', result);
       
       // Show success message (you can implement a toast notification here)
       alert('Patient updated successfully!');
