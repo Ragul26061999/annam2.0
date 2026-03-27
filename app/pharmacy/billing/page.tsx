@@ -360,15 +360,24 @@ export default function PharmacyBillingPage() {
         // Calculate REAL payments (excluding credit) for accurate status determination
         const payments = paymentsMap[bill.id] || [];
         const realPaid = payments
-          .filter((p: any) => p.method !== 'credit')
-          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
-          
-        const amountPaid = realPaid; 
-        const currentStatus = bill.payment_status || 'pending';
-        const paymentMethod = bill.payment_method || 'cash';
+          .filter((p: any) => (p.method || "").toLowerCase() !== "credit")
+          .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+
+        // Fallback: Use bill.amount_paid if it"s higher (covers manual settlements lacking ledger records)
+        // This prevents "paid" bills from appearing "pending" due to missing billing_payments rows
+        const headerPaid = Number(bill.amount_paid || 0);
+        const amountPaid = Math.max(headerPaid, realPaid);
+
+        const currentStatus = bill.payment_status || "pending";
+        const paymentMethod = bill.payment_method || "cash";
 
         // Determine correct payment status considering roundoff and payment method
         const correctedStatus = getPaymentStatusWithRoundoff(totalAmount, amountPaid, currentStatus, paymentMethod);
+
+        // Debug log for identified discrepancies if needed
+        if (headerPaid > 0 && realPaid === 0 && correctedStatus === "paid") {
+          console.log(`[Billing Fix] Bill ${bill.bill_number} shows paid via header but missing ledger entries.`);
+        }
 
         return {
           id: bill.id,
@@ -493,9 +502,9 @@ export default function PharmacyBillingPage() {
       }
 
       setBills(mappedBills)
-    } catch (err) {
+    } catch (err: any) {
       setError('Failed to load billing data')
-      console.error('Error loading billing data:', err)
+      console.error('Error loading billing data:', err.message || err)
     } finally {
       setLoading(false)
     }

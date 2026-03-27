@@ -67,14 +67,40 @@ export const signOut = async () => {
   await supabase.auth.signOut();
 };
 
+let currentAuthUser: any = null;
+let authUserPromise: Promise<any> | null = null;
+
 export const getCurrentUser = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
+  // If we already have a user, return it
+  if (currentAuthUser) return currentAuthUser;
+  
+  // If a request is already in progress, wait for it
+  if (authUserPromise) return authUserPromise;
+
+  // Make a new request and cache the promise to prevent lock stealing
+  authUserPromise = (async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) {
+        console.warn('Error in supabase.auth.getUser:', error.message);
+        return null;
+      }
+      currentAuthUser = user;
+      return user;
+    } catch (err) {
+      console.error('Unexpected error fetching user:', err);
+      return null;
+    } finally {
+      authUserPromise = null; // Clear the temporary promise
+    }
+  })();
+
+  return authUserPromise;
 };
 
 export const getCurrentUserProfile = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  console.log('Auth user:', user);
+  const user = await getCurrentUser();
+  console.log('Auth user fetched:', user);
   
   if (!user) {
     console.log('No authenticated user found');

@@ -2042,6 +2042,9 @@ function NewBillingPageInner() {
           customer_type: customer.type,
           staff_id: validatedStaffId,
           bill_type: 'pharmacy',
+          amount_paid: payments
+            .filter(p => p.method !== 'credit')
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
           payment_status: (() => {
             const hasCredit = payments.some(p => p.method === 'credit' && p.amount > 0);
             const nonCreditPaid = payments
