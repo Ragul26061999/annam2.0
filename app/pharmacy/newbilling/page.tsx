@@ -75,12 +75,16 @@ interface BillItem {
 }
 
 interface Customer {
-  type: 'patient' | 'walk_in' | 'intent' | 'op';
+  type: 'patient' | 'walk_in' | 'intent' | 'op' | 'self';
   name: string;
   phone?: string;
   patient_uuid?: string;
   patient_uhid?: string;
   intent_type?: string;
+  staff_id?: string;
+  doctor_id?: string;
+  self_bill_type?: 'staff' | 'doctor';
+  is_free_bill?: boolean;
 }
 
 interface BillTotals {
@@ -143,6 +147,9 @@ interface BillTab {
   opResults: any[];
   showOpDropdown: boolean;
   selectedOpIndex: number;
+  allStaff: any[];
+  staffSearch: string;
+  doctorSearch: string;
 }
 
 
@@ -246,6 +253,9 @@ function NewBillingPageInner() {
   const [opResults, setOpResults] = useState<any[]>([]);
   const [showOpDropdown, setShowOpDropdown] = useState(false);
   const [selectedOpIndex, setSelectedOpIndex] = useState(0);
+  const [allStaff, setAllStaff] = useState<any[]>([]);
+  const [staffSearch, setStaffSearch] = useState('');
+  const [doctorSearch, setDoctorSearch] = useState('');
   const medicineDropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -312,7 +322,10 @@ function NewBillingPageInner() {
     opSearch: '',
     opResults: [],
     showOpDropdown: false,
-    selectedOpIndex: 0
+    selectedOpIndex: 0,
+    allStaff: [],
+    staffSearch: '',
+    doctorSearch: ''
   });
 
   // Persistent Storage Management: Load/Save tabs to localStorage
@@ -484,7 +497,10 @@ function NewBillingPageInner() {
           opSearch,
           opResults,
           showOpDropdown,
-          selectedOpIndex
+          selectedOpIndex,
+          allStaff,
+          staffSearch,
+          doctorSearch
         };
         
         // Only update if something actually changed to avoid infinite loops
@@ -508,7 +524,8 @@ function NewBillingPageInner() {
     unlistedForm, showUnlistedModal, showExternalPriceModal,
     externalPriceInput, pendingExternalAdd, qrPreviewBatch, phoneError,
     activeTabIndex, tabs.length,
-    opSearch, opResults, showOpDropdown, selectedOpIndex
+    opSearch, opResults, showOpDropdown, selectedOpIndex,
+    allStaff, staffSearch, doctorSearch
   ]);
 
   // Load current user on component mount
@@ -551,6 +568,25 @@ function NewBillingPageInner() {
     };
 
     loadCurrentUser();
+  }, []);
+
+  // Fetch all staff members for Self billing
+  useEffect(() => {
+    const fetchAllStaff = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('staff')
+          .select('id, first_name, last_name, role, employee_id')
+          .eq('is_active', true)
+          .order('first_name');
+        
+        if (error) throw error;
+        setAllStaff(data || []);
+      } catch (err) {
+        console.error('Error fetching staff members:', err);
+      }
+    };
+    fetchAllStaff();
   }, []);
 
   // Smooth typing buffer for payment amounts per row
@@ -623,7 +659,8 @@ function NewBillingPageInner() {
       (customer.type === 'patient' && !!customer.patient_uuid && !!(customer.name || '').trim()) ||
       (customer.type === 'walk_in' && !!(customer.name || '').trim()) ||
       (customer.type === 'intent' && !!(customer.name || '').trim() && !!intentType) ||
-      (customer.type === 'op' && !!(customer.name || '').trim())
+      (customer.type === 'op' && !!(customer.name || '').trim()) ||
+      (customer.type === 'self' && !!(customer.name || '').trim() && (!!customer.staff_id || !!customer.doctor_id))
     )
   );
 
@@ -1839,6 +1876,14 @@ function NewBillingPageInner() {
 
   // Calculate totals with discount and tax
   const calculateTotals = () => {
+    if (customer.type === 'self' || customer.is_free_bill) {
+      return {
+        subtotal: 0,
+        discountAmount: 0,
+        taxAmount: 0,
+        totalAmount: 0
+      };
+    }
     const subtotal = billItems.reduce((sum, item) => sum + item.subtotal, 0);
     const totalGST = billItems.reduce((sum, item) => sum + item.gst_amount, 0);
 
@@ -1940,7 +1985,7 @@ function NewBillingPageInner() {
       taxAmount: totals.taxAmount,
       totalAmount: totals.totalAmount
     }));
-  }, [billItems, billTotals.discountType, billTotals.discountValue, billTotals.taxPercent]);
+  }, [billItems, billTotals.discountType, billTotals.discountValue, billTotals.taxPercent, customer.type, customer.is_free_bill]);
 
   // Generate bill
   const generateBill = async () => {
@@ -1965,6 +2010,11 @@ function NewBillingPageInner() {
       }
       if (!intentType) {
         alert('Please select an intent type');
+        return;
+      }
+    } else if (customer.type === 'self') {
+      if (!customer.name?.trim()) {
+        alert('Please select a staff member or doctor');
         return;
       }
     } else {
@@ -2038,9 +2088,12 @@ function NewBillingPageInner() {
           tax: billTotals.taxAmount || 0,
           payment_method: normalizeMethod(payments[0].method),
           customer_name: customer.name.trim(),
-          customer_phone: customer.type === 'patient' ? (customer.phone ?? null) : (customer.phone ?? '').trim(),
+          customer_phone: (customer.type === 'patient' || customer.type === 'self') ? (customer.phone ?? null) : (customer.phone ?? '').trim(),
           customer_type: customer.type,
-          staff_id: validatedStaffId,
+          staff_id: customer.type === 'self' && customer.staff_id ? customer.staff_id : validatedStaffId,
+          doctor_id: customer.type === 'self' ? customer.doctor_id : null,
+          is_free_bill: customer.type === 'self' || customer.is_free_bill ? true : false,
+          self_bill_type: customer.type === 'self' ? customer.self_bill_type : null,
           bill_type: 'pharmacy',
           amount_paid: payments
             .filter(p => p.method !== 'credit')
@@ -2049,12 +2102,12 @@ function NewBillingPageInner() {
             const hasCredit = payments.some(p => p.method === 'credit' && p.amount > 0);
             const nonCreditPaid = payments
               .filter(p => p.method !== 'credit')
-              .reduce((sum, p) => sum + (p.amount || 0), 0);
+              .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-            if (!hasCredit && nonCreditPaid >= billTotals.totalAmount - 0.01) {
-              return 'paid';
-            }
-            if (nonCreditPaid > 0) return 'partial';
+            const isFullyPaid = !hasCredit && (Math.abs(nonCreditPaid - billTotals.totalAmount) < 1.0 || nonCreditPaid >= billTotals.totalAmount);
+            
+            if (isFullyPaid) return 'paid';
+            if (nonCreditPaid > 0.1) return 'partial';
             return 'pending';
           })()
         } as any;
@@ -2707,8 +2760,13 @@ function NewBillingPageInner() {
                     <select
                       value={customer.type}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                        const newType = e.target.value as 'patient' | 'walk_in' | 'intent' | 'op';
-                        setCustomer({ ...customer, type: newType });
+                        const newType = e.target.value as 'patient' | 'walk_in' | 'intent' | 'op' | 'self';
+                        setCustomer({ 
+                          ...customer, 
+                          type: newType,
+                          self_bill_type: newType === 'self' ? customer.self_bill_type : undefined,
+                          is_free_bill: newType === 'self'
+                        });
                         if (newType !== 'intent') {
                           setIntentType('');
                         }
@@ -2719,11 +2777,68 @@ function NewBillingPageInner() {
                       <option value="op">OP</option>
                       <option value="walk_in">Walk-in</option>
                       <option value="intent">Intent</option>
+                      <option value="self">Self (Staff/Doctor)</option>
                     </select>
                   </div>
 
-                  {/* Show Search Patient first for patient type */}
-                  {customer.type === 'patient' ? (
+                  {/* Self Type Selection */}
+                  {customer.type === 'self' ? (
+                    <>
+                      <div className="col-span-3">
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Select Role</label>
+                        <select
+                          value={customer.self_bill_type || ''}
+                          onChange={(e) => {
+                            setCustomer({
+                              ...customer,
+                              self_bill_type: e.target.value as any,
+                              name: '',
+                              staff_id: undefined,
+                              doctor_id: undefined
+                            });
+                          }}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-blue-50/50"
+                        >
+                          <option value="">Select Role...</option>
+                          <option value="staff">Staff Member</option>
+                          <option value="doctor">Doctor</option>
+                        </select>
+                      </div>
+                      <div className="col-span-7">
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Select Name *</label>
+                        <div className="relative">
+                          <select
+                            value={customer.self_bill_type === 'staff' ? customer.staff_id : customer.doctor_id || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const person = allStaff.find(s => s.id === val);
+                              if (person) {
+                                setCustomer({
+                                  ...customer,
+                                  name: `${person.first_name} ${person.last_name}`,
+                                  staff_id: customer.self_bill_type === 'staff' ? person.id : undefined,
+                                  doctor_id: customer.self_bill_type === 'doctor' ? person.id : undefined,
+                                  is_free_bill: true
+                                });
+                              }
+                            }}
+                            disabled={!customer.self_bill_type}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${!customer.self_bill_type ? 'bg-slate-50 cursor-not-allowed border-slate-100' : 'bg-white border-slate-200 shadow-sm'}`}
+                          >
+                            <option value="">{!customer.self_bill_type ? 'Select role first...' : `Select ${customer.self_bill_type}...`}</option>
+                            {allStaff
+                              .filter(s => customer.self_bill_type === 'doctor' ? s.role === 'Doctor' : s.role !== 'Doctor')
+                              .map(s => (
+                                <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.role || 'Staff'})</option>
+                              ))}
+                          </select>
+                          {customer.self_bill_type && allStaff.filter(s => customer.self_bill_type === 'doctor' ? s.role === 'Doctor' : s.role !== 'Doctor').length === 0 && (
+                            <p className="mt-1 text-[10px] text-amber-600">No {customer.self_bill_type}s found in records.</p>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : customer.type === 'patient' ? (
                     <>
                       <div className="col-span-4">
                         <label className="block text-sm font-bold text-slate-700 mb-1">Search Patient</label>
@@ -4031,10 +4146,16 @@ function NewBillingPageInner() {
                     </div>
                   )}
 
-                  {paid === 0 && (
+                  {paid === 0 && totalDue > 0 && (
                     <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
                       <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
                       <p className="text-yellow-800">Please add at least one payment method with a valid amount.</p>
+                    </div>
+                  )}
+                  {totalDue === 0 && (
+                    <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                      <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                      <p className="text-green-800 font-medium">This is a free bill (Total Amount: ₹0). You can proceed to generate the bill.</p>
                     </div>
                   )}
                 </div>
@@ -4050,7 +4171,7 @@ function NewBillingPageInner() {
                   </button>
                   <button
                     onClick={async () => {
-                      if (paid === 0) {
+                      if (totalDue > 0 && paid === 0) {
                         alert('Please add at least one payment method with a valid amount.');
                         return;
                       }
@@ -4061,7 +4182,7 @@ function NewBillingPageInner() {
                       setShowPaymentModal(false);
                       await generateBill();
                     }}
-                    disabled={loading || paid === 0 || paid > totalDue}
+                    disabled={loading || (totalDue > 0 && (paid === 0 || paid > totalDue))}
                     className="px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                   >
                     {loading ? (
@@ -4191,6 +4312,12 @@ function NewBillingPageInner() {
                         <span>{customer.phone}</span>
                       </div>
                     )}
+                    {customer.type === 'self' && (
+                      <div className="flex justify-between">
+                        <span className="font-semibold">Role:</span>
+                        <span className="text-right uppercase font-bold">{customer.self_bill_type}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Items Table */}
@@ -4239,6 +4366,11 @@ function NewBillingPageInner() {
                       <span>TOTAL</span>
                       <span>₹{Math.round(billTotals.totalAmount)}</span>
                     </div>
+                    {customer.type === 'self' && (
+                      <div className="text-center mt-2 border border-black py-1 font-black text-sm uppercase italic">
+                        *** FREE BILL / SELF ***
+                      </div>
+                    )}
                   </div>
 
                   {/* Footer */}
@@ -4325,6 +4457,12 @@ function NewBillingPageInner() {
                   <span className="w-24 font-bold">Date</span>
                   <span className="font-bold">: {formatISTDate(getISTDate())} {formatISTTime(getISTDate())}</span>
                 </div>
+                {generatedBill.customer.type === 'self' && (
+                  <div className="flex">
+                    <span className="w-24 font-bold">Role</span>
+                    <span className="font-bold">: {generatedBill.customer.self_bill_type?.toUpperCase()}</span>
+                  </div>
+                )}
                 <div className="flex">
                   <span className="w-24 font-bold">Sales Type</span>
                   <span className="font-bold">: {
@@ -4405,6 +4543,13 @@ function NewBillingPageInner() {
                     <td className="totals-label" style={{ fontSize: '13px' }}>Tot.Net.Amt:</td>
                     <td className="totals-value" style={{ fontSize: '13px' }}>₹{Number(generatedBill.totals.totalAmount).toFixed(2)}</td>
                   </tr>
+                  {generatedBill.customer.type === 'self' && (
+                    <tr>
+                      <td colSpan={2} className="text-center py-2" style={{ border: '1px solid black' }}>
+                        <div className="font-black text-sm italic uppercase">*** FREE BILL / SELF ***</div>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
 

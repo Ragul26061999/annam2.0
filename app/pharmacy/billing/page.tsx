@@ -339,11 +339,9 @@ export default function PharmacyBillingPage() {
       const getPaymentStatusWithRoundoff = (totalAmount: number, amountPaid: number, currentStatus: string, paymentMethod: string) => {
         if (currentStatus === 'cancelled') return 'cancelled';
 
-        // Roundoff handling
-        const roundedPayable = Math.round(totalAmount);
-        const matchesRoundedPayable = Math.abs(roundedPayable - amountPaid) <= 0.1;
+        // Roundoff handling: consider fully paid if difference is less than ₹1
         const difference = Math.abs(totalAmount - amountPaid);
-        const isFullyPaid = matchesRoundedPayable || difference <= 0.1 || amountPaid >= totalAmount;
+        const isFullyPaid = difference < 1.0 || amountPaid >= totalAmount;
 
         // For credit payments, keep as pending/partial until changed to cash/upi/card
         if (paymentMethod?.toLowerCase() === 'credit') {
@@ -625,11 +623,13 @@ export default function PharmacyBillingPage() {
       })
 
       // Update billing table with correct payment status and overall method (use first one as primary)
-      let paymentStatus = 'partial'
       const difference = Math.abs(totalAmount - newTotalPaid)
-
-      if (difference <= 0.1 || newTotalPaid >= totalAmount) {
+      let paymentStatus = 'pending'
+      
+      if (difference < 1.0 || newTotalPaid >= totalAmount) {
         paymentStatus = 'paid'
+      } else if (newTotalPaid > 0.1) {
+        paymentStatus = 'partial'
       }
 
       const mainPaymentMethod = validPayments[0].method
@@ -2022,7 +2022,13 @@ export default function PharmacyBillingPage() {
                     {bill.patient_uhid || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                    ₹{Math.round(bill.total_amount).toLocaleString()}
+                    {bill.customer_type === 'self' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-600 shadow-sm">
+                        FREE
+                      </span>
+                    ) : (
+                      `₹${Math.round(bill.total_amount).toLocaleString()}`
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex flex-col gap-1.5 group/payment relative">
@@ -2150,16 +2156,25 @@ export default function PharmacyBillingPage() {
               )}
               <div><span className="font-medium">Date:</span> {new Date(selectedBill.created_at).toLocaleString()}</div>
               <div><span className="font-medium">Payment Status:</span> <span className={getStatusBadge(selectedBill.payment_status)}>{selectedBill.payment_status}</span></div>
-              {(selectedBill.amount_paid !== undefined && selectedBill.amount_paid !== selectedBill.total_amount) && (
+              {(selectedBill.amount_paid !== undefined && Math.abs((selectedBill.amount_paid || 0) - (selectedBill.total_amount || 0)) >= 1) && (
                 <div className="col-span-2">
-                  <span className="font-medium">Payment:</span> ₹{roundToWholeNumber(selectedBill.amount_paid || 0)} / ₹{roundToWholeNumber(selectedBill.total_amount || 0)}
-                  {selectedBill.payment_status === 'partial' && (
-                    <span className="ml-2 text-orange-600 text-xs">
-                      {Math.abs((selectedBill.total_amount || 0) - (selectedBill.amount_paid || 0)) < 1 
-                        ? '(Roundoff applied)' 
-                        : '(Partial)'}
-                    </span>
-                  )}
+                  <span className="font-medium">Payment:</span> {selectedBill.customer_type === 'self' ? 
+                    ( <span className="text-emerald-700 font-bold ml-1 uppercase italic">*** FREE TRANSACTION ***</span> ) : (
+                      <>
+                        ₹{roundToWholeNumber(selectedBill.amount_paid || 0)} / ₹{roundToWholeNumber(selectedBill.total_amount || 0)}
+                        {selectedBill.payment_status === 'partial' && (
+                          <span className="ml-2 text-orange-600 text-xs">
+                            (Partial)
+                          </span>
+                        )}
+                        {selectedBill.payment_status === 'pending' && (
+                          <span className="ml-2 text-yellow-600 text-xs">
+                            (Pending)
+                          </span>
+                        )}
+                      </>
+                    )
+                  }
                 </div>
               )}
             </div>
@@ -2269,7 +2284,13 @@ export default function PharmacyBillingPage() {
                         <td className="px-3 py-2">{it.description}</td>
                         <td className="px-3 py-2 text-center">{it.qty}</td>
                         <td className="px-3 py-2 text-right">₹{Number(it.unit_amount || 0).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right">₹{Number(it.total_amount || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">
+                          {selectedBill.customer_type === 'self' ? (
+                            <span className="text-emerald-600 font-bold text-xs uppercase tracking-tighter">FREE</span>
+                          ) : (
+                            `₹${Number(it.total_amount || 0).toFixed(2)}`
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -2278,7 +2299,13 @@ export default function PharmacyBillingPage() {
             </div>
             <div className="mt-4 flex justify-between items-center">
               <div className="text-gray-600 text-sm">Total</div>
-              <div className="font-semibold text-lg">₹{Math.round(selectedBill.total_amount).toLocaleString()}</div>
+              <div className="font-semibold text-lg text-green-700">
+                {selectedBill.customer_type === 'self' ? (
+                  <span className="text-emerald-600 font-black italic uppercase tracking-wider">*** FREE BILL ***</span>
+                ) : (
+                  `₹${Math.round(selectedBill.total_amount).toLocaleString()}`
+                )}
+              </div>
             </div>
             <div className="mt-4 flex gap-3">
               <button onClick={showThermalPreviewWithLogo} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Thermal Print</button>
