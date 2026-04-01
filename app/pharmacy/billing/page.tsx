@@ -343,9 +343,9 @@ export default function PharmacyBillingPage() {
         const difference = Math.abs(totalAmount - amountPaid);
         const isFullyPaid = difference < 1.0 || amountPaid >= totalAmount;
 
-        // For credit payments, keep as pending/partial until changed to cash/upi/card
+        // For credit payments, keep as pending until changed to cash/upi/card
         if (paymentMethod?.toLowerCase() === 'credit') {
-          return amountPaid > 0.1 ? 'partial' : 'pending';
+          return 'pending';
         }
 
         return isFullyPaid ? 'paid' : (amountPaid > 0.1 ? 'partial' : 'pending');
@@ -453,8 +453,8 @@ export default function PharmacyBillingPage() {
               .filter((p: any) => p.method !== 'credit')
               .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
             
-            // If it's labeled as credit and marked paid, but real money is insufficient, it needs fix
-            return paymentMethod === 'credit' && currentStatus === 'paid' && realPaid < (bill.total || 0) - 1;
+            // If it's labeled as credit and marked anything but pending, but real money is insufficient, it needs fix
+            return paymentMethod === 'credit' && currentStatus !== 'pending' && realPaid < (bill.total || 0) - 1;
           })
           .map((b: any) => b.id);
 
@@ -624,15 +624,17 @@ export default function PharmacyBillingPage() {
 
       // Update billing table with correct payment status and overall method (use first one as primary)
       const difference = Math.abs(totalAmount - newTotalPaid)
+      const mainPaymentMethod = validPayments[0].method
+
       let paymentStatus = 'pending'
       
       if (difference < 1.0 || newTotalPaid >= totalAmount) {
         paymentStatus = 'paid'
+      } else if (mainPaymentMethod.toLowerCase() === 'credit') {
+        paymentStatus = 'pending'
       } else if (newTotalPaid > 0.1) {
         paymentStatus = 'partial'
       }
-
-      const mainPaymentMethod = validPayments[0].method
 
       const updateData: any = {
         payment_status: paymentStatus,
