@@ -807,10 +807,32 @@ export async function getIPComprehensiveBilling(
       .eq('billing_status', 'pending')
       .order('created_at', { ascending: true });
 
-    // 9. Get other charges — prefer JSON saved in discharge_summaries (most up-to-date),
-    //    fall back to billing_item table if no saved JSON exists yet.
+    // 9. Get other charges — prioritize the dedicated ip_other_charges table (most up-to-date),
+    //    then fallback to JSON saved in discharge_summaries, then fallback to legacy billing_item table.
     let otherItems: any[] = [];
-    if (dischargeSummary?.other_charges_json) {
+    
+    // First Priority: Try to read from ip_other_charges table (the newer specialized source)
+    try {
+      const { data: specCharges, error: specError } = await supabase
+        .from('ip_other_charges')
+        .select('*')
+        .eq('allocation_id', bedAllocationId);
+      
+      if (!specError && specCharges && specCharges.length > 0) {
+        otherItems = specCharges.map((row: any) => ({
+          service_name: row.service_name,
+          rate: Number(row.rate || 0),
+          quantity: row.qty || row.days || 1,
+          days: row.days || row.qty || 1,
+          amount: Number(row.amount || 0)
+        }));
+      }
+    } catch (e) {
+      console.warn('Error reading from ip_other_charges:', e);
+    }
+
+    // Second Priority: Fallback to discharge_summaries JSON if still empty
+    if (otherItems.length === 0 && dischargeSummary?.other_charges_json) {
       try {
         const parsed = typeof dischargeSummary.other_charges_json === 'string'
           ? JSON.parse(dischargeSummary.other_charges_json)
@@ -825,8 +847,10 @@ export async function getIPComprehensiveBilling(
       } catch (e) {
         otherItems = [];
       }
-    } else {
-      // Fallback: try billing_item table for older records
+    } 
+    
+    // Final Fallback: legacy billing_item table
+    if (otherItems.length === 0) {
       try {
         const { data: oi, error: oiError } = await supabase
           .from('billing_item')
@@ -892,8 +916,6 @@ export async function getIPComprehensiveBilling(
     const doctorServicesTotal =
       doctorServices.reduce((sum, service) => sum + service.total_amount, 0) + additionalConsultationsTotal;
     const grossTotal = 
-      bedChargesTotal + 
-      doctorConsultationTotal + 
       doctorServicesTotal +
       prescribedMedicinesTotal +
       pharmacyTotal + 
@@ -902,6 +924,8 @@ export async function getIPComprehensiveBilling(
       scanTotal +
       otherChargesTotal + 
       otherBillsTotal;
+      // Note: bedChargesTotal and doctorConsultationTotal are excluded from grossTotal 
+      // as they are typically manually added to otherCharges for customized billing.
 
     // Calculate paid amounts from Other Bills
     const otherBillsPaidTotal = (otherBills || []).reduce(

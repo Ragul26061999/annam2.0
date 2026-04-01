@@ -121,6 +121,18 @@ export default function IPBillingLabEditor({
     return labOrders.reduce((sum, order) => sum + calculateOrderTotal(order), 0);
   };
 
+  const calculatePaidTotal = () => {
+    return labOrders.reduce((sum, order) => 
+      sum + order.tests.reduce((testSum, test) => testSum + (test.status === 'paid' ? test.test_cost : 0), 0), 0
+    );
+  };
+
+  const calculatePendingTotal = () => {
+    return labOrders.reduce((sum, order) => 
+      sum + order.tests.reduce((testSum, test) => testSum + (test.status !== 'paid' ? test.test_cost : 0), 0), 0
+    );
+  };
+
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
       <div className="flex justify-between items-center mb-4">
@@ -301,11 +313,22 @@ export default function IPBillingLabEditor({
         <div className="flex justify-between items-center">
           <div>
             <span className="text-lg font-semibold text-gray-700">Total Laboratory Charges:</span>
-            <p className="text-sm text-gray-500 mt-1">
-              {labOrders.length} order{labOrders.length !== 1 ? 's' : ''} • {labOrders.reduce((sum, order) => sum + order.tests.length, 0)} test{labOrders.reduce((sum, order) => sum + order.tests.length, 0) !== 1 ? 's' : ''}
-            </p>
+            <div className="flex items-center gap-4 mt-2">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-green-600 uppercase">Paid Amount</span>
+                <span className="text-lg font-bold text-green-700">{formatCurrency(calculatePaidTotal())}</span>
+              </div>
+              <div className="h-8 w-px bg-teal-200"></div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-orange-500 uppercase">Pending Amount</span>
+                <span className="text-lg font-bold text-orange-700">{formatCurrency(calculatePendingTotal())}</span>
+              </div>
+            </div>
           </div>
-          <span className="text-2xl font-bold text-blue-600">{formatCurrency(calculateLabTotal())}</span>
+          <div className="text-right">
+             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Total Amount</span>
+             <span className="text-3xl font-black text-blue-600 drop-shadow-sm font-mono tracking-tighter">{formatCurrency(calculateLabTotal())}</span>
+          </div>
         </div>
       </div>
     </div>
