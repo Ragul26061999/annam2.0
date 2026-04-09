@@ -182,7 +182,9 @@ export default function DischargeSummaryPage() {
                     admission_date: existing.admission_date || allocation.admission_date || '',
                     surgery_date: existing.surgery_date || '',
                     discharge_date: existing.discharge_date || new Date().toISOString().split('T')[0],
-                    consultant_id: existing.consultant_name || '', // Map consultant_name to consultant_id
+                    consultant_id: existing.consultant_id || allocation.doctor_id || '',
+                    consultant_name: existing.consultant_name || '',
+                    consult_doctor_name: existing.consult_doctor_name || existing.consultant_name || '',
                     presenting_complaint: existing.presenting_complaint || allocation.reason || '',
                     physical_findings: existing.physical_findings || '',
                     investigations: existing.investigations || '',

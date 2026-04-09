@@ -134,6 +134,7 @@ export interface IPDischargeSummary {
   created_by?: string;
   updated_by?: string;
   anesthesiologist?: string;
+  consultant_id?: string;
 }
 
 export interface PrescriptionItem {
@@ -464,7 +465,8 @@ export async function getIPDischargeSummary(bedAllocationId: string) {
     finalized_at: data.finalized_at,
     created_at: data.created_at,
     updated_at: data.updated_at,
-    created_by: data.created_by
+    created_by: data.created_by,
+    consultant_id: data.consultant_id
   };
 
   return mappedData;
@@ -528,6 +530,7 @@ export async function createOrUpdateIPDischargeSummary(
     finalized_at: updates.finalized_at,
     // Only include fields that exist in the database
     created_by: updates.created_by,
+    consultant_id: updates.consultant_id,
     updated_at: new Date().toISOString()
   };
 

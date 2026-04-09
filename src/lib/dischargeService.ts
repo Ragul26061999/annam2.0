@@ -13,6 +13,8 @@ export interface DischargeSummaryData {
     surgery_date?: string;
     discharge_date: string;
     consultant_id: string;
+    consultant_name?: string;
+    consult_doctor_name?: string;
     presenting_complaint: string;
     physical_findings: string;
     investigations: string;
