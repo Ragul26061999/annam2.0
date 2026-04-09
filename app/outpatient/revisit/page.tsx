@@ -99,6 +99,8 @@ export default function OutpatientRevisitPage() {
     staffId: ''
   });
 
+  const isSaving = useRef(false);
+
   const bmi = useMemo(() => {
     const h = Number(form.height) / 100;
     const w = Number(form.weight);
@@ -560,6 +562,7 @@ export default function OutpatientRevisitPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving || isSaving.current) return;
     setError(null);
 
     if (!selectedPatient) {
@@ -571,7 +574,8 @@ export default function OutpatientRevisitPage() {
       setError('Please select a doctor');
       return;
     }
-
+    
+    isSaving.current = true;
     setSaving(true);
 
     try {
@@ -693,6 +697,7 @@ export default function OutpatientRevisitPage() {
       setError(e?.message || 'Failed to complete revisit');
     } finally {
       setSaving(false);
+      isSaving.current = false;
     }
   };
 

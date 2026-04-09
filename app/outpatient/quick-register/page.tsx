@@ -115,6 +115,7 @@ export default function QuickRegisterPage() {
   });
 
   const submitRef = useRef<HTMLButtonElement>(null);
+  const isSubmitting = useRef(false);
 
   // ── Enter / Esc global key handler ───────────────────────────────────────
   const handleFormKey = useCallback((e: React.KeyboardEvent<HTMLFormElement>) => {
@@ -124,6 +125,7 @@ export default function QuickRegisterPage() {
       return;
     }
     if (e.key !== 'Enter') return;
+    if (loading || isSubmitting.current) return;
     // Allow Enter inside <textarea> normally
     if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
     // Place dropdown: let handlePlaceKey manage it
@@ -162,7 +164,7 @@ export default function QuickRegisterPage() {
 
     // No more fields — submit
     submitRef.current?.click();
-  }, [showPlaceSug, router, form.age]);
+  }, [showPlaceSug, router, form.age, loading]);
 
   // ── Data loading ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -504,6 +506,8 @@ export default function QuickRegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || isSubmitting.current) return;
+    isSubmitting.current = true;
     setLoading(true); setError(null);
     try {
       if (duplicatePatient && showDupAlert)
@@ -596,7 +600,10 @@ export default function QuickRegisterPage() {
       setIsSuccess(true);
     } catch(err) {
       setError(`Registration failed: ${(err as Error).message}`);
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+      isSubmitting.current = false;
+    }
   };
 
   // ── Blur check for duplicates ─────────────────────────────────────────────

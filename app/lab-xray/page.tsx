@@ -97,7 +97,8 @@ export default function LabXRayPage() {
     completedToday: 0
   });
   const [loading, setLoading] = useState(true);
-  const [diagFilterDate, setDiagFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [diagStartDate, setDiagStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [diagEndDate, setDiagEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [diagFilterCategory, setDiagFilterCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');       // For order tabs: ordered/in_progress/completed
@@ -116,7 +117,7 @@ export default function LabXRayPage() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [activeSubTab, statusFilter, urgencyFilter, completionFilter]);
+  }, [activeSubTab, statusFilter, urgencyFilter, completionFilter, diagStartDate, diagEndDate]);
 
   const loadData = async (isBackground = false) => {
     try {
@@ -124,15 +125,15 @@ export default function LabXRayPage() {
       else setIsRefreshing(true);
 
       // Get stats
-      const statsData = await getDiagnosticStats();
+      const statsData = await getDiagnosticStats({ dateFrom: diagStartDate, dateTo: diagEndDate });
       setStats(statsData);
 
       // Get orders and billing
       const [lab, radiology, scan, billing] = await Promise.all([
-        getLabOrders(),
-        getRadiologyOrders(),
-        getScanOrders(),
-        getDiagnosticBillsFromBilling({})
+        getLabOrders({ dateFrom: diagStartDate, dateTo: diagEndDate }),
+        getRadiologyOrders({ dateFrom: diagStartDate, dateTo: diagEndDate }),
+        getScanOrders({ dateFrom: diagStartDate, dateTo: diagEndDate }),
+        getDiagnosticBillsFromBilling({ dateFrom: diagStartDate, dateTo: diagEndDate })
       ]);
 
       setLabOrders(lab || []);
@@ -254,10 +255,15 @@ export default function LabXRayPage() {
         if (order.status !== 'completed' && order.status !== 'scan_completed') return false;
       }
 
-      // Apply date filter to orders too
-      if (diagFilterDate && order.created_at) {
+      // Apply date filter to orders too - though we already filter in backend, 
+      // keeping a basic check here for consistency if needed or if created_at is missing
+      if (diagStartDate && order.created_at) {
         const orderDate = String(order.created_at).split('T')[0];
-        if (orderDate !== diagFilterDate) return false;
+        if (orderDate < diagStartDate) return false;
+      }
+      if (diagEndDate && order.created_at) {
+        const orderDate = String(order.created_at).split('T')[0];
+        if (orderDate > diagEndDate) return false;
       }
 
       // Apply search term
@@ -275,7 +281,11 @@ export default function LabXRayPage() {
   const diagnosticFinanceData = useMemo(() => {
     const filtered = billingItems.filter(bill => {
       // Date filter
-      const matchesDate = !diagFilterDate || (bill.created_at && bill.created_at.startsWith(diagFilterDate));
+      const billDate = bill.created_at ? bill.created_at.split('T')[0] : null;
+      const matchesDate = !billDate || (
+        (!diagStartDate || billDate >= diagStartDate) && 
+        (!diagEndDate || billDate <= diagEndDate)
+      );
       
       // Category filter (Lab, Xray, Scan)
       let matchesCategory = true;
@@ -352,7 +362,7 @@ export default function LabXRayPage() {
     });
 
     return { stats, filteredBills: filtered };
-  }, [billingItems, diagFilterDate, diagFilterCategory, searchTerm]);
+  }, [billingItems, diagStartDate, diagEndDate, diagFilterCategory, searchTerm]);
 
   // Analytics Calculations
   const analyticsData = useMemo(() => {
@@ -521,7 +531,7 @@ export default function LabXRayPage() {
           { label: 'Active Lab', value: stats.pendingLabOrders, icon: Clock, color: 'orange', trend: 'In Queue' },
           { label: 'Active Radiology', value: stats.pendingRadiologyOrders, icon: Zap, color: 'purple', trend: 'In Queue' },
           { label: 'Active Scan', value: stats.pendingScanOrders, icon: Activity, color: 'indigo', trend: 'In Queue' },
-          { label: 'Release Today', value: stats.completedToday, icon: FileCheck, color: 'emerald', trend: 'Reports' },
+          { label: (diagStartDate === new Date().toISOString().split('T')[0] && diagEndDate === new Date().toISOString().split('T')[0]) ? 'Release Today' : 'Release Period', value: stats.completedToday, icon: FileCheck, color: 'emerald', trend: 'Reports' },
         ].map((item, i) => (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -812,15 +822,28 @@ export default function LabXRayPage() {
                   />
                 </div>
 
-                {/* Date filter — always visible for all tabs */}
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="date"
-                    value={diagFilterDate}
-                    onChange={(e) => setDiagFilterDate(e.target.value)}
-                    className="pl-10 pr-3 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none w-[160px]"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="date"
+                      value={diagStartDate}
+                      onChange={(e) => setDiagStartDate(e.target.value)}
+                      className="pl-10 pr-3 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none w-[160px]"
+                      title="Start Date"
+                    />
+                  </div>
+                  <span className="text-gray-400 text-xs font-bold">TO</span>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="date"
+                      value={diagEndDate}
+                      onChange={(e) => setDiagEndDate(e.target.value)}
+                      className="pl-10 pr-3 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none w-[160px]"
+                      title="End Date"
+                    />
+                  </div>
                 </div>
 
                 {/* Category filter — only for billing and orders tabs */}
@@ -930,7 +953,7 @@ export default function LabXRayPage() {
                     </div>
                     <div>
                        <p className="text-xs font-bold text-indigo-900 leading-none">Filtered Result Summary</p>
-                       <p className="text-[10px] text-indigo-500 font-medium">Showing {diagnosticFinanceData.stats.count} bills for {diagFilterCategory === 'all' ? 'All Diagnostic Services' : diagFilterCategory.toUpperCase()}</p>
+                       <p className="text-[10px] text-indigo-500 font-medium">Showing {diagnosticFinanceData.stats.count} bills for {diagFilterCategory === 'all' ? 'All Diagnostic Services' : diagFilterCategory.toUpperCase()} ({diagStartDate} to {diagEndDate})</p>
                     </div>
                  </div>
                  <div className="text-right">

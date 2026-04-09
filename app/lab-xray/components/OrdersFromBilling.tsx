@@ -500,6 +500,24 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
     const displayPaymentMethod = bill.payment_method;
     const salesType = currentStatus === 'paid' ? String(displayPaymentMethod || 'cash').toUpperCase() : 'CREDIT';
 
+    const patientDob = bill.patient?.date_of_birth;
+    let patientAge = 'N/A';
+    if (patientDob) {
+      try {
+        const birthDate = new Date(patientDob);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        patientAge = age.toString();
+      } catch (e) {
+        console.warn('Error calculating age:', e);
+      }
+    }
+    const patientGender = bill.patient?.gender || 'N/A';
+
     const amount = Number(bill.total ?? bill.subtotal ?? 0);
     const discountAmount = Number(bill.discount ?? 0);
     const taxableAmount = amount - discountAmount;
@@ -600,6 +618,9 @@ export default function OrdersFromBilling({ items, onRefresh, searchTerm: global
               </tr>
               <tr>
                 <td class="label">Patient Name</td><td class="value">: ${escapeHtml(patientName)}</td>
+              </tr>
+              <tr>
+                <td class="label">Age / Gender</td><td class="value">: ${escapeHtml(patientAge)} Y / ${escapeHtml(patientGender)}</td>
               </tr>
               <tr>
                 <td class="label">Bill No</td><td class="value">: ${escapeHtml(billNumber)}</td>

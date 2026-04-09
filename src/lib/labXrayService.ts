@@ -135,6 +135,8 @@ export async function getDiagnosticBillsFromBilling(filters?: {
   bill_type?: 'lab' | 'radiology' | 'scan' | 'diagnostics';
   payment_status?: string;
   searchTerm?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }): Promise<DiagnosticBill[]> {
   try {
     let billTypes: string[] = ['lab', 'radiology', 'scan'];
@@ -154,6 +156,14 @@ export async function getDiagnosticBillsFromBilling(filters?: {
 
     if (filters?.payment_status && filters.payment_status !== 'all') {
       query = query.eq('payment_status', filters.payment_status);
+    }
+
+    if (filters?.dateFrom) {
+      query = query.gte('created_at', filters.dateFrom);
+    }
+
+    if (filters?.dateTo) {
+      query = query.lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
     }
 
     const { data: bills, error } = await query;
@@ -1854,7 +1864,10 @@ export async function updateDiagnosticBillingStatus(
 /**
  * Get diagnostic statistics
  */
-export async function getDiagnosticStats(): Promise<{
+export async function getDiagnosticStats(filters?: {
+  dateFrom?: string;
+  dateTo?: string;
+}): Promise<{
   totalLabOrders: number;
   totalRadiologyOrders: number;
   totalScanOrders: number;
@@ -1867,10 +1880,25 @@ export async function getDiagnosticStats(): Promise<{
     const today = new Date().toISOString().split('T')[0];
 
     // Query lab, radiology, and scan orders with error handling for missing tables
+    let labQuery = supabase.from('lab_test_orders').select('id, status, created_at');
+    let radiologyQuery = supabase.from('radiology_test_orders').select('id, status, created_at');
+    let scanQuery = supabase.from('scan_test_orders').select('id, status, created_at');
+
+    if (filters?.dateFrom) {
+      labQuery = labQuery.gte('created_at', filters.dateFrom);
+      radiologyQuery = radiologyQuery.gte('created_at', filters.dateFrom);
+      scanQuery = scanQuery.gte('created_at', filters.dateFrom);
+    }
+    if (filters?.dateTo) {
+      labQuery = labQuery.lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
+      radiologyQuery = radiologyQuery.lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
+      scanQuery = scanQuery.lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
+    }
+
     const [labOrdersResult, radiologyOrdersResult, scanOrdersResult] = await Promise.allSettled([
-      supabase.from('lab_test_orders').select('id, status, created_at'),
-      supabase.from('radiology_test_orders').select('id, status, created_at'),
-      supabase.from('scan_test_orders').select('id, status, created_at')
+      labQuery,
+      radiologyQuery,
+      scanQuery
     ]);
 
     // Handle lab orders result
@@ -1911,7 +1939,17 @@ export async function getDiagnosticStats(): Promise<{
         ...labOrdersData,
         ...radiologyOrdersData,
         ...scanOrdersData
-      ].filter(o => o.status === 'completed' && o.created_at?.startsWith(today)).length
+      ].filter(o => {
+        const isCompleted = o.status === 'completed' || o.status === 'scan_completed';
+        if (!isCompleted) return false;
+        
+        if (filters?.dateFrom || filters?.dateTo) {
+          // If filtering by range, all returned items are within range, so just check status
+          return true;
+        }
+        // Fallback to today if no filter
+        return o.created_at?.startsWith(today);
+      }).length
     };
 
     return stats;
