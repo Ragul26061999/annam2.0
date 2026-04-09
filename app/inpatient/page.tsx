@@ -13,12 +13,12 @@ import {
   ArrowUpRight, Percent, BedSingle, Home, Layers
 } from 'lucide-react';
 import { getDashboardStats } from '../../src/lib/dashboardService';
-import { deletePatient } from '../../src/lib/patientService';
 import { getDischargeSummaryIdsByAllocations } from '../../src/lib/dischargeService';
 import {
   getBedAllocations,
   getBedStats,
   getAvailableBeds,
+  deleteBedAllocation,
   type BedAllocation,
   type Bed as BedType
 } from '../../src/lib/bedAllocationService';
@@ -599,8 +599,8 @@ export default function InpatientPage() {
                                 <div className="my-1 border-t border-slate-100" />
                                 <button
                                   onClick={() => { setPatientToDelete(allocation); setDeleteConfirmOpen(true); setCardMenuOpen(null); }}
-                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 font-medium">
-                                  <Trash2 className="h-3.5 w-3.5" /> Delete Patient
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 font-medium whitespace-nowrap">
+                                  <Trash2 className="h-3.5 w-3.5" /> Delete Record
                                 </button>
                               </div>
                             )}
@@ -814,6 +814,13 @@ export default function InpatientPage() {
                                     <Users className="h-3.5 w-3.5 text-indigo-500" /> Patient Profile
                                   </button>
                                 </Link>
+                                <div className="my-1 border-t border-slate-100" />
+                                <button
+                                  type="button"
+                                  onClick={() => { setPatientToDelete(allocation); setDeleteConfirmOpen(true); setCardMenuOpen(null); }}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 font-medium whitespace-nowrap">
+                                  <Trash2 className="h-3.5 w-3.5" /> Delete Record
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1093,8 +1100,8 @@ export default function InpatientPage() {
                   <Trash2 className="h-5 w-5 text-red-600" />
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-base font-bold text-slate-800">Delete Patient</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">This action cannot be undone</p>
+                  <h2 className="text-base font-bold text-slate-800">Delete Admission Record</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">This will remove this specific inpatient record</p>
                 </div>
                 <button onClick={() => { setDeleteConfirmOpen(false); setPatientToDelete(null); }}
                   className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400" disabled={isDeleting}>
@@ -1116,8 +1123,8 @@ export default function InpatientPage() {
                 </div>
               </div>
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3.5 py-2.5 mb-5">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700">All associated records (appointments, vitals, history) will be affected.</p>
+                <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700">Associated clinical data (vitals, notes, orders) for this admission will be deleted.</p>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => { setDeleteConfirmOpen(false); setPatientToDelete(null); }}
@@ -1126,8 +1133,14 @@ export default function InpatientPage() {
                 </button>
                 <button onClick={async () => {
                   setIsDeleting(true);
-                  try { await deletePatient(patientToDelete.patient_id); await loadInpatientData(); alert('Patient deleted.'); }
-                  catch { alert('Failed to delete patient.'); }
+                  try { 
+                    await deleteBedAllocation(patientToDelete.id); 
+                    await loadInpatientData(); 
+                    alert('Admission record deleted.'); 
+                  }
+                  catch (err: any) { 
+                    alert('Failed to delete admission record: ' + (err.message || 'Unknown error')); 
+                  }
                   finally { setIsDeleting(false); setDeleteConfirmOpen(false); setPatientToDelete(null); }
                 }} className="flex-1 px-4 py-2.5 text-sm bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl hover:from-red-700 hover:to-rose-700 font-semibold disabled:opacity-50 flex items-center justify-center gap-2" disabled={isDeleting}>
                   {isDeleting ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4" /> Delete</>}

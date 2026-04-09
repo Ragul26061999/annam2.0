@@ -968,3 +968,51 @@ export async function createBed(bedData: {
     throw error;
   }
 }
+
+/**
+ * Delete a bed allocation record
+ * This also updates the bed status to 'available' if the allocation was active
+ */
+export async function deleteBedAllocation(allocationId: string): Promise<void> {
+  try {
+    // 1. Get the allocation to check status and bed_id
+    const { data: allocation, error: fetchError } = await supabase
+      .from('bed_allocations')
+      .select('bed_id, status')
+      .eq('id', allocationId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching allocation for deletion:', fetchError);
+      throw new Error(`Failed to fetch allocation: ${fetchError.message}`);
+    }
+
+    if (!allocation) throw new Error('Allocation not found');
+
+    // 2. If it was an active allocation, set the bed to available
+    if (allocation.status === 'active' || allocation.status === 'allocated') {
+      const { error: bedError } = await supabase
+        .from('beds')
+        .update({ status: 'available' })
+        .eq('id', allocation.bed_id);
+
+      if (bedError) {
+        console.warn('Failed to update bed status during allocation deletion:', bedError);
+      }
+    }
+
+    // 3. Delete the allocation record
+    const { error: deleteError } = await supabase
+      .from('bed_allocations')
+      .delete()
+      .eq('id', allocationId);
+
+    if (deleteError) {
+      console.error('Error deleting bed allocation:', deleteError);
+      throw new Error(`Failed to delete allocation: ${deleteError.message}`);
+    }
+  } catch (error) {
+    console.error('Error in deleteBedAllocation:', error);
+    throw error;
+  }
+}
