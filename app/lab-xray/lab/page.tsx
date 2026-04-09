@@ -192,8 +192,8 @@ export default function LabOrderPage() {
                 .from('patients')
                 .select('*')
                 .or(`patient_id.ilike.%${searchTerm.trim()}%,name.ilike.%${searchTerm.trim()}%,phone.ilike.%${searchTerm.trim()}%`)
-                .limit(10)
-                .order('name');
+                .limit(50)
+                .order('patient_id', { ascending: false });
 
             if (error) throw error;
             const results = data || [];
@@ -1224,6 +1224,7 @@ export default function LabOrderPage() {
                                                             subLabel: `₹${item.test_cost}`
                                                         }))}
                                                         placeholder="Search & Select Test..."
+                                                        keepOpenAfterSelect={true}
                                                     />
                                                 </div>
 

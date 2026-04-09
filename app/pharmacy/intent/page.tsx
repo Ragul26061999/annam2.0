@@ -379,7 +379,8 @@ function IntentPageInner() {
           .from('patients')
           .select('id, patient_id, name, phone')
           .or(`name.ilike.%${usagePatientSearch}%,patient_id.ilike.%${usagePatientSearch}%`)
-          .limit(10);
+          .limit(50)
+          .order('patient_id', { ascending: false });
 
         if (error) throw error;
         setPatientResults(data || []);

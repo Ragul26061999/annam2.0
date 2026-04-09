@@ -180,8 +180,8 @@ export default function OutpatientRevisitPage() {
         .from('patients')
         .select('id, patient_id, name, phone, age, gender, admission_type, is_admitted')
         .or(orFilter)
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .order('patient_id', { ascending: false })
+        .limit(50);
 
       if (sErr) throw sErr;
       setResults((data || []) as PatientSearchRow[]);

@@ -353,7 +353,8 @@ export default function InpatientAdmissionForm({ onComplete, onCancel, initialPa
     try {
       const { data, error } = await supabase.from('patients').select('*')
         .or(`patient_id.ilike.%${term}%,phone.ilike.%${term}%,name.ilike.%${term}%`)
-        .limit(5);
+        .order('patient_id', { ascending: false })
+        .limit(50);
       if (error) throw error;
       setPatients(data || []);
     } catch {} finally { setSearching(false); }

@@ -1406,7 +1406,7 @@ export async function getAllPatients(
     // Apply pagination
     const { data: patients, error, count } = await query
       .range(offset, offset + limit - 1)
-      .order('created_at', { ascending: false });
+      .order('patient_id', { ascending: false });
 
     if (error) {
       console.error('Error fetching patients:', error);

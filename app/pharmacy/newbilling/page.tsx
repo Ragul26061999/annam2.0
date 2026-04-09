@@ -1457,7 +1457,8 @@ function NewBillingPageInner() {
           .from('patients')
           .select('id, patient_id, name, phone')
           .or(`name.ilike.%${term}%,patient_id.ilike.%${term}%`)
-          .limit(10);
+          .limit(50)
+          .order('patient_id', { ascending: false });
         if (error) throw error;
         setPatientResults(data || []);
       } catch (e) {

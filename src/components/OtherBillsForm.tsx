@@ -119,7 +119,8 @@ export default function OtherBillsForm({ isOpen, onClose, onSuccess, initialData
         .from('patients')
         .select('id, patient_id, name, phone')
         .or(`name.ilike.%${query}%,patient_id.ilike.%${query}%,phone.ilike.%${query}%`)
-        .limit(10);
+        .order('patient_id', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
       setPatientResults(data || []);

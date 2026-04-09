@@ -1310,7 +1310,7 @@ export async function searchPharmacyBills(searchTerm: string): Promise<any[]> {
       .from('patients')
       .select('id')
       .or(`name.ilike.%${searchTerm}%,patient_id.ilike.%${searchTerm}%`)
-      .limit(10)
+      .limit(50)
 
     const patientIds = (patientMatches || []).map((p: any) => p.id)
 
@@ -1342,7 +1342,7 @@ export async function searchPharmacyBills(searchTerm: string): Promise<any[]> {
     
     const { data, error } = await query
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(50)
 
     if (error) {
       console.error('Error in searchPharmacyBills:', error?.message || error)

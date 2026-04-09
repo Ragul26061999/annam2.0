@@ -138,8 +138,8 @@ export default function ScanOrderPage() {
         .from('patients')
         .select('id, patient_id, name, phone, gender, date_of_birth')
         .or(`patient_id.ilike.%${query.trim()}%,name.ilike.%${query.trim()}%,phone.ilike.%${query.trim()}%`)
-        .limit(10)
-        .order('name');
+        .limit(50)
+        .order('patient_id', { ascending: false });
 
       if (error) throw error;
       setPatientResults((data || []) as any);
@@ -568,6 +568,7 @@ export default function ScanOrderPage() {
                             subLabel: `₹${item.test_cost}`,
                           }))}
                           placeholder="Search & Select Scan..."
+                          keepOpenAfterSelect={true}
                         />
                       </div>
 
