@@ -2846,6 +2846,14 @@ function OutpatientPageContent() {
                               <MapPin size={14} className="mr-2 mt-1 text-red-500" />
                               {getTruncatedText(patient.address, 35)}
                             </div>
+                            <div className="flex items-center text-sm border-t border-gray-100 pt-2 mt-2">
+                              <Clock size={14} className="mr-2 text-indigo-500" />
+                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Registered:</span>
+                              <span className="text-xs font-bold text-indigo-600">
+                                {new Date(patient.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} 
+                                <span className="ml-1 text-indigo-400">{new Date(patient.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+                              </span>
+                            </div>
 
                             {/* Vitals summary if available */}
                             {(patient.bmi || patient.bp_systolic || patient.pulse) && (
@@ -2942,6 +2950,10 @@ function OutpatientPageContent() {
                                     <div className="ml-3">
                                       <div className="text-sm font-medium text-gray-900">{patient.name}</div>
                                       <div className="text-sm text-orange-600 font-mono">{patient.patient_id}</div>
+                                      <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1 font-medium">
+                                        <Clock size={10} />
+                                        <span>Reg: {new Date(patient.created_at).toLocaleDateString('en-GB')} {new Date(patient.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 </td>
@@ -4295,34 +4307,39 @@ function OutpatientPageContent() {
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill ID</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {billingRecords.map((record) => (
-                      <tr key={record.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {record.bill_id}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <div className="font-medium">{record.patient?.name || 'Unknown Patient'}</div>
-                              <Link href={`/patients/${record.patient?.id}`}>
-                                <button className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors" title="View Patient">
-                                  <Eye size={14} />
-                                </button>
-                              </Link>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date / Time</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {billingRecords.map((record) => (
+                        <tr key={record.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {record.bill_id}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-medium">{record.patient?.name || 'Unknown Patient'}</div>
+                                <Link href={`/patients/${record.patient?.id}`}>
+                                  <button className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors" title="View Patient">
+                                    <Eye size={14} />
+                                  </button>
+                                </Link>
+                              </div>
+                              <div className="text-gray-500">{record.patient?.patient_id || 'N/A'}</div>
                             </div>
-                            <div className="text-gray-500">{record.patient?.patient_id || 'N/A'}</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(record.bill_date).toLocaleDateString()}
-                        </td>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-700">{new Date(record.bill_date).toLocaleDateString('en-GB')}</span>
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                                {new Date(record.bill_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex items-center">
                             <IndianRupee size={14} className="text-gray-500" />

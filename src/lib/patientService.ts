@@ -1338,10 +1338,10 @@ export async function getAllPatients(
       }
 
       if (startDate) {
-        patientQuery = patientQuery.gte('created_at', startDate);
+        patientQuery = patientQuery.gte('created_at', `${startDate}T00:00:00.000Z`);
       }
       if (endDate) {
-        patientQuery = patientQuery.lte('created_at', endDate);
+        patientQuery = patientQuery.lte('created_at', `${endDate}T23:59:59.999Z`);
       }
 
       if (place) {
@@ -1392,10 +1392,10 @@ export async function getAllPatients(
 
     // Date range filter
     if (startDate) {
-      query = query.gte('created_at', startDate);
+      query = query.gte('created_at', `${startDate}T00:00:00.000Z`);
     }
     if (endDate) {
-      query = query.lte('created_at', endDate);
+      query = query.lte('created_at', `${endDate}T23:59:59.999Z`);
     }
 
     // Place filter (filter by city, state, or address)

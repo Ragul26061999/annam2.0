@@ -454,9 +454,10 @@ export default function PatientDisplayPage() {
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <span className="text-[10px] text-gray-400">
-                    Added {new Date(patient.created_at).toLocaleDateString()}
-                  </span>
+                  <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                    <Clock size={10} />
+                    <span>Registered: {new Date(patient.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} {new Date(patient.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/patients/${patient.id}`}

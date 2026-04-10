@@ -665,9 +665,17 @@ export default function PatientsPage() {
                   <Phone size={14} className="mr-2 text-green-500" />
                   {patient.phone}
                 </div>
-                <div className="flex items-start text-sm text-gray-600">
+                <div className="flex items-center text-sm text-gray-600">
                   <MapPin size={14} className="mr-2 mt-1 text-red-500" />
                   {getTruncatedText(patient.address, 35)}
+                </div>
+                <div className="flex items-center text-sm border-t border-gray-100 pt-2 mt-2">
+                  <Clock size={14} className="mr-2 text-indigo-500" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Registered:</span>
+                  <span className="text-xs font-bold text-indigo-600">
+                    {new Date(patient.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} 
+                    <span className="ml-1 text-indigo-400">{new Date(patient.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </span>
                 </div>
 
                 {/* Vitals summary if available */}

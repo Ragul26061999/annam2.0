@@ -524,8 +524,19 @@ export default function OutpatientContent() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>{patient.admission_date ? new Date(patient.admission_date).toLocaleDateString() : 'N/A'}</span>
+                    <Calendar className="h-4 w-4 text-blue-500" />
+                    <span>Admitted: {patient.admission_date ? new Date(patient.admission_date).toLocaleDateString() : 'N/A'}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 border-t border-gray-100 pt-2 mt-2">
+                    <Clock className="h-4 w-4 text-indigo-500" />
+                    <span className="text-[10px] uppercase font-bold text-gray-400">Reg:</span>
+                    <span className="text-xs font-bold text-indigo-600">
+                      {new Date(patient.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      <span className="ml-1 text-indigo-400 font-medium">
+                        {new Date(patient.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </span>
                   </div>
 
                   {patient.total_amount && parseFloat(patient.total_amount.toString()) > 0 && (
