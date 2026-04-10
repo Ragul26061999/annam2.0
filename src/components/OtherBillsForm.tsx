@@ -437,7 +437,7 @@ export default function OtherBillsForm({ isOpen, onClose, onSuccess, initialData
                       setFormData({ 
                         ...formData, 
                         doctor_id: selectedId, 
-                        doctor_name: selectedDoc?.user?.name || '' 
+                        doctor_name: selectedId === 'self' ? 'Self' : (selectedDoc?.user?.name || '') 
                       });
                     }}
                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"

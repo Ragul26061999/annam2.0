@@ -136,7 +136,7 @@ export default function OtherBills() {
 
     // Get patient UHID
     const patientUhid = bill.patient?.patient_id || 'WALK-IN';
-    const patientName = bill.patient?.name || 'Unknown Patient';
+    const patientName = bill.patient?.name || bill.patient_name || 'Unknown Patient';
     const billNumber = bill.bill_number || 'N/A';
 
     // Get payment status
@@ -364,7 +364,7 @@ const showThermalPreviewWithLogo = () => {
 
     // Get patient UHID
     const patientUhid = selectedBill.patient?.patient_id || 'WALK-IN';
-    const patientName = selectedBill.patient?.name || 'Unknown Patient';
+    const patientName = selectedBill.patient?.name || selectedBill.patient_name || 'Unknown Patient';
     const billNumber = selectedBill.bill_number || 'N/A';
 
     // Get payment status
