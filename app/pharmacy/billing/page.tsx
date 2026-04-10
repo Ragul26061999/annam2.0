@@ -1341,7 +1341,7 @@ export default function PharmacyBillingPage() {
         <td style="padding: 4px 2px; border-bottom: 1px dashed #000;">${(index + 1).toString().padStart(2, ' ')}</td>
         <td style="padding: 4px 2px; border-bottom: 1px dashed #000; text-transform: uppercase;">${(item.description || item.name || 'Unknown').substring(0, 45)}</td>
         <td style="padding: 4px 2px; border-bottom: 1px dashed #000; text-align: center;">${(item.qty || 1).toString().padStart(4, ' ')}</td>
-        <td style="padding: 4px 2px; border-bottom: 1px dashed #000; text-align: right;">${Number(item.total_amount || 0).toFixed(2).padStart(10, ' ')}</td>
+        <td style="padding: 4px 60px 4px 2px; border-bottom: 1px dashed #000; text-align: right;">${Number(item.total_amount || 0).toFixed(2).padStart(10, ' ')}</td>
       </tr>
     `).join('');
 
@@ -1375,7 +1375,7 @@ export default function PharmacyBillingPage() {
               font-family: 'Courier New', Courier, monospace; 
               font-size: 14px;
               line-height: 1.5;
-              width: 750px; /* Suitable for 80 column */
+              width: 680px; /* Reduced for better margin */
               margin: 0 auto;
               padding: 10px;
               color: #000;
@@ -1392,11 +1392,11 @@ export default function PharmacyBillingPage() {
             }
             .header { text-align: center; margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 10px; }
             .bill-info { width: 100%; margin-bottom: 10px; font-size: 14px; }
-            .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+            .items-table { width: 95%; border-collapse: collapse; margin-bottom: 15px; }
             .items-table th { border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 10px 2px; text-align: left; font-size: 14px; }
             .items-table td { padding: 6px 2px; border-bottom: 1px dashed #000; }
             .totals-table { width: 100%; margin-top: 10px; }
-            .totals-table td { text-align: right; padding: 4px; font-size: 14px; }
+            .totals-table td { text-align: right; padding: 4px 60px 4px 4px; font-size: 14px; }
             .dashed-line { border-top: 2px dashed #000; margin: 15px 0; }
             .title { font-size: 16px; text-decoration: underline; margin-top: 5px; }
             @media print {
@@ -1438,7 +1438,7 @@ export default function PharmacyBillingPage() {
                 <th style="width: 10%;">SL.NO</th>
                 <th style="width: 55%;">DRUG DESCRIPTION</th>
                 <th style="width: 15%; text-align: center;">QTY</th>
-                <th style="width: 20%; text-align: right;">AMOUNT (Rs.)</th>
+                <th style="width: 20%; text-align: right; padding-right: 60px;">AMOUNT (Rs.)</th>
               </tr>
             </thead>
             <tbody>
@@ -1446,7 +1446,7 @@ export default function PharmacyBillingPage() {
             </tbody>
           </table>
 
-          <div style="display: flex; justify-content: flex-end;">
+          <div style="display: flex; justify-content: flex-end; padding-right: 5%;">
             <table class="totals-table" style="width: 45%;">
               <tr>
                 <td style="text-align: left;">Taxable Amount:</td>
