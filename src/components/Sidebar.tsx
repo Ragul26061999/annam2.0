@@ -227,7 +227,7 @@ const Sidebar: React.FC = () => {
       nurse: ['/dashboard', '/patients', '/inpatient', '/outpatient', '/beds'],
       pharmacist: ['/dashboard', '/pharmacy', '/pharmacy/purchase', '/pharmacy/purchase-return', '/pharmacy/department-issue', '/pharmacy/newbilling', '/pharmacy/sales-return-v2', '/pharmacy/drug-broken', '/pharmacy/reports', '/pharmacy/reports?tab=gst', '/pharmacy/reports?tab=stock', '/pharmacy/cash-collection'],
       technician: ['/dashboard', '/lab-xray'],
-      receptionist: ['/dashboard', '/patients', '/appointments', '/finance', '/other-bills'],
+      receptionist: ['/dashboard', '/patients', '/appointments', '/finance', '/other-bills', '/outpatient', '/lab-xray'],
       accountant: ['/dashboard', '/finance', '/other-bills'],
       patient: ['/dashboard', '/appointments']
     };
