@@ -793,7 +793,7 @@ export default function OutpatientRegistrationForm({ onComplete, onCancel }: Out
                             </tr>
                             <tr>
                                 <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                                <td class="bill-info-10cm bill-info-bold">formatDateTime(`${formData.registrationDate}T${formData.registrationTime}`)</td>
+                                <td class="bill-info-10cm bill-info-bold">${formatDateTime(formData.registrationDate + 'T' + formData.registrationTime)}</td>
                             </tr>
                             <tr>
                                 <td class="header-10cm">Payment Type&nbsp;:&nbsp;&nbsp;</td>
@@ -1097,7 +1097,7 @@ export default function OutpatientRegistrationForm({ onComplete, onCancel }: Out
                                         <strong>Gender:</strong> {duplicatePatient.gender?.charAt(0).toUpperCase() + duplicatePatient.gender?.slice(1)}
                                     </p>
                                     <p className="text-sm text-gray-700 mb-1">
-                                        <strong>Date of Birth:</strong> {new Date(duplicatePatient.date_of_birth).toLocaleDateString()}
+                                        <strong>Date of Birth:</strong> {formatDate(duplicatePatient.date_of_birth)}
                                     </p>
                                     <p className="text-sm text-gray-700 mb-1">
                                         <strong>Contact:</strong> {duplicatePatient.phone || 'Not provided'}
