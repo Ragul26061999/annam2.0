@@ -9,6 +9,7 @@ import { getAllDoctorsSimple, getDoctorAvailableSlots, type Doctor } from '../li
 import { createAppointment } from '../lib/appointmentService';
 import { supabase } from '../lib/supabase';
 import PatientRegistrationLabel from './PatientRegistrationLabel';
+import { formatDate } from '../lib/dateUtils';
 
 interface RegistrationFormData {
   // Personal Information
@@ -920,7 +921,7 @@ export default function RestructuredPatientRegistrationForm({
             <div className="bg-purple-50 p-3 rounded-lg mb-4">
               <div className="flex items-center justify-between mb-3">
                 <h5 className="text-base font-semibold text-purple-900">
-                  {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              {formatDate(currentMonth).split('/').slice(1).join('/')}
                 </h5>
                 <span className="text-xs text-purple-700">Current Month</span>
               </div>
@@ -1002,7 +1003,7 @@ export default function RestructuredPatientRegistrationForm({
             </h4>
 
             <p className="text-sm text-gray-600 mb-4">
-              Selected Date: <strong>{new Date(formData.appointmentDate).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>
+              Selected Date: <strong>{formatDate(formData.appointmentDate)}</strong>
             </p>
 
             {availableSessions.map((session: string) => (
@@ -1252,12 +1253,7 @@ export default function RestructuredPatientRegistrationForm({
           <div className="space-y-2 text-sm">
             <p><strong>Doctor:</strong> {selectedDoctor?.user?.name}</p>
             <p><strong>Specialization:</strong> {selectedDoctor?.specialization}</p>
-            <p><strong>Date:</strong> {new Date(formData.appointmentDate).toLocaleDateString('en-IN', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}</p>
+            <p><strong>Date:</strong> {formatDate(formData.appointmentDate)}</p>
             <p><strong>Time:</strong> {formData.appointmentTime} ({formData.appointmentSession})</p>
             <p><strong>Type:</strong> New Patient</p>
             {selectedDoctor?.consultation_fee && (

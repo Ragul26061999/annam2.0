@@ -4,6 +4,8 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { IPComprehensiveBilling } from '../../lib/ipBillingService';
 
+import { formatDate as centralFormatDate } from '../../lib/dateUtils';
+
 interface IPBillingMultiPagePrintProps {
   billing: IPComprehensiveBilling;
 }
@@ -19,7 +21,7 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '______________________';
-    return new Date(dateString).toLocaleDateString('en-GB'); // DD/MM/YYYY format
+    return centralFormatDate(dateString);
   };
 
   const amountInWords = (amount: number): string => {

@@ -30,6 +30,7 @@ import StaffSelect from '../../../src/components/StaffSelect';
 import BarcodeModal from '../../../src/components/BarcodeModal';
 import UniversalPaymentModal from '../../../src/components/UniversalPaymentModal';
 import { supabase } from '../../../src/lib/supabase';
+import { formatDate, formatDateTime } from '../../../src/lib/dateUtils';
 import { generateUHID } from '../../../src/lib/patientService';
 
 const INDIAN_STATES = [
@@ -331,7 +332,7 @@ export default function QuickRegisterPage() {
     if (!currentBill || !registeredPatient) return;
 
     const now = new Date();
-    const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    const printedDateTime = `${formatDate(now)} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}`;
 
     const patientUhid = registeredPatient.patient_id || 'WALK-IN';
 
@@ -425,8 +426,8 @@ export default function QuickRegisterPage() {
                 <td class="bill-info-10cm bill-info-bold">${(() => {
                   const raw = currentBill.bill_date || (currentBill as any).issued_at || (currentBill as any).created_at || new Date().toISOString();
                   const d = new Date(raw);
-                  if (isNaN(d.getTime())) return new Date().toLocaleDateString('en-IN') + ' ' + new Date().toLocaleTimeString('en-IN');
-                  return d.toLocaleDateString('en-IN') + ' ' + d.toLocaleTimeString('en-IN');
+                  if (isNaN(d.getTime())) return formatDateTime(new Date());
+                  return formatDateTime(d);
                 })()}</td>
               </tr>
               <tr>
@@ -764,7 +765,7 @@ export default function QuickRegisterPage() {
               </span>
               <span className="flex items-center gap-1.5">
                 <Calendar size={12}/>
-                <strong className="text-white">{new Date(form.registrationDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</strong>
+                <strong className="text-white">{formatDate(form.registrationDate)}</strong>
               </span>
               <span className="flex items-center gap-1.5">
                 <Clock size={12}/>

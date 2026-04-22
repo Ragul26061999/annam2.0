@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FileText, Stethoscope, User, FileOutput, History } from 'lucide-react';
+import { formatDate } from '../../lib/dateUtils';
 import CaseSheet from './CaseSheet';
 import DoctorOrders from './DoctorOrders';
 import NurseRecords from './NurseRecords';
@@ -62,8 +63,8 @@ export default function IPClinicalRecords({ allocations, patient, defaultTab = '
           >
             {sortedAllocations.map(alloc => (
               <option key={alloc.id} value={alloc.id}>
-                {alloc.ip_number || 'IP (No Number)'} — {new Date(alloc.admission_date).toLocaleDateString()} 
-                {alloc.status === 'active' ? ' (Active)' : ` (Discharged: ${alloc.discharge_date ? new Date(alloc.discharge_date).toLocaleDateString() : 'N/A'})`}
+                {alloc.ip_number || 'IP (No Number)'} — {formatDate(alloc.admission_date)} 
+                {alloc.status === 'active' ? ' (Active)' : ` (Discharged: ${alloc.discharge_date ? formatDate(alloc.discharge_date) : 'N/A'})`}
               </option>
             ))}
           </select>

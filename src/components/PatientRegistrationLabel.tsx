@@ -1,6 +1,7 @@
 'use client';
 import React, { useRef } from 'react';
 import { Printer, QrCode } from 'lucide-react';
+import { formatDate, formatDateTime } from '../lib/dateUtils';
 
 interface PatientRegistrationLabelProps {
   uhid: string;
@@ -249,11 +250,7 @@ export default function PatientRegistrationLabel({
             
             <div className="info-row" style={{ marginBottom: '8px' }}>
               <span className="info-label" style={{ fontWeight: 'bold' }}>DATE: </span>
-              <span>{new Date(dateOfVisit).toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric'
-              }).toUpperCase()}</span>
+              <span>{formatDate(dateOfVisit)}</span>
             </div>
           </div>
         </div>
@@ -408,20 +405,12 @@ export default function PatientRegistrationLabel({
                         
                         <div class="info-row">
                           <div class="info-label">Registration Date:</div>
-                          <div class="info-value">${new Date(dateOfVisit).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'long',
-                            year: 'numeric'
-                          })}</div>
+                          <div class="info-value">${formatDate(dateOfVisit)}</div>
                         </div>
                         
                         <div class="info-row">
                           <div class="info-label">Time:</div>
-                          <div class="info-value">${new Date().toLocaleTimeString('en-IN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                          })}</div>
+                          <div class="info-value">${formatDateTime(new Date()).split(', ')[1]}</div>
                         </div>
                       </div>
                     </div>

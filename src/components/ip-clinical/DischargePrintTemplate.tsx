@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Check } from 'lucide-react';
+import { formatDateTime } from '../../lib/dateUtils';
 import { IPDischargeSummary } from '../../lib/ipClinicalService';
 
 interface DischargePrintTemplateProps {
@@ -13,8 +14,13 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
   ({ summary, patient, bedAllocation }, ref) => {
     // Helper to format dates
     const formatDate = (dateStr?: string) => {
-      if (!dateStr) return '______________________';
-      return new Date(dateStr).toLocaleDateString('en-GB'); // DD/MM/YYYY format
+      if (!dateStr) return "______________________";
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return "";
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
     };
 
     // Use a Portal to render directly into body, bypassing modal nesting
@@ -410,7 +416,7 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
                 <p className="font-bold text-sm uppercase">Signature of Doctor</p>
                 {summary.finalized_at && (
                   <p className="text-[10px] text-gray-500 mt-1">
-                    Finalized: {new Date(summary.finalized_at).toLocaleString()}
+                    Finalized: {formatDateTime(summary.finalized_at)}
                   </p>
                 )}
               </div>

@@ -46,8 +46,13 @@ export function BillingReceiptPrint({ record, onClose }: BillingReceiptPrintProp
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return '______________________';
-    return new Date(dateString).toLocaleDateString('en-GB'); // DD/MM/YYYY format
+    if (!dateString) return "______________________";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "";
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   const amountInWords = (amount: number): string => {

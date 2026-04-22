@@ -36,6 +36,27 @@ const roundToWholeNumber = (amount: number): number => {
   return decimal >= 0.5 ? Math.ceil(amount) : Math.floor(amount)
 }
 
+const formatDate = (date: string | Date | number): string => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+const formatDateTime = (date: string | Date | number): string => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+  return `${day}/${month}/${year}, ${time}`
+}
+
 interface PharmacyBill {
   id: string
   bill_number: string
@@ -1056,7 +1077,7 @@ export default function PharmacyBillingPage() {
               <td><strong>To:</strong> ${selectedBill.customer_name || 'WALK-IN CUSTOMER'}</td>
             </tr>
             <tr>
-              <td><strong>Date:</strong> ${new Date(selectedBill.created_at).toLocaleString()}</td>
+              <td><strong>Date:</strong> ${formatDateTime(selectedBill.created_at)}</td>
               <td><strong>Status:</strong> ${selectedBill.payment_status}</td>
             </tr>
           </table>
@@ -1086,8 +1107,8 @@ export default function PharmacyBillingPage() {
           <div class="invoice-footer">
             <div style="display:flex;justify-content:space-between;align-items:flex-end">
               <div>
-                <div>Printed Date: ${new Date().toLocaleDateString()}</div>
-                <div>Printed Time: ${new Date().toLocaleTimeString()}</div>
+                <div>Printed Date: ${formatDate(new Date())}</div>
+                <div>Printed Time: ${new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true })}</div>
               </div>
               <div>
                 <div style="height:40px"></div>
@@ -1149,8 +1170,8 @@ export default function PharmacyBillingPage() {
     const taxableAmount = totalAmount - (cgst + sgst);
 
     const now = new Date();
-    const printedDate = now.toLocaleDateString('en-GB').replace(/\//g, '-');
-    const printedTime = now.toLocaleTimeString('en-GB');
+    const printedDate = formatDate(now);
+    const printedTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
 
     // Get patient UHID
     const patientUhid = selectedBill.patient_uhid || 'WALK-IN';
@@ -1270,7 +1291,7 @@ export default function PharmacyBillingPage() {
                 <tr><td style="border: none;">Patient Name</td><td style="border: none;">: ${selectedBill.customer_name || 'WALK-IN CUSTOMER'}</td></tr>
                 <tr style="height: 5px;"><td style="border: none;"></td><td style="border: none;"></td></tr>
                 <tr><td style="border: none;">Bill No</td><td style="border: none;">: ${selectedBill.bill_number}</td></tr>
-                <tr><td style="border: none;">Date</td><td style="border: none;">: ${new Date(selectedBill.created_at).toLocaleString()}</td></tr>
+                <tr><td style="border: none;">Date</td><td style="border: none;">: ${formatDateTime(selectedBill.created_at)}</td></tr>
                 <tr><td style="border: none;">Sales Type</td><td style="border: none;">: ${salesType}</td></tr>
               </table>
             </div>
@@ -1333,8 +1354,8 @@ export default function PharmacyBillingPage() {
     const patientUhid = selectedBill.patient_uhid || 'WALK-IN';
     const salesType = selectedBill.payment_method?.toUpperCase() || 'CASH';
     const now = new Date();
-    const printedDate = now.toLocaleDateString('en-GB').replace(/\//g, '-');
-    const printedTime = now.toLocaleTimeString('en-GB');
+    const printedDate = formatDate(now);
+    const printedTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
 
     const itemsHtml = viewItems.map((item: any, index: number) => `
       <tr>
@@ -1421,7 +1442,7 @@ export default function PharmacyBillingPage() {
           <table class="bill-info">
             <tr>
               <td style="width: 50%;"><strong>BILL NO:</strong> ${selectedBill.bill_number}</td>
-              <td style="width: 50%; text-align: right;"><strong>DATE:</strong> ${new Date(selectedBill.created_at).toLocaleString()}</td>
+              <td style="width: 50%; text-align: right;"><strong>DATE:</strong> ${formatDateTime(selectedBill.created_at)}</td>
             </tr>
             <tr>
               <td><strong>UHID:</strong> ${patientUhid}</td>
@@ -2070,7 +2091,7 @@ export default function PharmacyBillingPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(bill.created_at).toLocaleDateString()}
+                    {formatDate(bill.created_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex gap-2">
@@ -2156,7 +2177,7 @@ export default function PharmacyBillingPage() {
               {selectedBill.patient_uhid && (
                 <div><span className="font-medium">UHID:</span> {selectedBill.patient_uhid}</div>
               )}
-              <div><span className="font-medium">Date:</span> {new Date(selectedBill.created_at).toLocaleString()}</div>
+              <div><span className="font-medium">Date:</span> {formatDateTime(selectedBill.created_at)}</div>
               <div><span className="font-medium">Payment Status:</span> <span className={getStatusBadge(selectedBill.payment_status)}>{selectedBill.payment_status}</span></div>
               {(selectedBill.amount_paid !== undefined && Math.abs((selectedBill.amount_paid || 0) - (selectedBill.total_amount || 0)) >= 1) && (
                 <div className="col-span-2">
@@ -2231,7 +2252,7 @@ export default function PharmacyBillingPage() {
                           <div>
                             <div className="font-medium text-red-900">{r.return_number || r.id}</div>
                             <div className="text-xs text-red-700">
-                              {r.return_date ? new Date(r.return_date).toLocaleDateString() : ''}
+                              {r.return_date ? formatDate(r.return_date) : ''}
                               {r.reason ? ` · ${r.reason}` : ''}
                               {r.status ? ` · ${r.status}` : ''}
                             </div>
@@ -2487,7 +2508,7 @@ export default function PharmacyBillingPage() {
                             <p className="text-sm text-gray-500">UHID: {bill.patient_uhid}</p>
                           )}
                           <p className="text-xs text-gray-500">
-                            {new Date(bill.created_at).toLocaleDateString()} at {new Date(bill.created_at).toLocaleTimeString()}
+                            {formatDateTime(bill.created_at)}
                           </p>
                         </div>
                         <div className="text-right">

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle, Printer, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
+import { formatDate, formatDateTime } from '../lib/dateUtils';
 
 interface AppointmentSuccessPageProps {
   appointmentId: string;
@@ -228,11 +229,7 @@ export default function AppointmentSuccessPage({
                 
                 <div class="info-row">
                   <div class="info-label">Appointment Date:</div>
-                  <div class="info-value">${new Date(details.appointmentDate).toLocaleDateString('en-IN', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                  })}</div>
+                  <div class="info-value">${formatDate(details.appointmentDate)}</div>
                 </div>
                 
                 <div class="info-row">
@@ -242,14 +239,7 @@ export default function AppointmentSuccessPage({
                 
                 <div class="info-row">
                   <div class="info-label">Booking Time:</div>
-                  <div class="info-value">${new Date().toLocaleString('en-IN', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  })}</div>
+                  <div class="info-value">${formatDateTime(new Date())}</div>
                 </div>
               </div>
             </div>
@@ -359,11 +349,7 @@ export default function AppointmentSuccessPage({
                 <div className="border-b border-gray-300 pb-2">
                   <span className="font-bold text-gray-700">DATE: </span>
                   <span className="text-base text-gray-900">
-                    {new Date(details.appointmentDate).toLocaleDateString('en-GB', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric'
-                    }).toUpperCase()}
+                    {formatDate(details.appointmentDate)}
                   </span>
                 </div>
                 

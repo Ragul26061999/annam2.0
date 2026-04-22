@@ -22,6 +22,8 @@ import { IPBillingMultiPagePrint } from './IPBillingMultiPagePrint';
 import IPServiceChargesEditor from './IPServiceChargesEditor';
 import IPDoctorConsultationsEditor from './IPDoctorConsultationsEditor';
 
+import { formatDate } from '../../lib/dateUtils';
+
 interface IPBillingViewProps {
   bedAllocationId: string;
   patient: any;
@@ -329,7 +331,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
             </div>
             <div className="flex flex-col">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Admission Date</p>
-              <p className="text-base font-bold text-slate-700">{new Date(billing.admission.admission_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              <p className="text-base font-bold text-slate-700">{formatDate(billing.admission.admission_date)}</p>
               <div className="h-0.5 w-8 bg-slate-100 mt-2 rounded-full"></div>
             </div>
             <div className="flex flex-col">
@@ -510,11 +512,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                       <div className="flex flex-col">
                         <span className="text-[10px] uppercase font-bold text-gray-400">Billing Date</span>
                         <span className="text-sm font-semibold text-gray-700">
-                          {new Date(pb.bill_date).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
+                          {formatDate(pb.bill_date)}
                         </span>
                       </div>
                     </div>
@@ -661,11 +659,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                         <div>
                           <p className="text-xs text-gray-500 uppercase">Date</p>
                           <p className="font-medium text-gray-900">
-                            {new Date(rb.order_date).toLocaleDateString('en-IN', { 
-                              day: '2-digit', 
-                              month: '2-digit', 
-                              year: 'numeric' 
-                            })}
+                            {formatDate(rb.order_date)}
                           </p>
                         </div>
                       </div>
@@ -781,11 +775,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                         <div>
                           <p className="text-xs text-gray-500 uppercase">Date</p>
                           <p className="font-medium text-gray-900">
-                            {new Date(sb.order_date).toLocaleDateString('en-IN', { 
-                              day: '2-digit', 
-                              month: '2-digit', 
-                              year: 'numeric' 
-                            })}
+                            {formatDate(sb.order_date)}
                           </p>
                         </div>
                       </div>
@@ -1277,7 +1267,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                 <div className="flex items-baseline">
                   <span className="font-bold w-32 flex-shrink-0">Bill Date</span>
                   <span className="font-normal w-4">:</span>
-                  <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">{new Date().toLocaleDateString()}</span>
+                  <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">{formatDate(new Date())}</span>
                 </div>
               </div>
             </div>

@@ -2,6 +2,7 @@
 
 import React, { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { formatDate as centralFormatDate } from '../lib/dateUtils';
 
 interface PrintablePatientSlipProps {
   patientName: string;
@@ -21,12 +22,7 @@ const PrintablePatientSlip: React.FC<PrintablePatientSlipProps> = ({
   const printRef = useRef<HTMLDivElement>(null);
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).toUpperCase();
+    return centralFormatDate(dateString);
   };
 
   const handlePrint = () => {

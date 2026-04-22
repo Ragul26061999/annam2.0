@@ -40,6 +40,7 @@ import StaffSelect from './StaffSelect';
 import DocumentUpload from './DocumentUpload';
 import DocumentList from './DocumentList';
 import UniversalPaymentModal from './UniversalPaymentModal';
+import { formatDate, formatDateTime } from '../lib/dateUtils';
 import { createOPConsultationBill, type PaymentRecord } from '../lib/universalPaymentService';
 
 interface OutpatientRegistrationFormProps {
@@ -723,7 +724,7 @@ export default function OutpatientRegistrationForm({ onComplete, onCancel }: Out
         if (!registrationResult) return;
 
         const now = new Date();
-        const printedDateTime = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        const printedDateTime = formatDateTime(now);
 
         // Get sales type
         let salesType = formData.paymentMode?.toUpperCase() || 'CASH';
@@ -792,7 +793,7 @@ export default function OutpatientRegistrationForm({ onComplete, onCancel }: Out
                             </tr>
                             <tr>
                                 <td class="bill-info-10cm">Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;</td>
-                                <td class="bill-info-10cm bill-info-bold">${formData.registrationDate} ${formData.registrationTime}</td>
+                                <td class="bill-info-10cm bill-info-bold">formatDateTime(`${formData.registrationDate}T${formData.registrationTime}`)</td>
                             </tr>
                             <tr>
                                 <td class="header-10cm">Payment Type&nbsp;:&nbsp;&nbsp;</td>

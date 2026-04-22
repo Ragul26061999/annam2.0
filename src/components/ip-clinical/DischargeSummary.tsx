@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Save, Loader2, FileText, CheckCircle, Lock, Printer, Wand2 } from 'lucide-react';
+import { formatDate } from '../../lib/dateUtils';
 import { 
   getIPDischargeSummary, 
   createOrUpdateIPDischargeSummary, 
@@ -175,11 +176,11 @@ export default function DischargeSummary({ bedAllocationId, patient, bedAllocati
             </div>
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">Admission Date</p>
-              <p className="font-semibold text-gray-900">{bedAllocation?.admission_date ? new Date(bedAllocation.admission_date).toLocaleDateString() : '-'}</p>
+              <p className="font-semibold text-gray-900">{bedAllocation?.admission_date ? formatDate(bedAllocation.admission_date) : '-'}</p>
             </div>
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">Discharge Date</p>
-              <p className="font-semibold text-gray-900">{summary.discharge_date ? new Date(summary.discharge_date).toLocaleDateString() : '(Pending)'}</p>
+              <p className="font-semibold text-gray-900">{summary.discharge_date ? formatDate(summary.discharge_date) : '(Pending)'}</p>
             </div>
           </div>
         </div>

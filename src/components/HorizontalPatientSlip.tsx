@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { formatDate as centralFormatDate } from '../lib/dateUtils';
 
 interface PatientSlipProps {
   patientName: string;
@@ -17,12 +18,7 @@ const HorizontalPatientSlip: React.FC<PatientSlipProps> = ({
   qrCodeData
 }) => {
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).toUpperCase();
+    return centralFormatDate(dateString);
   };
 
   const qrData = qrCodeData || uhid;
