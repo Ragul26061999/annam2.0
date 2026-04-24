@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveAlias: {
       fflate: 'fflate/browser',
+      '@': './',
     },
   },
   // Disable ESLint during production builds

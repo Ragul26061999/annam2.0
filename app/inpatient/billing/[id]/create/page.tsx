@@ -6,7 +6,7 @@ import {
   Loader2, Save, List, RefreshCw, Plus, Trash2, Printer, 
   ArrowLeft, BedDouble, Stethoscope, Calendar, User, 
   Wallet, Check, CreditCard, Receipt, FileText, ChevronRight,
-  Activity, Hash, CheckSquare
+  Activity, Hash, CheckSquare, Upload, X, Eye
 } from 'lucide-react';
 import { getIPComprehensiveBilling, saveIPBilling } from '../../../../../src/lib/ipBillingService';
 import { getTotalAvailableAdvance } from '../../../../../src/lib/ipFlexibleBillingService';
@@ -101,6 +101,12 @@ export default function IPNewBillingPage() {
   const [isBedImported, setIsBedImported] = useState(false);
   const [isDoctorImported, setIsDoctorImported] = useState(false);
 
+  // Upload functionality state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadedBills, setUploadedBills] = useState<any[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+
   const handlePrint = (withHeader: boolean) => {
     setPrintWithHeader(withHeader);
     setTimeout(() => {
@@ -108,10 +114,24 @@ export default function IPNewBillingPage() {
     }, 100);
   };
 
+  const loadUploadedBills = async () => {
+    try {
+      const response = await fetch(`/api/ip-bills?allocation_id=${bedAllocationId}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setUploadedBills(result.bills);
+      }
+    } catch (error) {
+      console.error('Error loading uploaded bills:', error);
+    }
+  };
+
 
   useEffect(() => {
     if (bedAllocationId) {
       loadBillingData();
+      loadUploadedBills();
     }
   }, [bedAllocationId]);
 
@@ -937,6 +957,7 @@ export default function IPNewBillingPage() {
                         <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400/80 animate-pulse">{statusMsg}</span>
                       </div>
                     )}
+                    <div className="grid grid-cols-2 gap-4">
                     <button 
                       onClick={handleSave}
                       disabled={isSaving}
@@ -948,11 +969,213 @@ export default function IPNewBillingPage() {
                         <span className="text-base font-black uppercase tracking-widest">Finalize & Collect</span>
                       </div>
                     </button>
+                    
+                    <button 
+                      onClick={() => setShowUploadModal(true)}
+                      className="w-full h-16 bg-white hover:bg-slate-100 text-slate-900 rounded-3xl transition-all shadow-2xl hover:shadow-white/10 flex items-center justify-center gap-3 active:scale-95 group overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-emerald-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300 pointer-events-none" />
+                      <div className="relative z-10 flex items-center justify-center gap-3 group-hover:text-white transition-colors duration-300">
+                        <Upload className="h-5 w-5" />
+                        <span className="text-base font-black uppercase tracking-widest">Upload Bill</span>
+                      </div>
+                    </button>
                  </div>
               </div>
            </div>
         </div>
       </div>
+
+      {/* UPLOAD BILL MODAL */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Upload className="h-6 w-6" />
+                  <h2 className="text-xl font-bold">Upload Patient Bill</h2>
+                </div>
+                <button 
+                  onClick={() => setShowUploadModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Upload Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-emerald-600" />
+                    Upload Bill Document
+                  </h3>
+                  
+                  <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-emerald-500 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSelectedFile(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setUploadPreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                      id="bill-upload"
+                    />
+                    <label htmlFor="bill-upload" className="cursor-pointer">
+                      <Upload className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                      <p className="text-sm font-medium text-slate-700 mb-2">
+                        Click to upload or drag and drop
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        PNG, JPG, PDF up to 10MB
+                      </p>
+                    </label>
+                  </div>
+                  
+                  {selectedFile && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                      <p className="text-sm font-medium text-emerald-800">
+                        Selected: {selectedFile.name}
+                      </p>
+                      <p className="text-xs text-emerald-600">
+                        Size: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Preview Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-emerald-600" />
+                    Preview
+                  </h3>
+                  
+                  {uploadPreview ? (
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      {selectedFile?.type.startsWith('image/') ? (
+                        <img 
+                          src={uploadPreview} 
+                          alt="Bill preview" 
+                          className="w-full h-64 object-contain bg-slate-50"
+                        />
+                      ) : (
+                        <div className="h-64 bg-slate-50 flex items-center justify-center">
+                          <FileText className="h-16 w-16 text-slate-400" />
+                          <p className="ml-3 text-slate-600">PDF Preview</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 rounded-lg h-64 bg-slate-50 flex items-center justify-center">
+                      <div className="text-center">
+                        <Eye className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                        <p className="text-sm text-slate-500">No preview available</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Uploaded Bills List */}
+              {uploadedBills.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-200">
+                  <h3 className="text-lg font-semibold text-slate-800 mb-4">Previously Uploaded Bills</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {uploadedBills.map((bill: any) => (
+                      <div key={bill.id} className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="aspect-video bg-slate-50 rounded mb-3 flex items-center justify-center">
+                          {bill.file_type.startsWith('image/') ? (
+                            <img 
+                              src={`data:${bill.file_type};base64,${bill.file_data}`} 
+                              alt={bill.file_name} 
+                              className="w-full h-full object-contain rounded cursor-pointer"
+                              onClick={() => window.open(`data:${bill.file_type};base64,${bill.file_data}`, '_blank')}
+                            />
+                          ) : (
+                            <FileText className="h-8 w-8 text-slate-400" />
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-slate-800 truncate">{bill.file_name}</p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(bill.upload_date).toLocaleDateString()}
+                        </p>
+                        {bill.total_amount > 0 && (
+                          <p className="text-xs font-medium text-emerald-600">
+                            ₹{bill.total_amount.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
+                <button
+                  onClick={() => setShowUploadModal(false)}
+                  className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (selectedFile) {
+                      try {
+                        const formData = new FormData();
+                        formData.append('file', selectedFile);
+                        formData.append('allocation_id', bedAllocationId);
+                        formData.append('patient_name', billing?.patient?.name || '');
+                        formData.append('bill_date', new Date().toISOString().split('T')[0]);
+                        formData.append('total_amount', finalGrossTotal.toString());
+
+                        const response = await fetch('/api/ip-bills', {
+                          method: 'POST',
+                          body: formData
+                        });
+
+                        const result = await response.json();
+
+                        if (result.success) {
+                          // Refresh uploaded bills
+                          await loadUploadedBills();
+                          setSelectedFile(null);
+                          setUploadPreview(null);
+                          // Reset file input
+                          const fileInput = document.getElementById('bill-upload') as HTMLInputElement;
+                          if (fileInput) fileInput.value = '';
+                          setStatusMsg('Bill uploaded successfully!');
+                        } else {
+                          setStatusMsg('Failed to upload bill: ' + result.error);
+                        }
+                      } catch (error) {
+                        console.error('Upload error:', error);
+                        setStatusMsg('Failed to upload bill');
+                      }
+                    }
+                  }}
+                  disabled={!selectedFile}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Upload Bill
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PRINT ONLY SECTION - Styled like Discharge Summary */}
       <div className="print-only-template hidden">
@@ -1166,6 +1389,7 @@ export default function IPNewBillingPage() {
           .bg-slate-100 { background-color: #f1f5f9 !important; }
         }
       `}</style>
+      </div>
     </div>
   );
 }
