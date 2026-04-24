@@ -1039,7 +1039,7 @@ export default function IPNewBillingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {!isBedImported && (
+                {isBedImported && (
                   <tr className="text-[12px]">
                     <td className="px-3 py-2 text-slate-500 font-bold text-center">A</td>
                     <td className="px-3 py-2 font-bold text-slate-800 uppercase">Room Rent / Ward Charges ({billing.bed_charges.bed_type})</td>
@@ -1048,7 +1048,7 @@ export default function IPNewBillingPage() {
                     <td className="px-3 py-2 text-right font-mono font-black text-slate-900">{totalBedAmount.toFixed(2)}</td>
                   </tr>
                 )}
-                {!isDoctorImported && (
+                {isDoctorImported && (
                   <tr className="text-[12px]">
                     <td className="px-3 py-2 text-slate-500 font-bold text-center">B</td>
                     <td className="px-3 py-2 font-bold text-slate-800 uppercase">Consultation Charges ({billing.doctor_consultation.doctor_name})</td>
