@@ -144,11 +144,9 @@ export default function IPNewBillingPage() {
           
         setGridItems(charges);
         
-        // Detect if stay charges were already imported
-        const hasBed = charges.some((i: any) => i.isStayCharge === 'bed');
-        const hasDoc = charges.some((i: any) => i.isStayCharge === 'doctor');
-        setIsBedImported(hasBed);
-        setIsDoctorImported(hasDoc);
+        // Start with checkboxes unticked - user must manually tick them to include charges
+        setIsBedImported(false);
+        setIsDoctorImported(false);
 
       } catch {
         setGridItems(data.other_charges || []);
@@ -321,12 +319,16 @@ export default function IPNewBillingPage() {
     // (billing?.summary?.scan_total || 0) +
     // (billing?.summary?.other_bills_total || 0);
 
-  // Totals for summary: Only count Bed/Doctor if checkbox IS TICKED
-  const displayBedAmount = isBedImported ? totalBedAmount : 0;
-  const displayDoctorAmount = isDoctorImported ? totalDoctorAmount : 0;
+  // Calculate bed and doctor amounts only from grid if checkbox is ticked
+  const bedChargesInGrid = gridItems.find(item => item.isStayCharge === 'bed');
+  const doctorChargesInGrid = gridItems.find(item => item.isStayCharge === 'doctor');
+  
+  // Use grid amounts for stay charges if checkbox is ticked, otherwise use calculated amounts
+  const displayBedAmount = isBedImported ? (bedChargesInGrid?.amount || 0) : 0;
+  const displayDoctorAmount = isDoctorImported ? (doctorChargesInGrid?.amount || 0) : 0;
 
-  const stayAndGridTotal = displayBedAmount + displayDoctorAmount + totalGridAmount;
-  const finalGrossTotal = stayAndGridTotal; // Removed otherDeptsTotal
+  // Gross Total should only include manual charges + checked stay charges (from grid)
+  const finalGrossTotal = totalGridAmount;
 
   const netAmount = Math.max(0, finalGrossTotal - lessAdvance - concession);
 
@@ -871,7 +873,7 @@ export default function IPNewBillingPage() {
                  <div className="space-y-4">
                     <div className="flex justify-between items-baseline group cursor-default">
                        <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest group-hover:text-indigo-400 transition-colors">Stay + Other</span>
-                       <span className="font-mono text-sm font-bold text-slate-300">₹{stayAndGridTotal.toFixed(2)}</span>
+                       <span className="font-mono text-sm font-bold text-slate-300">₹{finalGrossTotal.toFixed(2)}</span>
                     </div>
                                         <div className="pt-4 border-t border-white/10 flex justify-between items-end">
                        <span className="text-xs font-black uppercase tracking-widest text-white">Gross Total</span>
@@ -1068,7 +1070,7 @@ export default function IPNewBillingPage() {
               <tfoot className="border-t border-slate-800 font-bold">
                 <tr>
                   <td colSpan={4} className="px-3 py-2 text-right text-[10px] uppercase tracking-widest font-black">Gross Total Charges</td>
-                  <td className="px-3 py-2 text-right text-[14px] font-mono font-black">₹{stayAndGridTotal.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right text-[14px] font-mono font-black">₹{finalGrossTotal.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
