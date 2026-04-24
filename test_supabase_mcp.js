@@ -4,7 +4,7 @@ const fs = require('fs');
 console.log('Testing Supabase MCP Server connection...');
 
 // Read MCP config
-const mcpConfigPath = '/home/ragul/.codeium/windsurf/mcp_config.json';
+const mcpConfigPath = 'C:\\Users\\Ragul\\.gemini\\antigravity\\mcp_config.json';
 if (fs.existsSync(mcpConfigPath)) {
   const config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8'));
   console.log('✅ MCP Config found:', JSON.stringify(config, null, 2));

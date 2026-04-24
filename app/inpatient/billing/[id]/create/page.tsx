@@ -311,22 +311,22 @@ export default function IPNewBillingPage() {
   const totalBedAmount = (bedChargesDraft.days || 0) * (bedChargesDraft.rate || 0);
   const totalDoctorAmount = (doctorFeesDraft.days || 0) * (doctorFeesDraft.rate || 0);
   
-  // Totals from other departments
-  const otherDeptsTotal = 
-    (billing?.summary?.doctor_services_total || 0) + 
-    (billing?.summary?.prescribed_medicines_total || 0) +
-    (billing?.summary?.pharmacy_total || 0) + 
-    (billing?.summary?.lab_total || 0) + 
-    (billing?.summary?.radiology_total || 0) + 
-    (billing?.summary?.scan_total || 0) +
-    (billing?.summary?.other_bills_total || 0);
+  // Totals from other departments - DISABLED to only calculate manual charges
+  const otherDeptsTotal = 0;
+    // (billing?.summary?.doctor_services_total || 0) + 
+    // (billing?.summary?.prescribed_medicines_total || 0) +
+    // (billing?.summary?.pharmacy_total || 0) + 
+    // (billing?.summary?.lab_total || 0) + 
+    // (billing?.summary?.radiology_total || 0) + 
+    // (billing?.summary?.scan_total || 0) +
+    // (billing?.summary?.other_bills_total || 0);
 
-  // Totals for summary: Only count Bed/Doctor if NOT in grid
-  const displayBedAmount = isBedImported ? 0 : totalBedAmount;
-  const displayDoctorAmount = isDoctorImported ? 0 : totalDoctorAmount;
+  // Totals for summary: Only count Bed/Doctor if checkbox IS TICKED
+  const displayBedAmount = isBedImported ? totalBedAmount : 0;
+  const displayDoctorAmount = isDoctorImported ? totalDoctorAmount : 0;
 
   const stayAndGridTotal = displayBedAmount + displayDoctorAmount + totalGridAmount;
-  const finalGrossTotal = stayAndGridTotal + otherDeptsTotal;
+  const finalGrossTotal = stayAndGridTotal; // Removed otherDeptsTotal
 
   const netAmount = Math.max(0, finalGrossTotal - lessAdvance - concession);
 
@@ -358,14 +358,15 @@ export default function IPNewBillingPage() {
       updatedBilling.summary.gross_total = 
          displayBedAmount + 
          displayDoctorAmount + 
-         (updatedBilling.summary.doctor_services_total || 0) + 
-         otherChargesTotal + 
-         (updatedBilling.summary.pharmacy_total || 0) + 
-         (updatedBilling.summary.lab_total || 0) + 
-         (updatedBilling.summary.radiology_total || 0) + 
-         (updatedBilling.summary.scan_total || 0) +
-         (updatedBilling.summary.prescribed_medicines_total || 0) +
-         (updatedBilling.summary.other_bills_total || 0);
+         otherChargesTotal; 
+         // Department charges disabled - only manual charges calculated
+         // (updatedBilling.summary.doctor_services_total || 0) + 
+         // (updatedBilling.summary.pharmacy_total || 0) + 
+         // (updatedBilling.summary.lab_total || 0) + 
+         // (updatedBilling.summary.radiology_total || 0) + 
+         // (updatedBilling.summary.scan_total || 0) +
+         // (updatedBilling.summary.prescribed_medicines_total || 0) +
+         // (updatedBilling.summary.other_bills_total || 0);
 
       updatedBilling.summary.net_payable = updatedBilling.summary.gross_total - lessAdvance - concession;
 
@@ -872,11 +873,7 @@ export default function IPNewBillingPage() {
                        <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest group-hover:text-indigo-400 transition-colors">Stay + Other</span>
                        <span className="font-mono text-sm font-bold text-slate-300">₹{stayAndGridTotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between items-baseline group cursor-default">
-                       <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest group-hover:text-indigo-400 transition-colors">Ext. Deperatments</span>
-                       <span className="font-mono text-sm font-bold text-slate-300">₹{otherDeptsTotal.toFixed(2)}</span>
-                    </div>
-                    <div className="pt-4 border-t border-white/10 flex justify-between items-end">
+                                        <div className="pt-4 border-t border-white/10 flex justify-between items-end">
                        <span className="text-xs font-black uppercase tracking-widest text-white">Gross Total</span>
                        <span className="text-2xl font-bold font-mono tracking-tighter text-white">₹{finalGrossTotal.toLocaleString()}</span>
                     </div>
