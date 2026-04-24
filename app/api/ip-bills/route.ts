@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabase';
+import { requireSupabaseAdmin } from '../../../src/lib/supabase-admin';
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = requireSupabaseAdmin();
     const searchParams = request.nextUrl.searchParams;
     const allocationId = searchParams.get('allocation_id');
     
@@ -28,6 +29,18 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    let supabase;
+    try {
+      supabase = requireSupabaseAdmin();
+    } catch (adminError) {
+      console.error('Supabase admin client not configured:', adminError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Server configuration error: SUPABASE_SERVICE_ROLE_KEY not set. Please create .env.local file with SUPABASE_SERVICE_ROLE_KEY from .env.example' 
+      }, { status: 500 });
+    }
+    
+    console.log('POST /api/ip-bills - Starting upload');
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const allocationId = formData.get('allocation_id') as string;
@@ -35,7 +48,17 @@ export async function POST(request: NextRequest) {
     const billDate = formData.get('bill_date') as string;
     const totalAmount = formData.get('total_amount') as string;
     
+    console.log('Received data:', { 
+      fileName: file?.name, 
+      fileSize: file?.size, 
+      allocationId, 
+      patientName, 
+      billDate, 
+      totalAmount 
+    });
+    
     if (!file || !allocationId) {
+      console.error('Missing required fields:', { hasFile: !!file, hasAllocationId: !!allocationId });
       return NextResponse.json({ success: false, error: 'File and allocation ID are required' }, { status: 400 });
     }
     
@@ -44,8 +67,10 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
     const base64Data = buffer.toString('base64');
     
+    console.log('File converted to base64, length:', base64Data.length);
+    
     // Insert into database
-    const { data, error } = await supabase.from('uploaded_bills').insert({
+    const insertData = {
       allocation_id: allocationId,
       patient_name: patientName || '',
       bill_date: billDate || new Date().toISOString().split('T')[0],
@@ -54,12 +79,19 @@ export async function POST(request: NextRequest) {
       file_type: file.type,
       file_data: base64Data,
       upload_date: new Date().toISOString()
-    }).select();
+    };
+    
+    console.log('Inserting into uploaded_bills:', insertData);
+    
+    const { data, error } = await supabase.from('uploaded_bills').insert(insertData).select();
     
     if (error) {
       console.error('Error uploading bill:', error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      return NextResponse.json({ success: false, error: error.message || 'Database error occurred' }, { status: 500 });
     }
+    
+    console.log('Upload successful, bill ID:', data?.[0]?.id);
     
     return NextResponse.json({ 
       success: true, 
@@ -68,12 +100,15 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error uploading bill:', error);
-    return NextResponse.json({ success: false, error: 'Failed to upload bill' }, { status: 500 });
+    console.error('Error stack:', (error as Error).stack);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    const supabase = requireSupabaseAdmin();
     const { searchParams } = new URL(request.url);
     const billId = searchParams.get('bill_id');
     

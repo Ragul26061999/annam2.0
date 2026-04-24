@@ -1134,6 +1134,7 @@ export default function IPNewBillingPage() {
                   onClick={async () => {
                     if (selectedFile) {
                       try {
+                        console.log('Starting upload...');
                         const formData = new FormData();
                         formData.append('file', selectedFile);
                         formData.append('allocation_id', bedAllocationId);
@@ -1141,12 +1142,20 @@ export default function IPNewBillingPage() {
                         formData.append('bill_date', new Date().toISOString().split('T')[0]);
                         formData.append('total_amount', finalGrossTotal.toString());
 
+                        console.log('Sending to API:', {
+                          fileName: selectedFile.name,
+                          fileSize: selectedFile.size,
+                          allocationId: bedAllocationId
+                        });
+
                         const response = await fetch('/api/ip-bills', {
                           method: 'POST',
                           body: formData
                         });
 
+                        console.log('API response status:', response.status);
                         const result = await response.json();
+                        console.log('API response:', result);
 
                         if (result.success) {
                           // Refresh uploaded bills
@@ -1157,12 +1166,14 @@ export default function IPNewBillingPage() {
                           const fileInput = document.getElementById('bill-upload') as HTMLInputElement;
                           if (fileInput) fileInput.value = '';
                           setStatusMsg('Bill uploaded successfully!');
+                          setShowUploadModal(false);
                         } else {
+                          console.error('Upload failed:', result.error);
                           setStatusMsg('Failed to upload bill: ' + result.error);
                         }
                       } catch (error) {
                         console.error('Upload error:', error);
-                        setStatusMsg('Failed to upload bill');
+                        setStatusMsg('Failed to upload bill: ' + (error as Error).message);
                       }
                     }
                   }}

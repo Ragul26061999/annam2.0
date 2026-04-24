@@ -22,7 +22,10 @@ import {
   X,
   Pill,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Layers
 } from 'lucide-react';
 import StaffSelect from '@/src/components/StaffSelect';
 
@@ -248,6 +251,8 @@ function NewBillingPageInner() {
   const [quantity, setQuantity] = useState<number | string>(1);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
+  const [showTabDropdown, setShowTabDropdown] = useState(false);
+  const [tabSearchQuery, setTabSearchQuery] = useState('');
   const [phoneError, setPhoneError] = useState<string>('');
   const [opSearch, setOpSearch] = useState('');
   const [opResults, setOpResults] = useState<any[]>([]);
@@ -257,6 +262,7 @@ function NewBillingPageInner() {
   const [staffSearch, setStaffSearch] = useState('');
   const [doctorSearch, setDoctorSearch] = useState('');
   const medicineDropdownRef = useRef<HTMLDivElement>(null);
+  const tabDropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hospital settings
@@ -640,6 +646,16 @@ function NewBillingPageInner() {
       second: '2-digit'
     });
   };
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tabDropdownRef.current && !tabDropdownRef.current.contains(event.target as Node)) {
+        setShowTabDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Keep buffer length in sync when rows are added/removed, without overwriting existing typed values
   useEffect(() => {
     setPaymentAmountInputs(prev => {
@@ -2649,39 +2665,118 @@ function NewBillingPageInner() {
               <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-4">
                   <span className="text-slate-500 font-medium whitespace-nowrap">Active Bill</span>
-                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1 max-w-2xl scrollbar-hide">
-                    {tabs.map((tab, idx) => (
-                      <div key={tab.id} className="flex items-center">
-                        <div
-                          className={`group flex items-center gap-3 px-5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border-2 ${idx === activeTabIndex
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                            : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200 shadow-sm'
-                            }`}
-                          onClick={() => switchTab(idx)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span>{tab.customer?.name ? (tab.customer.name.length > 20 ? tab.customer.name.substring(0, 18) + '...' : tab.customer.name) : (tab.name)}</span>
-                            {tabs.length > 1 && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  closeTab(idx);
-                                }}
-                                className={`rounded-full p-1 transition-colors ${idx === activeTabIndex ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-600'}`}
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
+                  <div className="flex items-center gap-3">
+                    <div className="relative" ref={tabDropdownRef}>
+                      <button
+                        onClick={() => setShowTabDropdown(!showTabDropdown)}
+                        className="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-slate-900 text-white shadow-lg hover:bg-slate-800 transition-all font-bold text-sm min-w-[280px] justify-between"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <Layers className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          <span className="truncate">
+                            {tabs[activeTabIndex]?.customer?.name || tabs[activeTabIndex]?.name || 'Select Tab'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 border-l border-slate-700 pl-2 ml-2">
+                          <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded uppercase">
+                            {tabs.length} Tabs
+                          </span>
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showTabDropdown ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+
+                      {showTabDropdown && (
+                        <div className="absolute top-full right-0 mt-2 w-[350px] bg-white rounded-2xl shadow-2xl border border-slate-100 z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                          <div className="p-3 border-b border-slate-50 bg-slate-50/50">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <input
+                                autoFocus
+                                type="text"
+                                placeholder="Search patient or tab..."
+                                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                value={tabSearchQuery}
+                                onChange={(e) => setTabSearchQuery(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-[400px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                            {tabs
+                              .map((tab, idx) => ({ tab, originalIdx: idx }))
+                              .filter(({ tab }) =>
+                                (tab.customer?.name || tab.name).toLowerCase().includes(tabSearchQuery.toLowerCase()) ||
+                                (tab.customer?.phone || '').includes(tabSearchQuery) ||
+                                (tab.customer?.patient_uhid || '').toLowerCase().includes(tabSearchQuery.toLowerCase())
+                              )
+                              .map(({ tab, originalIdx }) => {
+                                const isActive = originalIdx === activeTabIndex;
+                                return (
+                                  <div
+                                    key={tab.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      switchTab(originalIdx);
+                                      setShowTabDropdown(false);
+                                      setTabSearchQuery('');
+                                    }}
+                                    className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${isActive
+                                      ? 'bg-blue-50 border border-blue-100 shadow-sm'
+                                      : 'hover:bg-slate-50 border border-transparent'
+                                      }`}
+                                  >
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isActive ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-slate-300'}`} />
+                                      <div className="flex flex-col min-w-0">
+                                        <span className={`text-sm font-bold truncate ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>
+                                          {tab.customer?.name || tab.name}
+                                        </span>
+                                        {(tab.customer?.patient_uhid || tab.customer?.phone) && (
+                                          <span className="text-[10px] text-slate-500 truncate flex gap-2">
+                                            {tab.customer?.patient_uhid && <span>#{tab.customer.patient_uhid}</span>}
+                                            {tab.customer?.phone && <span>• {tab.customer.phone}</span>}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                        {tab.billItems.length} items
+                                      </span>
+                                      {tabs.length > 1 && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            closeTab(originalIdx);
+                                          }}
+                                          className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            {tabs.filter(tab =>
+                              (tab.customer?.name || tab.name).toLowerCase().includes(tabSearchQuery.toLowerCase())
+                            ).length === 0 && (
+                              <div className="py-8 text-center text-slate-400 text-sm">
+                                No matching tabs found
+                              </div>
                             )}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      )}
+                    </div>
+
                     <button
                       onClick={addNewTab}
-                      className="flex items-center justify-center min-w-[36px] h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 border-2 border-blue-100 transition-all shadow-sm ml-2"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-all font-bold text-sm active:scale-95 whitespace-nowrap"
                       title="Add New Bill Tab"
                     >
                       <Plus className="w-5 h-5" />
+                      <span>New Tab</span>
                     </button>
                   </div>
                 </div>
