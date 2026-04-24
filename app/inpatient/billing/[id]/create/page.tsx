@@ -1057,7 +1057,7 @@ export default function IPNewBillingPage() {
                     <td className="px-3 py-2 text-right font-mono font-black text-slate-900">{totalDoctorAmount.toFixed(2)}</td>
                   </tr>
                 )}
-                {gridItems.map((item, idx) => (
+                {gridItems.filter(item => !item.isStayCharge).map((item, idx) => (
                   <tr key={idx} className="text-[12px]">
                     <td className="px-3 py-2 text-slate-500 font-bold text-center">{idx + 1}</td>
                     <td className="px-3 py-2 font-bold text-slate-800 uppercase">{item.service_name}</td>
