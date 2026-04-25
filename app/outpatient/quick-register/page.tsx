@@ -4,8 +4,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ChevronLeft,
-  ChevronRight,
   Save,
   Loader2,
   CheckCircle,
@@ -21,7 +19,8 @@ import {
   Hash,
   Calendar,
   Clock,
-  CreditCard
+  CreditCard,
+  ArrowLeft
 } from 'lucide-react';
 import { addToQueue } from '../../../src/lib/outpatientQueueService';
 import { createAppointment, type AppointmentData } from '../../../src/lib/appointmentService';
@@ -89,7 +88,6 @@ export default function QuickRegisterPage() {
   const [showDupAlert,      setShowDupAlert]       = useState(false);
   const [doctors,           setDoctors]            = useState<any[]>([]);
   const [contactErr,        setContactErr]         = useState('');
-  const [sidebarOpen,       setSidebarOpen]        = useState(true);
   const [currentBill,       setCurrentBill]        = useState<PaymentRecord | null>(null);
   const [showPaymentModal,  setShowPaymentModal]   = useState(false);
   const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
@@ -118,13 +116,8 @@ export default function QuickRegisterPage() {
   const submitRef = useRef<HTMLButtonElement>(null);
   const isSubmitting = useRef(false);
 
-  // ── Enter / Esc global key handler ───────────────────────────────────────
+  // ── Enter key handler ───────────────────────────────────────────────────────
   const handleFormKey = useCallback((e: React.KeyboardEvent<HTMLFormElement>) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      router.push('/outpatient');
-      return;
-    }
     if (e.key !== 'Enter') return;
     if (loading || isSubmitting.current) return;
     // Allow Enter inside <textarea> normally
@@ -156,7 +149,7 @@ export default function QuickRegisterPage() {
 
     // No more fields — submit
     submitRef.current?.click();
-  }, [showPlaceSug, router, form.age, loading]);
+  }, [showPlaceSug, form.age, loading]);
 
   // ── Data loading ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -703,57 +696,22 @@ export default function QuickRegisterPage() {
   // MAIN FORM
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
-
-      {/* ════════ Collapsible Sidebar ════════ */}
-      <aside className={`
-        flex-shrink-0 bg-white border-r border-slate-200 shadow-sm
-        flex flex-col transition-all duration-200
-        ${sidebarOpen ? 'w-48' : 'w-12'}
-      `}>
-        {/* Sidebar header */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-slate-100 bg-gradient-to-r from-orange-500 to-orange-600">
-          {sidebarOpen && (
-            <span className="text-white text-xs font-bold tracking-wide truncate">OP Registration</span>
-          )}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-white/80 hover:text-white ml-auto flex-shrink-0"
-          >
-            {sidebarOpen ? <ChevronLeft size={15}/> : <ChevronRight size={15}/>}
-          </button>
-        </div>
-
-        {/* Nav links */}
-        <nav className="flex flex-col gap-0.5 p-2 flex-1 mt-1">
-          {[
-            {href:'/outpatient',          label:'Outpatient'},
-            {href:'/outpatient?tab=queue',label:'Queue'},
-            {href:'/outpatient/revisit',  label:'Revisit'},
-            {href:'/dashboard',           label:'Dashboard'},
-            {href:'/patients',            label:'Patients'},
-          ].map(item => (
-            <Link key={item.href} href={item.href}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition-colors font-medium truncate">
-              {sidebarOpen ? item.label : '›'}
-            </Link>
-          ))}
-        </nav>
-
-        {!sidebarOpen || (
-          <div className="p-3 border-t border-slate-100">
-            <p className="text-[10px] text-slate-400 text-center">Press <kbd className="bg-slate-100 px-1 rounded text-slate-500">Esc</kbd> to go back</p>
-          </div>
-        )}
-      </aside>
+    <div className="h-screen bg-slate-100 overflow-hidden font-sans">
 
       {/* ════════ Main area ════════ */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex flex-col h-full overflow-hidden">
 
         {/* ── Top bar ── */}
         <header className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-orange-600 shadow-lg">
           <div className="flex items-center justify-between px-5 py-3">
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/outpatient')}
+                className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm hover:bg-white/30 transition-colors"
+                title="Go back to Outpatient"
+              >
+                <ArrowLeft size={16} className="text-white"/>
+              </button>
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
                 <User size={16} className="text-white"/>
               </div>
@@ -784,7 +742,7 @@ export default function QuickRegisterPage() {
           <form
             onSubmit={handleSubmit}
             onKeyDown={handleFormKey}
-            className="p-4 space-y-3 max-w-screen-2xl mx-auto"
+            className="p-4 space-y-3 max-w-full px-8"
           >
 
             {/* Error banner */}
