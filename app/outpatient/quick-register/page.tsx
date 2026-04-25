@@ -141,15 +141,6 @@ export default function QuickRegisterPage() {
       return;
     }
 
-    // Auto-calc DOB when leaving the age field
-    if (activeId === 'age') {
-      const age = parseInt(form.age.replace?.(/\D/g,'') ?? form.age);
-      if (!isNaN(age) && age >= 0 && age <= 150) {
-        const y = new Date().getFullYear() - age;
-        setForm(p => ({...p, dob:`${y}-04-14`}));
-      }
-    }
-
     if (!activeId) return;
     const idx = FIELDS.indexOf(activeId);
     if (idx === -1) return;
@@ -221,6 +212,19 @@ export default function QuickRegisterPage() {
       return;
     }
     if (name === 'dob') { setForm(p => ({...p, dob:value, age:''})); return; }
+    if (name === 'age') {
+      const age = parseInt(value.replace(/\D/g,''));
+      if (!isNaN(age) && age >= 0 && age <= 150) {
+        const today = new Date();
+        const birthYear = today.getFullYear() - age;
+        const birthDate = new Date(birthYear, today.getMonth(), today.getDate());
+        const dobStr = birthDate.toISOString().split('T')[0];
+        setForm(p => ({...p, age:value, dob:dobStr}));
+      } else {
+        setForm(p => ({...p, age:value, dob:''}));
+      }
+      return;
+    }
     setForm(p => ({...p, [name]:value}));
 
     if (name === 'place') {
