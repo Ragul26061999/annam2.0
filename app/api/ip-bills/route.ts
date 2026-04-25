@@ -17,13 +17,20 @@ export async function GET(request: NextRequest) {
     
     if (error) {
       console.error('Error fetching uploaded bills:', error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ 
+        success: false, 
+        error: error.message || 'Failed to fetch bills from database',
+        code: error.code
+      }, { status: 500 });
     }
     
     return NextResponse.json({ success: true, bills: bills || [] });
   } catch (error) {
     console.error('Error fetching uploaded bills:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch bills' }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to fetch bills' 
+    }, { status: 500 });
   }
 }
 
@@ -88,7 +95,19 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error uploading bill:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
-      return NextResponse.json({ success: false, error: error.message || 'Database error occurred' }, { status: 500 });
+      let userFriendlyError = error.message || 'Database error occurred';
+      
+      // Provide more helpful message for missing table
+      if (error.code === '42P01') {
+        userFriendlyError = 'Database table "uploaded_bills" is missing. Please run the migration SQL script.';
+      }
+      
+      return NextResponse.json({ 
+        success: false, 
+        error: userFriendlyError,
+        details: error.details,
+        code: error.code
+      }, { status: 500 });
     }
     
     console.log('Upload successful, bill ID:', data?.[0]?.id);
