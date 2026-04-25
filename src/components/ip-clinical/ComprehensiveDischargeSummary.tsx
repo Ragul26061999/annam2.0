@@ -151,6 +151,25 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
            String(doctor) || '';
   };
 
+  // Helper function to calculate age from date of birth
+  const calculateAgeFromDateOfBirth = (dateOfBirth: string | null | undefined): number => {
+    if (!dateOfBirth) return 0;
+    
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    
+    if (isNaN(birthDate.getTime())) return 0;
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -161,19 +180,37 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
         getAllDoctorsSimple()
       ]);
       
-      setSummary(summaryData || { 
-        status: 'draft',
-        discharge_status: (summaryData as any)?.discharge_status || (bedAllocation?.discharge_date ? 'Discharged' : 'Active'),
-        uhid: patient?.uhid || '',
+      // Always auto-fill patient details from patient and bedAllocation props
+      // Build complete address from multiple fields
+      const addressParts = [
+        patient?.address,
+        patient?.city,
+        patient?.state,
+        patient?.pincode
+      ].filter(Boolean);
+      const completeAddress = addressParts.length > 0 ? addressParts.join(', ') : '';
+
+      // Calculate age from date of birth if available, otherwise use stored age
+      const calculatedAge = calculateAgeFromDateOfBirth(patient?.date_of_birth);
+
+      const autoFilledPatientDetails = {
+        uhid: patient?.patient_id || '',
         patient_name: patient?.name || '',
-        age: patient?.age || 0,
+        age: calculatedAge || patient?.age || 0,
         gender: patient?.gender || '',
-        address: patient?.address || '',
+        address: completeAddress,
         ip_number: bedAllocation?.ip_number || '',
-        room_no: bedAllocation?.bed?.room_number || '', // Auto-populate room number
-        admission_date: bedAllocation?.admission_date || '', // Auto-populate admission date
-        consult_doctor_name: extractDoctorName(bedAllocation?.doctor), // Auto-populate consulting doctor
-        discharge_date: new Date().toISOString().split('T')[0]
+        room_no: bedAllocation?.bed?.room_number || '',
+        admission_date: bedAllocation?.admission_date || '',
+        consult_doctor_name: extractDoctorName(bedAllocation?.doctor),
+      };
+
+      setSummary({
+        ...summaryData,
+        ...autoFilledPatientDetails,
+        status: summaryData?.status || 'draft',
+        discharge_status: summaryData?.discharge_status || (bedAllocation?.discharge_date ? 'Discharged' : 'Active'),
+        discharge_date: summaryData?.discharge_date || new Date().toISOString().split('T')[0]
       });
       setCaseSheetData(sheet);
       setDoctorOrdersData(orders || []);
@@ -390,26 +427,22 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">AGE</p>
               <input
-                type="number"
-                disabled={isFinal}
-                className="font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"
+                type="text"
+                disabled={true}
+                className="font-semibold text-gray-900 bg-gray-50 border-b border-gray-300 w-full"
                 value={summary.age || ''}
-                onChange={(e) => setSummary({...summary, age: parseInt(e.target.value) || 0})}
+                readOnly
               />
             </div>
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">GENDER</p>
-              <select
-                disabled={isFinal}
-                className="font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"
+              <input
+                type="text"
+                disabled={true}
+                className="font-semibold text-gray-900 bg-gray-50 border-b border-gray-300 w-full capitalize"
                 value={summary.gender || ''}
-                onChange={(e) => setSummary({...summary, gender: e.target.value})}
-              >
-                <option value="">Select</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
+                readOnly
+              />
             </div>
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">ROOM NO</p>

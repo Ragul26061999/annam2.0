@@ -23,6 +23,17 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
       return `${day}/${month}/${year}`;
     };
 
+    // Helper to safely extract doctor name from object or string
+    const extractDoctorName = (doctor: any): string => {
+      if (!doctor) return '';
+      if (typeof doctor === 'string') return doctor;
+      return doctor.name || 
+             doctor.user?.name || 
+             doctor.doctor_name || 
+             doctor.staff_name || 
+             String(doctor) || '';
+    };
+
     // Use a Portal to render directly into body, bypassing modal nesting
     // This ensures print styles work correctly and aren't affected by parent overflow/hiding
     return createPortal(
@@ -125,7 +136,8 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
 
         {/* Patient Identification */}
         <div className="section-break mb-8">          {/* Identification Section */}
-          <div className="flex gap-10 text-sm font-medium pt-4">
+          <div className="border-2 border-blue-600 p-4 text-sm font-medium pt-4">
+            <div className="flex gap-10">
             {/* Left Column (Personal & Medical Team) */}
             <div className="w-1/2 flex flex-col gap-4">
               <div className="flex items-baseline">
@@ -149,15 +161,15 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
               </div>
               <div className="flex items-baseline">
                 <span className="font-bold w-40 shrink-0">Consultant :</span>
-                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.consult_doctor_name || summary.consultant_name || '-'}</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{extractDoctorName(summary.consult_doctor_name) || extractDoctorName(summary.consultant_name) || '-'}</span>
               </div>
               <div className="flex items-baseline">
                 <span className="font-bold w-40 shrink-0">Surgeon :</span>
-                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.surgeon_doctor_name || '-'}</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{extractDoctorName(summary.surgeon_doctor_name) || '-'}</span>
               </div>
               <div className="flex items-baseline">
                 <span className="font-bold w-40 shrink-0">Anesthesiologist :</span>
-                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{summary.anesthesiologist_doctor || '-'}</span>
+                <span className="flex-1 border-b border-dotted border-gray-400 pb-1 uppercase">{extractDoctorName(summary.anesthesiologist_doctor) || '-'}</span>
               </div>
             </div>
 
@@ -199,6 +211,7 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
                 <span className="font-bold w-44 shrink-0">Date of Discharge :</span>
                 <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{formatDate(summary.discharge_date)}</span>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -410,7 +423,7 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
             <div className="text-center min-w-[250px]">
               <div className="h-16 flex items-end justify-center pb-2">
                 {/* Digital Signature Placeholder */}
-                {summary.status === 'final' && <span className="font-script text-xl italic text-blue-900">{summary.consult_doctor_name || summary.consultant_name}</span>}
+                {summary.status === 'final' && <span className="font-script text-xl italic text-blue-900">{extractDoctorName(summary.consult_doctor_name) || extractDoctorName(summary.consultant_name)}</span>}
               </div>
               <div className="border-t-2 border-gray-800 pt-2">
                 <p className="font-bold text-sm uppercase">Signature of Doctor</p>
