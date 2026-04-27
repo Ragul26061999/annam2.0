@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Package, AlertTriangle, ShoppingCart, DollarSign, IndianRupee, Filter, Eye, Edit, Trash2, FileText, Users, Receipt, BarChart3, History, RefreshCw, X, TrendingUp, TrendingDown, Calendar, PieChart, Activity, RotateCcw, Building2, Target, ArrowLeft } from 'lucide-react'
+import { Search, Plus, Package, AlertTriangle, ShoppingCart, DollarSign, IndianRupee, Filter, Eye, Edit, Trash2, FileText, Users, Receipt, BarChart3, History, RefreshCw, X, TrendingUp, TrendingDown, Calendar, PieChart, Activity, RotateCcw, Building2, Target, ArrowLeft, Printer } from 'lucide-react'
 import {
   BarChart,
   Bar,
@@ -111,6 +111,7 @@ export default function PharmacyPage() {
   const [expiryDetails, setExpiryDetails] = useState<any[]>([])
   const [stockAlertDetails, setStockAlertDetails] = useState<any[]>([])
   const [detailsLoading, setDetailsLoading] = useState(false)
+  const [currentExpiryPeriod, setCurrentExpiryPeriod] = useState<string>('')
 
   useEffect(() => {
     loadData()
@@ -143,6 +144,7 @@ export default function PharmacyPage() {
   const loadExpiryDetails = async (period: string) => {
     try {
       setDetailsLoading(true)
+      setCurrentExpiryPeriod(period)
       console.log('Loading expiry details for period:', period)
 
       // First, let's see what the analytics data shows for comparison
@@ -320,6 +322,204 @@ export default function PharmacyPage() {
       setShowExpiryModal(true)
     }
   }
+
+  // Print expiry details
+  const handlePrintExpiryDetails = () => {
+    const printContent = `
+      <html>
+      <head>
+        <title>Expiry Details Report - ${currentExpiryPeriod}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            color: #333;
+          }
+          h1 {
+            color: #dc2626;
+            margin-bottom: 5px;
+          }
+          .period-badge {
+            display: inline-block;
+            background-color: #fee2e2;
+            color: #991b1b;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+          }
+          .subtitle {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+          }
+          .summary {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+          }
+          .summary-box {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            flex: 1;
+          }
+          .summary-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+          }
+          .summary-value {
+            font-size: 24px;
+            font-weight: bold;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th {
+            background-color: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #ddd;
+          }
+          td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+          }
+          tr:hover {
+            background-color: #f9fafb;
+          }
+          .batch-badge {
+            background-color: #dbeafe;
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+          }
+          .status-expired {
+            background-color: #fee2e2;
+            color: #991b1b;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+          }
+          .status-critical {
+            background-color: #fed7aa;
+            color: #9a3412;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+          }
+          .status-warning {
+            background-color: #fef08a;
+            color: #854d0e;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+          }
+          .status-normal {
+            background-color: #dbeafe;
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+          }
+          .text-red { color: #dc2626; }
+          .text-orange { color: #ea580c; }
+          .text-yellow { color: #ca8a04; }
+          .text-blue { color: #2563eb; }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+          }
+          @media print {
+            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Expiry Details Report</h1>
+        <span class="period-badge">${currentExpiryPeriod}</span>
+        <p class="subtitle">Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+        
+        <div class="summary">
+          <div class="summary-box">
+            <div class="summary-label">Total Batches</div>
+            <div class="summary-value" style="color: #991b1b;">${expiryDetails.length}</div>
+          </div>
+          <div class="summary-box">
+            <div class="summary-label">Total Quantity</div>
+            <div class="summary-value" style="color: #9a3412;">${expiryDetails.reduce((sum, item) => sum + item.current_quantity, 0)}</div>
+          </div>
+          <div class="summary-box">
+            <div class="summary-label">Value at Risk</div>
+            <div class="summary-value" style="color: #7c3aed;">${formatIndianCurrency(expiryDetails.reduce((sum, item) => sum + item.total_value, 0))}</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Medicine</th>
+              <th>Batch</th>
+              <th>Expiry Date</th>
+              <th>Days</th>
+              <th>Quantity</th>
+              <th>Value</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${expiryDetails.map(item => `
+              <tr>
+                <td>
+                  <div style="font-weight: 500;">${item.medications.name}</div>
+                  <div style="font-size: 12px; color: #666;">${item.medications.category}</div>
+                </td>
+                <td><span class="batch-badge">${item.batch_number}</span></td>
+                <td>${new Date(item.expiry_date).toLocaleDateString()}</td>
+                <td class="${item.days_to_expiry < 0 ? 'text-red' : item.days_to_expiry <= 30 ? 'text-orange' : item.days_to_expiry <= 60 ? 'text-yellow' : 'text-blue'}">
+                  ${item.days_to_expiry < 0 ? `${Math.abs(item.days_to_expiry)} days ago` : `${item.days_to_expiry} days`}
+                </td>
+                <td style="font-weight: 500;">${item.current_quantity}</td>
+                <td style="text-align: right; font-weight: 500;">${formatIndianCurrency(item.total_value)}</td>
+                <td>
+                  <span class="status-${item.status}">
+                    ${item.status === 'expired' ? 'Expired' : item.status === 'critical' ? 'Critical' : item.status === 'warning' ? 'Warning' : 'Normal'}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>Pharmacy Management System - Expiry Report (${currentExpiryPeriod})</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    }
+  };
 
   // Fetch detailed stock alert information
   const loadStockAlertDetails = async (alertType: string) => {
@@ -1187,9 +1387,18 @@ export default function PharmacyPage() {
                 </h2>
                 <p className="text-red-100 mt-1">Batch expiry information and value at risk</p>
               </div>
-              <button onClick={() => setShowExpiryModal(false)} className="text-white hover:bg-white/20 rounded-full p-2">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePrintExpiryDetails()}
+                  className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print
+                </button>
+                <button onClick={() => setShowExpiryModal(false)} className="text-white hover:bg-white/20 rounded-full p-2">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(95vh-180px)]">
               {detailsLoading ? (
