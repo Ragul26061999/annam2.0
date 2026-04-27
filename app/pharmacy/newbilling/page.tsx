@@ -2872,7 +2872,6 @@ function NewBillingPageInner() {
                       <option value="patient">Patient</option>
                       <option value="op">OP</option>
                       <option value="walk_in">Walk-in</option>
-                      <option value="intent">Intent</option>
                       <option value="self">Self (Staff/Doctor)</option>
                     </select>
                   </div>
