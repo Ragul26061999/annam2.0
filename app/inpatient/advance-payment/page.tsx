@@ -569,28 +569,28 @@ export default function AdvancePaymentPage() {
                     <td style={{ width: '16%', padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.patient?.age || '??'} Yrs / {selected.patient?.gender || 'N/A'}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Address</span></td>
+                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Consultant</span></td>
                     <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">{selected.patient?.address || 'N/A'}</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Dr. {getDoctor(selected)}</td>
                     <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">O.P. No / UHID</span></td>
                     <td style={{ textAlign: 'center' }}>:</td>
                     <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.patient?.uhid || 'N/A'}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Consultant</span></td>
+                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Room/Bed</span></td>
                     <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Dr. {getDoctor(selected)}</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Room {selected.bed?.bed_type?.toUpperCase() || 'GENERAL'} / Bed {selected.bed?.bed_number || 'N/A'}</td>
                     <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">I.P. No</span></td>
                     <td style={{ textAlign: 'center' }}>:</td>
                     <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.ip_number || 'N/A'}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Room/Bed</span></td>
+                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Receipt Date</span></td>
                     <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Room {selected.bed?.bed_type?.toUpperCase() || 'GENERAL'} / Bed {selected.bed?.bed_number || 'N/A'}</td>
-                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">Receipt Date</span></td>
-                    <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{new Date().toLocaleDateString('en-GB')}</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">{new Date().toLocaleDateString('en-GB')}</td>
+                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}></td>
+                    <td style={{ textAlign: 'center' }}></td>
+                    <td style={{ padding: '2px 0' }}></td>
                   </tr>
                 </tbody>
               </table>
