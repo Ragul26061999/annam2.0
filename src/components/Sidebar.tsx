@@ -224,7 +224,7 @@ const Sidebar: React.FC = () => {
     // Define allowed paths per role
     const permissions: Record<string, string[]> = {
       doctor: ['/dashboard', '/patients', '/appointments', '/inpatient', '/outpatient', '/lab-xray', '/beds', '/surgery-charges'],
-      nurse: ['/dashboard', '/patients', '/inpatient', '/outpatient', '/beds'],
+      nurse: ['/dashboard', '/patients', '/inpatient', '/outpatient', '/beds', '/pharmacy', '/pharmacy/purchase', '/pharmacy/purchase-return', '/pharmacy/department-issue', '/pharmacy/newbilling', '/pharmacy/sales-return-v2', '/pharmacy/drug-broken', '/pharmacy/reports', '/pharmacy/reports?tab=gst', '/pharmacy/reports?tab=stock', '/pharmacy/cash-collection'],
       pharmacist: ['/dashboard', '/pharmacy', '/pharmacy/purchase', '/pharmacy/purchase-return', '/pharmacy/department-issue', '/pharmacy/newbilling', '/pharmacy/sales-return-v2', '/pharmacy/drug-broken', '/pharmacy/reports', '/pharmacy/reports?tab=gst', '/pharmacy/reports?tab=stock', '/pharmacy/cash-collection'],
       technician: ['/dashboard', '/lab-xray'],
       receptionist: ['/dashboard', '/patients', '/appointments', '/finance', '/other-bills', '/outpatient', '/lab-xray'],
