@@ -173,28 +173,58 @@ export default function AdvancePaymentPage() {
 
   return (
     <div className="flex flex-col h-full bg-[#f4f6fb] print:h-auto print:bg-white">
-      {/* Print Styles */}
       <style jsx global>{`
         @media print {
-          body {
-            background: white;
+          body * {
+            visibility: hidden;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+          }
+          .print-only-template, .print-only-template * {
+            visibility: visible;
+          }
+          .print-only-template {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 20.6cm;
+            height: 28.5cm;
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+          }
+          @page {
+            size: 20.6cm 28.5cm;
+            margin: 0;
+          }
+          .print-container {
+            width: 20.6cm;
+            height: 28.5cm;
+            padding-left: 1.2cm;
+            padding-right: 1.2cm;
+            padding-bottom: 1.5cm;
+            position: relative;
+            box-sizing: border-box;
+            background: white !important;
+            display: flex;
+            flex-direction: column;
+            font-family: sans-serif;
+          }
+          .hospital-header-area {
+            height: 5.9cm;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
           }
           .print\\:hidden {
             display: none !important;
           }
-          .print\\:block {
-            display: block !important;
-          }
-          .print\\:h-auto {
-            height: auto !important;
-          }
-          .print\\:bg-white {
-            background: white !important;
-          }
         }
       `}</style>
+
 
       {/* ── Header ── */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-20 print:hidden">
@@ -536,88 +566,96 @@ export default function AdvancePaymentPage() {
 
       {/* ── Print-Only Receipt Section ── */}
       {selected && advances.length > 0 && (
-        <div className="hidden print:block" style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', lineHeight: '1.4' }}>
-          {/* Standard Print Header - Only shown when Standard Print is selected */}
-          {printWithHeader && (
-            <div className="text-center mb-6 pb-4">
-              <h1 className="text-xl font-bold text-slate-900 mb-1">ANNAM HOSPITAL</h1>
-              <p className="text-sm text-slate-600">2/301, Raj Kanna Nagar, Veerapandian Patanam,</p>
-              <p className="text-sm text-slate-600">Tiruchendur - 628216 | Ph: 04639-252592</p>
-              <p className="text-xs text-slate-500 mt-1">GST No: GST29ABCDE1234F1Z5</p>
+        <div className="print-only-template hidden">
+          <div className="print-container">
+            {/* Hospital Header Area */}
+            <div className="hospital-header-area">
+              {printWithHeader && (
+                <div className="text-center">
+                  <div className="flex justify-center mb-2">
+                    <img src="/images/logo.png" alt="Annam Hospital Logo" className="h-16 w-auto object-contain" />
+                  </div>
+                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Annam Multispeciality Hospital</h2>
+                  <p className="text-[10px] font-bold text-slate-600 mt-1">
+                    2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk, Thoothukudi - 628 216.
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-600">
+                    Cell: 8681850592, 8681950592 | Email: annammultispecialityhospital@gmail.com
+                  </p>
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Letterhead Print - No header, starts with gap for pre-printed letterhead */}
-          {!printWithHeader && <div style={{ height: '120px' }}></div>}
-          <div className="px-8">
-            {/* Title with Blue Underline */}
-            <div className="text-center mb-6">
-              <h2 className="text-lg font-bold text-slate-800 tracking-widest uppercase" style={{ color: '#1e3a5f' }}>INPATIENT ADVANCE RECEIPT</h2>
-              <div className="border-t-2 border-blue-600 mt-2 mx-auto" style={{ width: '280px' }}></div>
+            <div className="text-center mb-6 mt-2">
+              <h3 className="text-lg font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-10 py-1">Advance Receipt</h3>
             </div>
 
-            {/* Patient Info Section - Structured Format */}
-            <div className="mb-6">
-              <table className="w-full" style={{ fontSize: '11px' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ width: '25%', padding: '2px 0' }}><span className="font-bold text-slate-800">Patient Name</span></td>
-                    <td style={{ width: '2%', textAlign: 'center' }}>:</td>
-                    <td style={{ width: '40%', padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="font-bold text-slate-800 uppercase">{selected.patient?.name || 'N/A'}</td>
-                    <td style={{ width: '15%', padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">Age & Sex</span></td>
-                    <td style={{ width: '2%', textAlign: 'center' }}>:</td>
-                    <td style={{ width: '16%', padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.patient?.age || '??'} Yrs / {selected.patient?.gender || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Consultant</span></td>
-                    <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Dr. {getDoctor(selected)}</td>
-                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">O.P. No / UHID</span></td>
-                    <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.patient?.uhid || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Room/Bed</span></td>
-                    <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Room {selected.bed?.bed_type?.toUpperCase() || 'GENERAL'} / Bed {selected.bed?.bed_number || 'N/A'}</td>
-                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">I.P. No</span></td>
-                    <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.ip_number || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Receipt Date</span></td>
-                    <td style={{ textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">{new Date().toLocaleDateString('en-GB')}</td>
-                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}></td>
-                    <td style={{ textAlign: 'center' }}></td>
-                    <td style={{ padding: '2px 0' }}></td>
-                  </tr>
-                </tbody>
-              </table>
+            {/* Patient Info Section */}
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-6 text-[12px] px-2">
+              <div className="space-y-3">
+                <div className="flex items-baseline">
+                  <span className="font-bold w-24 flex-shrink-0">Patient Name</span>
+                  <span className="font-normal w-4">:</span>
+                  <span className="flex-1 border-b border-slate-200 font-extrabold uppercase ml-1 pb-0.5">{selected.patient?.name}</span>
+                </div>
+                <div className="flex items-baseline">
+                  <span className="font-bold w-24 flex-shrink-0">Consultant</span>
+                  <span className="font-normal w-4">:</span>
+                  <span className="flex-1 border-b border-slate-200 font-extrabold uppercase ml-1 pb-0.5">Dr. {getDoctor(selected)}</span>
+                </div>
+                <div className="flex items-baseline">
+                  <span className="font-bold w-24 flex-shrink-0">Room/Bed</span>
+                  <span className="font-normal w-4">:</span>
+                  <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">Room {selected.bed?.bed_type?.toUpperCase()} / Bed {selected.bed?.bed_number}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-baseline">
+                  <span className="font-bold w-32 flex-shrink-0">Age & Sex</span>
+                  <span className="font-normal w-4">:</span>
+                  <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">{selected.patient?.age} Yrs / {selected.patient?.gender}</span>
+                </div>
+                <div className="flex items-baseline">
+                  <span className="font-bold w-32 flex-shrink-0">O.P. No / UHID</span>
+                  <span className="font-normal w-4">:</span>
+                  <span className="flex-1 border-b border-slate-200 font-mono font-bold ml-1 pb-0.5">{selected.patient?.uhid}</span>
+                </div>
+                <div className="flex items-baseline">
+                  <span className="font-bold w-32 flex-shrink-0">I.P. No</span>
+                  <span className="font-normal w-4">:</span>
+                  <span className="flex-1 border-b border-slate-200 font-mono font-bold ml-1 pb-0.5">{selected.ip_number}</span>
+                </div>
+                <div className="flex items-baseline">
+                  <span className="font-bold w-32 flex-shrink-0">Receipt Date</span>
+                  <span className="font-normal w-4">:</span>
+                  <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">{new Date().toLocaleDateString('en-GB')}</span>
+                </div>
+              </div>
             </div>
 
             {/* Advance Details Table */}
-            <div className="mb-4">
-              <table className="w-full" style={{ fontSize: '11px', borderCollapse: 'collapse' }}>
+            <div className="mb-6">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr style={{ borderTop: '1px solid #333', borderBottom: '1px solid #333' }}>
-                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '8%' }}>S.NO</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '22%' }}>DATE</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '25%' }}>PAYMENT METHOD</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '20%' }}>REF. NO</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 'bold', width: '25%' }}>AMOUNT (₹)</th>
+                  <tr className="bg-slate-50 text-slate-800 text-[9px] font-black uppercase tracking-widest border-y border-slate-800">
+                    <th className="px-3 py-1.5 text-left w-10">S.No</th>
+                    <th className="px-3 py-1.5 text-left">Date</th>
+                    <th className="px-3 py-1.5 text-left">Payment Method</th>
+                    <th className="px-3 py-1.5 text-left">Ref. No</th>
+                    <th className="px-3 py-1.5 text-right w-28">Amount (₹)</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {advances.map((adv, idx) => {
                     const method = PAYMENT_METHODS.find(m => m.value === adv.payment_type);
                     return (
-                      <tr key={adv.id || idx} style={{ borderBottom: '1px solid #ddd' }}>
-                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{idx + 1}</td>
-                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{adv.advance_date ? fmtDate(adv.advance_date) : '-'}</td>
-                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{method?.label || adv.payment_type}</td>
-                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{adv.reference_number || '-'}</td>
-                        <td style={{ padding: '6px 4px', textAlign: 'right', fontWeight: '600' }}>₹{(adv.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <tr key={adv.id || idx} className="text-[12px]">
+                        <td className="px-3 py-2 text-slate-500 font-bold text-center">{idx + 1}</td>
+                        <td className="px-3 py-2 font-bold text-slate-800 uppercase">{adv.advance_date ? fmtDate(adv.advance_date) : '-'}</td>
+                        <td className="px-3 py-2 text-slate-600">{method?.label || adv.payment_type}</td>
+                        <td className="px-3 py-2 text-slate-600">{adv.reference_number || '-'}</td>
+                        <td className="px-3 py-2 text-right font-mono font-black text-slate-900">₹{(adv.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     );
                   })}
@@ -625,61 +663,41 @@ export default function AdvancePaymentPage() {
               </table>
             </div>
 
-            {/* Totals Section - Right Aligned */}
-            <div className="mb-6" style={{ marginLeft: '50%' }}>
-              <table className="w-full" style={{ fontSize: '11px' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold' }}>TOTAL ADVANCE AMOUNT</td>
-                    <td style={{ padding: '4px 0', width: '20px', textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold', width: '100px' }}>₹{totalAdvance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                  <tr style={{ color: '#d97706' }}>
-                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold' }}>USED AMOUNT</td>
-                    <td style={{ padding: '4px 0', width: '20px', textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold' }}>- ₹{totalUsed.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                  <tr style={{ borderTop: '1px solid #333', color: '#059669' }}>
-                    <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 'bold' }}>AVAILABLE BALANCE</td>
-                    <td style={{ padding: '6px 0', width: '20px', textAlign: 'center' }}>:</td>
-                    <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>₹{totalAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                </tbody>
-              </table>
+
+            {/* Summary Section */}
+            <div className="flex justify-end mb-10 px-2">
+              <div className="w-64 py-3 border-t-2 border-slate-900">
+                <div className="flex justify-between items-center text-slate-900">
+                  <span className="text-[12px] font-black uppercase tracking-tight">Available Balance</span>
+                  <span className="text-[20px] font-black font-mono tracking-tighter text-slate-900 leading-none">₹{totalAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
             </div>
 
-            {/* Notes Section */}
-            {advances.some(adv => adv.notes) && (
-              <div className="mb-4" style={{ fontSize: '10px', border: '1px solid #ddd', padding: '8px', borderRadius: '4px' }}>
-                <p className="font-bold text-slate-800 mb-1">Notes:</p>
-                {advances.filter(adv => adv.notes).map((adv, idx) => (
-                  <p key={idx} className="text-slate-600">• {adv.notes}</p>
-                ))}
-              </div>
-            )}
 
             {/* Signature Section */}
-            <div className="mt-10" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-              <div style={{ textAlign: 'center', width: '200px' }}>
-                <div style={{ borderTop: '1px solid #333', paddingTop: '4px', marginTop: '40px' }}></div>
-                <p className="font-bold text-slate-800">AUTHORIZED SIGNATORY</p>
-                <p className="text-xs text-slate-500" style={{ fontSize: '9px' }}>(ANNAM HOSPITAL OFFICE)</p>
+            <div className="grid grid-cols-2 gap-24 mt-16 px-6">
+              <div className="text-center flex flex-col items-center">
+                <div className="w-full border-t border-slate-300 mb-2"></div>
+                <p className="text-[11px] font-black text-slate-800 uppercase">Authorized Signatory</p>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">(Annam Hospital Office)</p>
               </div>
-              <div style={{ textAlign: 'center', width: '200px' }}>
-                <div style={{ borderTop: '1px solid #333', paddingTop: '4px', marginTop: '40px' }}></div>
-                <p className="font-bold text-slate-800">PATIENT / ATTENDER</p>
-                <p className="text-xs text-slate-500" style={{ fontSize: '9px' }}>(VERIFICATION OF CHARGES)</p>
+              <div className="text-center flex flex-col items-center">
+                <div className="w-full border-t border-slate-300 mb-2"></div>
+                <p className="text-[11px] font-black text-slate-800 uppercase">Patient / Attender</p>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">(Verification of Charges)</p>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="mt-8 text-center" style={{ fontSize: '9px', color: '#666', borderTop: '1px solid #ddd', paddingTop: '8px' }}>
-              <p>COMPUTER GENERATED PROVISIONAL RECEIPT - THIS IS NOT AN OFFICIAL RECEIPT - SUBJECT TO HOSPITAL TERMS</p>
-              <p>Printed on: {new Date().toLocaleString('en-GB')}</p>
+            <div className="mt-auto pt-8 text-center">
+              <p className="text-[9px] font-bold text-slate-400 uppercase italic tracking-wider">Computer generated provisional receipt • This is not an official receipt • Subject to Hospital Terms</p>
+              <p className="text-[8px] text-slate-400 mt-1">Printed on: {new Date().toLocaleString('en-GB')}</p>
             </div>
           </div>
         </div>
       )}
+
 
       {/* ── Toast ── */}
       {toast && (
