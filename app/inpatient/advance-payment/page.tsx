@@ -6,7 +6,8 @@ import {
   ArrowLeft, Search, BedDouble, User, Stethoscope, Calendar,
   CreditCard, CheckCircle, Loader2, AlertCircle, X, Plus,
   Wallet, Receipt, Clock, Building2, Hash, Banknote,
-  Smartphone, Landmark, FileText, TrendingUp, RefreshCw
+  Smartphone, Landmark, FileText, TrendingUp, RefreshCw,
+  Printer
 } from 'lucide-react';
 import { supabase } from '../../../src/lib/supabase';
 import {
@@ -48,6 +49,14 @@ export default function AdvancePaymentPage() {
   const [saving,      setSaving]          = useState(false);
   const [toast,       setToast]           = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showForm,    setShowForm]        = useState(false);
+  const [printWithHeader, setPrintWithHeader] = useState(true);
+
+  const handlePrint = (withHeader: boolean) => {
+    setPrintWithHeader(withHeader);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
 
   const [form, setForm] = useState<AdvanceForm>({
     amount:          '',
@@ -163,10 +172,32 @@ export default function AdvancePaymentPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f6fb]">
+    <div className="flex flex-col h-full bg-[#f4f6fb] print:h-auto print:bg-white">
+      {/* Print Styles */}
+      <style jsx global>{`
+        @media print {
+          body {
+            background: white;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+          .print\\:block {
+            display: block !important;
+          }
+          .print\\:h-auto {
+            height: auto !important;
+          }
+          .print\\:bg-white {
+            background: white !important;
+          }
+        }
+      `}</style>
 
       {/* ── Header ── */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-20 print:hidden">
         <div className="px-6 h-14 flex items-center gap-4">
           <button onClick={() => router.push('/inpatient')}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
@@ -186,7 +217,7 @@ export default function AdvancePaymentPage() {
       </div>
 
       {/* ── Body: 2-col layout ── */}
-      <div className="flex-1 overflow-hidden flex gap-0">
+      <div className="flex-1 overflow-hidden flex gap-0 print:hidden">
 
         {/* LEFT — Patient list */}
         <div className="w-80 shrink-0 border-r border-slate-200 bg-white flex flex-col">
@@ -283,6 +314,24 @@ export default function AdvancePaymentPage() {
                       <span className="flex items-center gap-1"><Stethoscope className="h-3 w-3 text-slate-300" />Dr. {getDoctor(selected)}</span>
                       <span className="flex items-center gap-1"><Calendar className="h-3 w-3 text-slate-300" />{fmtDate(selected.admission_date)}</span>
                     </div>
+                  </div>
+
+                  {/* Print buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePrint(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg transition-all text-xs font-semibold"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Standard
+                    </button>
+                    <button
+                      onClick={() => handlePrint(false)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg transition-all text-xs font-semibold"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      Letterhead
+                    </button>
                   </div>
 
                   {/* Advance button */}
@@ -484,6 +533,153 @@ export default function AdvancePaymentPage() {
           )}
         </div>
       </div>
+
+      {/* ── Print-Only Receipt Section ── */}
+      {selected && advances.length > 0 && (
+        <div className="hidden print:block" style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', lineHeight: '1.4' }}>
+          {/* Standard Print Header - Only shown when Standard Print is selected */}
+          {printWithHeader && (
+            <div className="text-center mb-6 pb-4">
+              <h1 className="text-xl font-bold text-slate-900 mb-1">ANNAM HOSPITAL</h1>
+              <p className="text-sm text-slate-600">2/301, Raj Kanna Nagar, Veerapandian Patanam,</p>
+              <p className="text-sm text-slate-600">Tiruchendur - 628216 | Ph: 04639-252592</p>
+              <p className="text-xs text-slate-500 mt-1">GST No: GST29ABCDE1234F1Z5</p>
+            </div>
+          )}
+
+          {/* Letterhead Print - No header, starts with gap for pre-printed letterhead */}
+          {!printWithHeader && <div style={{ height: '120px' }}></div>}
+          <div className="px-8">
+            {/* Title with Blue Underline */}
+            <div className="text-center mb-6">
+              <h2 className="text-lg font-bold text-slate-800 tracking-widest uppercase" style={{ color: '#1e3a5f' }}>INPATIENT ADVANCE RECEIPT</h2>
+              <div className="border-t-2 border-blue-600 mt-2 mx-auto" style={{ width: '280px' }}></div>
+            </div>
+
+            {/* Patient Info Section - Structured Format */}
+            <div className="mb-6">
+              <table className="w-full" style={{ fontSize: '11px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ width: '25%', padding: '2px 0' }}><span className="font-bold text-slate-800">Patient Name</span></td>
+                    <td style={{ width: '2%', textAlign: 'center' }}>:</td>
+                    <td style={{ width: '40%', padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="font-bold text-slate-800 uppercase">{selected.patient?.name || 'N/A'}</td>
+                    <td style={{ width: '15%', padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">Age & Sex</span></td>
+                    <td style={{ width: '2%', textAlign: 'center' }}>:</td>
+                    <td style={{ width: '16%', padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.patient?.age || '??'} Yrs / {selected.patient?.gender || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Address</span></td>
+                    <td style={{ textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">{selected.patient?.address || 'N/A'}</td>
+                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">O.P. No / UHID</span></td>
+                    <td style={{ textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.patient?.uhid || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Consultant</span></td>
+                    <td style={{ textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Dr. {getDoctor(selected)}</td>
+                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">I.P. No</span></td>
+                    <td style={{ textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{selected.ip_number || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '2px 0' }}><span className="font-bold text-slate-800">Room/Bed</span></td>
+                    <td style={{ textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }} className="text-slate-700">Room {selected.bed?.bed_type?.toUpperCase() || 'GENERAL'} / Bed {selected.bed?.bed_number || 'N/A'}</td>
+                    <td style={{ padding: '2px 0', paddingLeft: '20px' }}><span className="font-bold text-slate-800">Receipt Date</span></td>
+                    <td style={{ textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '2px 0', borderBottom: '1px dotted #ccc' }}>{new Date().toLocaleDateString('en-GB')}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Advance Details Table */}
+            <div className="mb-4">
+              <table className="w-full" style={{ fontSize: '11px', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderTop: '1px solid #333', borderBottom: '1px solid #333' }}>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '8%' }}>S.NO</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '22%' }}>DATE</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '25%' }}>PAYMENT METHOD</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 'bold', width: '20%' }}>REF. NO</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 'bold', width: '25%' }}>AMOUNT (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {advances.map((adv, idx) => {
+                    const method = PAYMENT_METHODS.find(m => m.value === adv.payment_type);
+                    return (
+                      <tr key={adv.id || idx} style={{ borderBottom: '1px solid #ddd' }}>
+                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{idx + 1}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{adv.advance_date ? fmtDate(adv.advance_date) : '-'}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{method?.label || adv.payment_type}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'left' }}>{adv.reference_number || '-'}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'right', fontWeight: '600' }}>₹{(adv.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals Section - Right Aligned */}
+            <div className="mb-6" style={{ marginLeft: '50%' }}>
+              <table className="w-full" style={{ fontSize: '11px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold' }}>TOTAL ADVANCE AMOUNT</td>
+                    <td style={{ padding: '4px 0', width: '20px', textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold', width: '100px' }}>₹{totalAdvance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                  <tr style={{ color: '#d97706' }}>
+                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold' }}>USED AMOUNT</td>
+                    <td style={{ padding: '4px 0', width: '20px', textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 'bold' }}>- ₹{totalUsed.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                  <tr style={{ borderTop: '1px solid #333', color: '#059669' }}>
+                    <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 'bold' }}>AVAILABLE BALANCE</td>
+                    <td style={{ padding: '6px 0', width: '20px', textAlign: 'center' }}>:</td>
+                    <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>₹{totalAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Notes Section */}
+            {advances.some(adv => adv.notes) && (
+              <div className="mb-4" style={{ fontSize: '10px', border: '1px solid #ddd', padding: '8px', borderRadius: '4px' }}>
+                <p className="font-bold text-slate-800 mb-1">Notes:</p>
+                {advances.filter(adv => adv.notes).map((adv, idx) => (
+                  <p key={idx} className="text-slate-600">• {adv.notes}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Signature Section */}
+            <div className="mt-10" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <div style={{ textAlign: 'center', width: '200px' }}>
+                <div style={{ borderTop: '1px solid #333', paddingTop: '4px', marginTop: '40px' }}></div>
+                <p className="font-bold text-slate-800">AUTHORIZED SIGNATORY</p>
+                <p className="text-xs text-slate-500" style={{ fontSize: '9px' }}>(ANNAM HOSPITAL OFFICE)</p>
+              </div>
+              <div style={{ textAlign: 'center', width: '200px' }}>
+                <div style={{ borderTop: '1px solid #333', paddingTop: '4px', marginTop: '40px' }}></div>
+                <p className="font-bold text-slate-800">PATIENT / ATTENDER</p>
+                <p className="text-xs text-slate-500" style={{ fontSize: '9px' }}>(VERIFICATION OF CHARGES)</p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="mt-8 text-center" style={{ fontSize: '9px', color: '#666', borderTop: '1px solid #ddd', paddingTop: '8px' }}>
+              <p>COMPUTER GENERATED PROVISIONAL RECEIPT - THIS IS NOT AN OFFICIAL RECEIPT - SUBJECT TO HOSPITAL TERMS</p>
+              <p>Printed on: {new Date().toLocaleString('en-GB')}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast ── */}
       {toast && (
