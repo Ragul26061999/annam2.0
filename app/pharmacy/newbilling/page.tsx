@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState, useRef } from 'react';
+import React, { Suspense, useEffect, useState, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/src/lib/supabase'
 import { generateBillNumber } from '@/src/lib/billingService';
@@ -274,6 +274,46 @@ function NewBillingPageInner() {
     gstNumber: 'GST29ABCDE1234F1Z5'
   });
   const [showHospitalModal, setShowHospitalModal] = useState(false);
+
+  // Helper for consistent batch matching/sorting
+  const getMatchingBatches = (batches: MedicineBatch[], term: string) => {
+    const t = (term || '').trim().toLowerCase();
+    if (!t) return batches;
+    
+    const isExact = (val: string | null | undefined, search: string) => {
+      if (!val) return false;
+      const v = val.toLowerCase().trim();
+      return v === search || v.replace(/^0+/, '') === search.replace(/^0+/, '');
+    };
+
+    return batches
+      .filter(b =>
+        (b.batch_number || '').toLowerCase().includes(t) ||
+        (b.batch_barcode || '').toLowerCase().includes(t) ||
+        ((b.legacy_code || '') as string).toLowerCase().includes(t)
+      )
+      .sort((a, b) => {
+        // 1. Exact barcode match (highest priority)
+        const aExactBarcode = isExact(a.batch_barcode, t);
+        const bExactBarcode = isExact(b.batch_barcode, t);
+        if (aExactBarcode && !bExactBarcode) return -1;
+        if (!aExactBarcode && bExactBarcode) return 1;
+
+        // 2. Exact batch number match
+        const aExactBatch = isExact(a.batch_number, t);
+        const bExactBatch = isExact(b.batch_number, t);
+        if (aExactBatch && !bExactBatch) return -1;
+        if (!aExactBatch && bExactBatch) return 1;
+
+        // 3. Exact legacy code match
+        const aExactLegacy = isExact(a.legacy_code as string, t);
+        const bExactLegacy = isExact(b.legacy_code as string, t);
+        if (aExactLegacy && !bExactLegacy) return -1;
+        if (!aExactLegacy && bExactLegacy) return 1;
+
+        return 0;
+      });
+  };
 
 
   // Functions for tab management
@@ -940,35 +980,95 @@ function NewBillingPageInner() {
   // Filter medicines based on search (including batch number, barcode, and legacy code); guard undefined fields
   // Only show results when there is a search term (hide catalogue by default)
   const searchTermTrimmed = (searchTerm || '').trim();
-  const filteredMedicines = searchTermTrimmed.length === 0
-    ? []
-    : medicines.filter((medicine) => {
-      const term = searchTermTrimmed.toLowerCase();
-      const name = (medicine.name || '').toLowerCase();
-      const combination = (medicine.combination || '').toLowerCase();
-      const code = (medicine.medicine_code || '').toLowerCase();
-      const manufacturer = (medicine.manufacturer || '').toLowerCase();
-      const category = (medicine.category || '').toLowerCase();
-      const unit = (medicine.unit || '').toLowerCase();
-      const baseMatch =
-        name.includes(term) ||
-        combination.includes(term) ||
-        code.includes(term) ||
-        manufacturer.includes(term) ||
-        category.includes(term) ||
-        unit.includes(term);
+  const filteredMedicines = useMemo(() => {
+    if (searchTermTrimmed.length === 0) return [];
 
-      // If base match, include all batches; otherwise search within batches
-      if (baseMatch) return true;
+    const term = searchTermTrimmed.toLowerCase();
+    const terms = term.split(/\s+/).filter(t => t.length > 0);
 
-      // Search within batch numbers, barcodes, and legacy codes
-      return medicine.batches?.some((batch: any) => {
-        const batchNum = (batch.batch_number || '').toLowerCase();
-        const barcode = (batch.batch_barcode || '').toLowerCase();
-        const legacyCode = ((batch.legacy_code || '') as string).toLowerCase();
-        return batchNum.includes(term) || barcode.includes(term) || legacyCode.includes(term);
+    return medicines
+      .filter((medicine) => {
+        const name = (medicine.name || '').toLowerCase();
+        const genericName = ((medicine as any).generic_name || '').toLowerCase();
+        const code = (medicine.medicine_code || '').toLowerCase();
+        const combination = (medicine.combination || '').toLowerCase();
+        const manufacturer = (medicine.manufacturer || '').toLowerCase();
+        const category = (medicine.category || '').toLowerCase();
+
+        // Check if ALL search terms are found in ANY of the fields
+        const isMatch = terms.every(t =>
+          name.includes(t) ||
+          genericName.includes(t) ||
+          code.includes(t) ||
+          combination.includes(t) ||
+          manufacturer.includes(t) ||
+          category.includes(t)
+        );
+
+        if (isMatch) return true;
+
+        // Search within batch numbers, barcodes, and legacy codes
+        return medicine.batches?.some((batch: any) => {
+          const batchNum = (batch.batch_number || '').toLowerCase();
+          const barcode = (batch.batch_barcode || '').toLowerCase();
+          const legacy = (String(batch.legacy_code || '')).toLowerCase();
+
+          return terms.every(t =>
+            batchNum.includes(t) ||
+            barcode.includes(t) ||
+            legacy.includes(t)
+          );
+        });
+      })
+      .sort((a, b) => {
+        // Prioritize exact matches for barcode/code
+        const t = searchTermTrimmed.toLowerCase();
+        
+        const isExact = (val: string | null | undefined, search: string) => {
+          if (!val) return false;
+          const v = val.toLowerCase().trim();
+          return v === search || v.replace(/^0+/, '') === search.replace(/^0+/, '');
+        };
+
+        // 1. Exact barcode match in any batch
+        const aExactBarcode = a.batches?.some(batch => isExact(batch.batch_barcode, t));
+        const bExactBarcode = b.batches?.some(batch => isExact(batch.batch_barcode, t));
+        if (aExactBarcode && !bExactBarcode) return -1;
+        if (!aExactBarcode && bExactBarcode) return 1;
+
+        // 2. Exact medicine code match
+        const aExactCode = isExact(a.medicine_code, t);
+        const bExactCode = isExact(b.medicine_code, t);
+        if (aExactCode && !bExactCode) return -1;
+        if (!aExactCode && bExactCode) return 1;
+
+        // 3. Exact batch number match in any batch
+        const aExactBatch = a.batches?.some(batch => isExact(batch.batch_number, t));
+        const bExactBatch = b.batches?.some(batch => isExact(batch.batch_number, t));
+        if (aExactBatch && !bExactBatch) return -1;
+        if (!aExactBatch && bExactBatch) return 1;
+
+        // 4. Exact legacy code match in any batch
+        const aExactLegacy = a.batches?.some(batch => isExact(batch.legacy_code as string, t));
+        const bExactLegacy = b.batches?.some(batch => isExact(batch.legacy_code as string, t));
+        if (aExactLegacy && !bExactLegacy) return -1;
+        if (!aExactLegacy && bExactLegacy) return 1;
+
+        // 5. Exact name match
+        const aExactName = (a.name || '').toLowerCase() === t;
+        const bExactName = (b.name || '').toLowerCase() === t;
+        if (aExactName && !bExactName) return -1;
+        if (!aExactName && bExactName) return 1;
+
+        // 6. Starts with name
+        const aStartsWith = (a.name || '').toLowerCase().startsWith(t);
+        const bStartsWith = (b.name || '').toLowerCase().startsWith(t);
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+
+        return 0;
       });
-    });
+  }, [medicines, searchTermTrimmed]);
 
   const handleMedicineKeyDown = (e: React.KeyboardEvent) => {
     // Early return if dropdown is not showing or no medicines
@@ -984,13 +1084,7 @@ function NewBillingPageInner() {
     const currentMedicine = filteredMedicines[selectedMedicineIndex];
     if (!currentMedicine) return;
 
-    const matchingBatches = searchTermTrimmed.length > 0
-      ? currentMedicine.batches.filter(b =>
-        (b.batch_number || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-        (b.batch_barcode || '').toLowerCase().includes(searchTermTrimmed.toLowerCase()) ||
-        ((b.legacy_code || '') as string).toLowerCase().includes(searchTermTrimmed.toLowerCase())
-      ) || []
-      : currentMedicine.batches || [];
+    const matchingBatches = getMatchingBatches(currentMedicine.batches, searchTermTrimmed);
 
     const totalBatches = matchingBatches.length;
 
@@ -1094,7 +1188,8 @@ function NewBillingPageInner() {
           setShowExternalPriceModal(true);
           return;
         }
-        const batch = medicine.batches[0];
+        const matchingBatches = getMatchingBatches(medicine.batches, searchTermTrimmed);
+        const batch = matchingBatches.length > 0 ? matchingBatches[0] : medicine.batches[0];
         if (batch) {
           addToBill(medicine, batch, Number(quantity) || 1);
           setSearchTerm('');
