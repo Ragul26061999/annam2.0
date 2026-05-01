@@ -452,8 +452,8 @@ export async function createDoctor(doctorData: DoctorRegistrationData): Promise<
       });
 
       if (authError) {
-        if (authError.message.includes('User already registered') || authError.message.includes('user_already_exists')) {
-          throw new Error(`User with email ${emailToUse} already exists in authentication. Please use a different email or contact the administrator to reset the password.`);
+        if (authError.message.includes('User already registered') || authError.message.includes('user_already_exists') || authError.message.includes('already been registered')) {
+          throw new Error(`The email address ${emailToUse} is already registered in the authentication system. Please use a different email or contact the administrator.`);
         } else {
           console.error('Error creating doctor auth user:', authError);
           throw new Error(`Failed to create doctor authentication: ${authError.message}`);
