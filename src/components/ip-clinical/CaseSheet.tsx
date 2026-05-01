@@ -109,7 +109,6 @@ export default function CaseSheet({ bedAllocationId, patientId, selectedDate }: 
       }
     }
     // Allow Enter key for natural line breaks within the textarea
-    // This enables proper line-by-line text entry
   };
 
   const handleTextChange = (field: keyof IPCaseSheet, value: string) => {

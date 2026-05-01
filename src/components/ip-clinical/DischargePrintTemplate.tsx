@@ -182,19 +182,18 @@ export const DischargePrintTemplate = React.forwardRef<HTMLDivElement, Discharge
                 </span>
               </div>
               
-              <div className="flex items-center justify-between">
-                <div className="flex items-baseline flex-1">
-                  <span className="font-bold w-20 shrink-0">O.P. No.</span>
-                  <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
-                    {String(patient?.patient_id || '______________________')}
-                  </span>
-                </div>
-                <div className="flex items-baseline flex-1 ml-4">
-                  <span className="font-bold w-16 shrink-0 text-right pr-2">I.P. No.</span>
-                  <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
-                    {bedAllocation?.ip_number || '______________________'}
-                  </span>
-                </div>
+              <div className="flex items-baseline">
+                <span className="font-bold w-44 shrink-0">O.P. No. :</span>
+                <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
+                  {String(patient?.patient_id || patient?.uhid || summary?.uhid || '______________________')}
+                </span>
+              </div>
+
+              <div className="flex items-baseline">
+                <span className="font-bold w-44 shrink-0">I.P. No. :</span>
+                <span className="flex-1 uppercase font-bold border-b border-dotted border-gray-400 pb-1">
+                  {bedAllocation?.ip_number || '______________________'}
+                </span>
               </div>
 
               <div className="flex items-baseline">

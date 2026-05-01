@@ -126,6 +126,42 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
   const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionItem[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Handle Tab key press to simulate navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Only handle Tab for navigation
+    if (e.key !== 'Tab') return;
+
+    e.preventDefault();
+    
+    if (!containerRef.current) return;
+
+    const focusableElements = Array.from(
+      containerRef.current.querySelectorAll(
+        'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button.handle-keydown:not([disabled])'
+      )
+    ) as HTMLElement[];
+
+    const currentIndex = focusableElements.indexOf(document.activeElement as HTMLElement);
+
+    if (e.shiftKey) {
+      // Backwards navigation (Shift+Tab)
+      if (currentIndex > 0) {
+        focusableElements[currentIndex - 1].focus();
+      } else {
+        focusableElements[focusableElements.length - 1].focus();
+      }
+    } else {
+      // Forwards navigation (Tab)
+      if (currentIndex < focusableElements.length - 1) {
+        focusableElements[currentIndex + 1].focus();
+      } else {
+        // Wrap around to the first element
+        focusableElements[0].focus();
+      }
+    }
+  };
   
   // Auto-fill source data
   const [caseSheetData, setCaseSheetData] = useState<any>(null);
@@ -194,7 +230,7 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
       const calculatedAge = calculateAgeFromDateOfBirth(patient?.date_of_birth);
 
       const autoFilledPatientDetails = {
-        uhid: patient?.patient_id || '',
+        uhid: patient?.patient_id || patient?.uhid || '',
         patient_name: patient?.name || '',
         age: calculatedAge || patient?.age || 0,
         gender: patient?.gender || '',
@@ -332,7 +368,7 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
 
   return (
     <>
-      <div className="max-w-7xl mx-auto space-y-6 print:hidden">
+      <div ref={containerRef} onKeyDown={handleKeyDown} className="max-w-7xl mx-auto space-y-6 print:hidden">
         {/* Header with Status */}
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex justify-between items-start mb-6">
@@ -403,16 +439,25 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm bg-gray-50 p-4 rounded-lg border border-gray-100">
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">UH ID / IP NO</p>
-              <input
-                type="text"
-                disabled={isFinal}
-                className="font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"
-                value={`${summary.uhid || ''} / ${summary.ip_number || ''}`}
-                onChange={(e) => {
-                  const [uhid, ip] = e.target.value.split(' / ');
-                  setSummary({...summary, uhid: uhid?.trim(), ip_number: ip?.trim()});
-                }}
-              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  disabled={isFinal}
+                  className="font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-[45%]"
+                  value={summary.uhid || ''}
+                  onChange={(e) => setSummary({...summary, uhid: e.target.value})}
+                  placeholder="UHID"
+                />
+                <span className="text-gray-400">/</span>
+                <input
+                  type="text"
+                  disabled={isFinal}
+                  className="font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-[45%]"
+                  value={summary.ip_number || ''}
+                  onChange={(e) => setSummary({...summary, ip_number: e.target.value})}
+                  placeholder="IP No"
+                />
+              </div>
             </div>
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">NAME</p>
@@ -428,20 +473,20 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
               <p className="text-xs font-bold text-gray-500 uppercase">AGE</p>
               <input
                 type="text"
-                disabled={true}
-                className="font-semibold text-gray-900 bg-gray-50 border-b border-gray-300 w-full"
+                disabled={isFinal}
+                className="font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"
                 value={summary.age || ''}
-                readOnly
+                onChange={(e) => setSummary({...summary, age: e.target.value ? parseInt(e.target.value) : 0})}
               />
             </div>
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase">GENDER</p>
               <input
                 type="text"
-                disabled={true}
-                className="font-semibold text-gray-900 bg-gray-50 border-b border-gray-300 w-full capitalize"
+                disabled={isFinal}
+                className="font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full capitalize"
                 value={summary.gender || ''}
-                readOnly
+                onChange={(e) => setSummary({...summary, gender: e.target.value})}
               />
             </div>
             <div>
@@ -605,7 +650,15 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
               ].map((section) => (
                 <div key={section.key} className="relative group">
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-gray-700">{section.label}</label>
+                    <div className="flex items-center gap-4">
+                      <label className="block text-sm font-medium text-gray-700">{section.label}</label>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <kbd className="px-1 py-0.5 bg-gray-50 border border-gray-200 rounded text-[10px]">Enter</kbd>
+                        <span>new line</span>
+                        <kbd className="px-1 py-0.5 bg-gray-50 border border-gray-200 rounded text-[10px]">Tab</kbd>
+                        <span>next field</span>
+                      </div>
+                    </div>
                     {!isFinal && (
                       <button 
                         onClick={() => autoFill(section.key as keyof IPDischargeSummary)}
@@ -622,6 +675,7 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
                     rows={section.rows}
                     value={(summary[section.key as keyof IPDischargeSummary] as string) || ''}
                     onChange={(e) => setSummary({...summary, [section.key]: e.target.value})}
+                    data-allow-enter="true"
                   />
                 </div>
               ))}
@@ -764,7 +818,7 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
                 <button
                   onClick={() => handleSave(false)}
                   disabled={saving}
-                  className="bg-white border border-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+                  className="bg-white border border-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium handle-keydown"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Save
@@ -778,7 +832,7 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
                     }
                   }}
                   disabled={saving}
-                  className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium handle-keydown"
                 >
                   <CheckCircle className="h-4 w-4" />
                   Finalize
@@ -791,7 +845,7 @@ export default function ComprehensiveDischargeSummary({ bedAllocationId, patient
                     window.print();
                   }
                 }}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium handle-keydown"
               >
                 <Printer className="h-4 w-4" />
                 Print
