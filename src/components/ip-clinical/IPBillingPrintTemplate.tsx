@@ -14,7 +14,146 @@ export const IPBillingPrintTemplate = React.forwardRef<HTMLDivElement, IPBilling
     };
 
     const formatCurrency = (amount: number) => {
-      return amount.toFixed(0);
+      return amount.toFixed(2);
+    };
+
+    const getDepartmentBreakdown = () => {
+      if (!billing) return [];
+  
+      const departments: any[] = [];
+  
+      // Room/Bed Charges
+      if (billing.summary.bed_charges_total > 0) {
+        departments.push({
+          id: 'room_board',
+          name: 'Room & Board',
+          charges: billing.summary.bed_charges_total,
+          items: [
+            {
+              description: `${billing.bed_charges.bed_type} Room`,
+              quantity: billing.bed_charges.days,
+              unitPrice: billing.bed_charges.daily_rate,
+              total: billing.summary.bed_charges_total,
+              billNumber: 'N/A'
+            }
+          ]
+        });
+      }
+  
+      // Doctor Consultation
+      if (billing.summary.doctor_consultation_total > 0) {
+        departments.push({
+          id: 'doctor_consultation',
+          name: 'Doctor Consultation',
+          charges: billing.summary.doctor_consultation_total,
+          items: [
+            {
+              description: `Dr. ${billing.doctor_consultation.doctor_name} - Daily Consultation`,
+              quantity: billing.doctor_consultation.days,
+              unitPrice: billing.doctor_consultation.consultation_fee,
+              total: billing.summary.doctor_consultation_total,
+              billNumber: 'N/A'
+            }
+          ]
+        });
+      }
+  
+      // Service Charges
+      if (billing.summary.doctor_services_total > 0 && billing.doctor_services.length > 0) {
+        departments.push({
+          id: 'service_charges',
+          name: 'Service Charges',
+          charges: billing.summary.doctor_services_total,
+          items: billing.doctor_services.map(s => ({
+            description: s.service_type,
+            quantity: s.quantity,
+            unitPrice: s.fee,
+            total: s.total_amount,
+            doctors: [s.doctor_name],
+            billNumber: 'N/A'
+          }))
+        });
+      }
+  
+      // Pharmacy
+      if (billing.summary.pharmacy_total > 0 && billing.pharmacy_billing.length > 0) {
+        const pharmacyItems = billing.pharmacy_billing.flatMap((pb: any) => 
+          (pb.items || []).map((item: any) => ({
+            description: item.medicine_name,
+            quantity: item.quantity,
+            unitPrice: item.unit_price,
+            total: item.total,
+            billNumber: pb.bill_number
+          }))
+        );
+        
+        departments.push({
+          id: 'pharmacy',
+          name: 'Pharmacy',
+          charges: billing.summary.pharmacy_total,
+          items: pharmacyItems
+        });
+      }
+  
+      // Laboratory
+      if (billing.summary.lab_total > 0 && billing.lab_billing.length > 0) {
+        const labItems = billing.lab_billing.flatMap((order: any) =>
+          (order.tests || []).map((test: any) => ({
+            description: test.test_name,
+            quantity: 1,
+            unitPrice: test.test_cost,
+            total: test.test_cost,
+            billNumber: order.bill_number || order.order_number
+          }))
+        );
+        
+        departments.push({
+          id: 'laboratory',
+          name: 'Laboratory',
+          charges: billing.summary.lab_total,
+          items: labItems
+        });
+      }
+  
+      // Radiology
+      if (billing.summary.radiology_total > 0 && billing.radiology_billing.length > 0) {
+        const radiologyItems = billing.radiology_billing.flatMap((rb: any) =>
+          (rb.scans || []).map((scan: any) => ({
+            description: scan.scan_name,
+            quantity: 1,
+            unitPrice: scan.scan_cost,
+            total: scan.scan_cost,
+            billNumber: rb.bill_number || rb.order_number
+          }))
+        );
+        
+        departments.push({
+          id: 'radiology',
+          name: 'Radiology & Imaging',
+          charges: billing.summary.radiology_total,
+          items: radiologyItems
+        });
+      }
+  
+      // Other Bills
+      if (billing.summary.other_charges_total > 0) {
+        const otherChargeItems = (billing.other_charges || []).map((charge: any) => ({
+          description: charge.service_name,
+          quantity: charge.days || charge.quantity || 1,
+          unitPrice: charge.rate,
+          total: charge.amount,
+          billNumber: charge.billNumber || 'N/A'
+        }));
+  
+        departments.push({
+          id: 'other_bills',
+          name: 'Other Hospital Bills',
+          charges: billing.summary.other_charges_total,
+          items: otherChargeItems
+        });
+      }
+  
+      return departments;
     };
 
     const numberToWords = (num: number): string => {
@@ -220,134 +359,47 @@ export const IPBillingPrintTemplate = React.forwardRef<HTMLDivElement, IPBilling
             <thead>
               <tr>
                 <th className="w-12">S.No</th>
-                <th>Service Name</th>
+                <th>Service Details</th>
+                <th className="w-24">Bill No.</th>
                 <th className="w-24 text-center">Fees</th>
-                <th className="w-24 text-center">No/Hrs/Days</th>
+                <th className="w-16 text-center">Qty</th>
                 <th className="w-28 text-right">Amount</th>
               </tr>
             </thead>
             <tbody>
-              {/* Bed Charges */}
-              <tr>
-                <td>1</td>
-                <td className="font-semibold">{billing.bed_charges.bed_type}</td>
-                <td className="text-center">{formatCurrency(billing.bed_charges.daily_rate)}</td>
-                <td className="text-center">{billing.bed_charges.days}</td>
-                <td className="text-right">{formatCurrency(billing.bed_charges.total_amount)}</td>
-              </tr>
-
-              {/* Doctor Consultation */}
-              <tr>
-                <td>2</td>
-                <td className="font-semibold">Doctor Consultation - {billing.doctor_consultation.doctor_name}</td>
-                <td className="text-center">{formatCurrency(billing.doctor_consultation.consultation_fee)}</td>
-                <td className="text-center">{billing.doctor_consultation.days}</td>
-                <td className="text-right">{formatCurrency(billing.doctor_consultation.total_amount)}</td>
-              </tr>
-
-              {/* Individual Doctor Services */}
-              {billing.doctor_services.map((service, index) => (
-                <tr key={index}>
-                  <td>{3 + index}</td>
-                  <td className="font-semibold">{service.doctor_name} - {service.service_type}</td>
-                  <td className="text-center">{formatCurrency(service.fee)}</td>
-                  <td className="text-center">{service.quantity}</td>
-                  <td className="text-right">{formatCurrency(service.total_amount)}</td>
-                </tr>
-              ))}
-
-              {/* Prescribed Medicines */}
-              {billing.prescribed_medicines.length > 0 && (
-                <>
-                  <tr className="bg-gray-50">
-                    <td colSpan={5} className="font-bold text-sm py-2">PRESCRIBED MEDICINES</td>
-                  </tr>
-                  {billing.prescribed_medicines.map((medicine, index) => (
-                    <tr key={index}>
-                      <td>{3 + billing.doctor_services.length + index}</td>
-                      <td>
-                        <div className="font-semibold">{medicine.medicine_name}</div>
-                        <div className="text-[9px] text-gray-600 ml-2">
-                          {medicine.generic_name && <div>Generic: {medicine.generic_name}</div>}
-                          <div>Dosage: {medicine.dosage} | Frequency: {medicine.frequency} | Duration: {medicine.duration}</div>
-                        </div>
+              {(() => {
+                const depts = getDepartmentBreakdown();
+                let globalIdx = 0;
+                return depts.map((dept) => (
+                  <React.Fragment key={dept.id}>
+                    {/* Department Header */}
+                    <tr className="bg-gray-100 font-bold">
+                      <td colSpan={6} className="py-1 px-2 uppercase text-[10px] tracking-wider border-b border-gray-400">
+                        {dept.name}
                       </td>
-                      <td className="text-center">{formatCurrency(medicine.unit_price)}</td>
-                      <td className="text-center">{medicine.quantity}</td>
-                      <td className="text-right">{formatCurrency(medicine.total_price)}</td>
                     </tr>
-                  ))}
-                </>
-              )}
-
-              {/* Pharmacy Billing */}
-              {billing.pharmacy_billing.length > 0 && (
-                <tr>
-                  <td>{3 + billing.doctor_services.length + billing.prescribed_medicines.length}</td>
-                  <td className="font-semibold">
-                    Pharmacy Bill
-                    {billing.pharmacy_billing.map((pb, idx) => (
-                      <div key={idx} className="text-[9px] text-gray-600 ml-2">
-                        • {pb.bill_number} ({formatDate(pb.bill_date)})
-                      </div>
-                    ))}
-                  </td>
-                  <td className="text-center">-</td>
-                  <td className="text-center">-</td>
-                  <td className="text-right">{formatCurrency(billing.summary.pharmacy_total)}</td>
-                </tr>
-              )}
-
-              {/* Lab Billing */}
-              {billing.lab_billing.length > 0 && (
-                <tr>
-                  <td>{3 + billing.doctor_services.length + billing.prescribed_medicines.length + (billing.pharmacy_billing.length > 0 ? 1 : 0)}</td>
-                  <td className="font-semibold">
-                    Laboratory Tests
-                    {billing.lab_billing.map((lb, idx) => (
-                      <div key={idx} className="text-[9px] text-gray-600 ml-2">
-                        {lb.tests.map((test, tidx) => (
-                          <div key={tidx}>• {test.test_name}</div>
-                        ))}
-                      </div>
-                    ))}
-                  </td>
-                  <td className="text-center">-</td>
-                  <td className="text-center">-</td>
-                  <td className="text-right">{formatCurrency(billing.summary.lab_total)}</td>
-                </tr>
-              )}
-
-              {/* Radiology Billing */}
-              {billing.radiology_billing.length > 0 && (
-                <tr>
-                  <td>{3 + billing.doctor_services.length + billing.prescribed_medicines.length + (billing.pharmacy_billing.length > 0 ? 1 : 0) + (billing.lab_billing.length > 0 ? 1 : 0)}</td>
-                  <td className="font-semibold">
-                    Radiology/X-Ray
-                    {billing.radiology_billing.map((rb, idx) => (
-                      <div key={idx} className="text-[9px] text-gray-600 ml-2">
-                        {rb.scans.map((scan, sidx) => (
-                          <div key={sidx}>• {scan.scan_name}</div>
-                        ))}
-                      </div>
-                    ))}
-                  </td>
-                  <td className="text-center">-</td>
-                  <td className="text-center">-</td>
-                  <td className="text-right">{formatCurrency(billing.summary.radiology_total)}</td>
-                </tr>
-              )}
-
-              {/* Other Charges */}
-              {billing.other_charges.map((charge, idx) => (
-                <tr key={idx}>
-                  <td>{3 + billing.doctor_services.length + billing.prescribed_medicines.length + (billing.pharmacy_billing.length > 0 ? 1 : 0) + (billing.lab_billing.length > 0 ? 1 : 0) + (billing.radiology_billing.length > 0 ? 1 : 0) + idx}</td>
-                  <td>{charge.service_name}</td>
-                  <td className="text-center">{formatCurrency(charge.rate)}</td>
-                  <td className="text-center">{charge.quantity}</td>
-                  <td className="text-right">{formatCurrency(charge.amount)}</td>
-                </tr>
-              ))}
+                    {/* Items */}
+                    {dept.items.map((item: any, i: number) => {
+                      globalIdx++;
+                      return (
+                        <tr key={`${dept.id}-${i}`}>
+                          <td className="text-center">{globalIdx}</td>
+                          <td>
+                            <div className="font-semibold">{item.description}</div>
+                            {item.doctors && (
+                              <div className="text-[9px] text-gray-600 italic">By: {item.doctors.join(', ')}</div>
+                            )}
+                          </td>
+                          <td className="font-mono text-[9px]">{item.billNumber || 'N/A'}</td>
+                          <td className="text-center">{formatCurrency(item.unitPrice)}</td>
+                          <td className="text-center">{item.quantity}</td>
+                          <td className="text-right">{formatCurrency(item.total)}</td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                ));
+              })()}
             </tbody>
           </table>
         </div>

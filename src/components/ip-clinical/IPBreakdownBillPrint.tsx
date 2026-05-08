@@ -6,9 +6,17 @@ import { IPComprehensiveBilling } from '../../lib/ipBillingService';
 
 interface IPBreakdownBillPrintProps {
   billing: IPComprehensiveBilling;
+  selectedDepartments?: string[];
+  isLetterhead?: boolean;
+  isSummarized?: boolean;
 }
 
-export function IPBreakdownBillPrint({ billing }: IPBreakdownBillPrintProps) {
+export function IPBreakdownBillPrint({ 
+  billing, 
+  selectedDepartments = [], 
+  isLetterhead = false,
+  isSummarized = false
+}: IPBreakdownBillPrintProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -19,7 +27,40 @@ export function IPBreakdownBillPrint({ billing }: IPBreakdownBillPrintProps) {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '______________________';
-    return new Date(dateString).toLocaleDateString('en-GB'); // DD/MM/YYYY format
+    try {
+      return new Date(dateString).toLocaleDateString('en-GB'); // DD/MM/YYYY format
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const numberToWords = (num: number): string => {
+    const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'];
+    const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+    const teens = ['TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+
+    if (num === 0) return 'ZERO RUPEES ONLY';
+
+    const convertLessThanThousand = (n: number): string => {
+      if (n === 0) return '';
+      if (n < 10) return ones[n];
+      if (n < 20) return teens[n - 10];
+      if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+      return ones[Math.floor(n / 100)] + ' HUNDRED' + (n % 100 !== 0 ? ' ' + convertLessThanThousand(n % 100) : '');
+    };
+
+    const crore = Math.floor(num / 10000000);
+    const lakh = Math.floor((num % 10000000) / 100000);
+    const thousand = Math.floor((num % 100000) / 1000);
+    const remainder = Math.floor(num % 1000);
+
+    let result = '';
+    if (crore > 0) result += convertLessThanThousand(crore) + ' CRORE ';
+    if (lakh > 0) result += convertLessThanThousand(lakh) + ' LAKH ';
+    if (thousand > 0) result += convertLessThanThousand(thousand) + ' THOUSAND ';
+    if (remainder > 0) result += convertLessThanThousand(remainder);
+
+    return result.trim() + ' RUPEES ONLY';
   };
 
   const getDepartmentBreakdown = () => {
@@ -27,196 +68,211 @@ export function IPBreakdownBillPrint({ billing }: IPBreakdownBillPrintProps) {
 
     const departments = [];
 
-    // Room/Bed Charges
-    if (billing.summary.bed_charges_total > 0) {
-      departments.push({
-        name: 'Room & Board',
-        charges: billing.summary.bed_charges_total,
-        items: [
-          {
-            description: `${billing.bed_charges.bed_type} Room`,
-            quantity: billing.bed_charges.days,
-            unitPrice: billing.bed_charges.daily_rate,
-            total: billing.summary.bed_charges_total
-          }
-        ]
-      });
-    }
+    // Group IP BILL items together as seen in Image 1
+    const ipBillItems = [];
+    let ipBillTotal = 0;
 
-    // Doctor Consultation
+    // Doctor Fees
     if (billing.summary.doctor_consultation_total > 0) {
-      departments.push({
-        name: 'Doctor Consultation',
-        charges: billing.summary.doctor_consultation_total,
-        items: [
-          {
-            description: `Dr. ${billing.doctor_consultation.doctor_name} - Daily Consultation`,
-            quantity: billing.doctor_consultation.days,
-            unitPrice: billing.doctor_consultation.consultation_fee,
-            total: billing.summary.doctor_consultation_total
-          }
-        ]
+      ipBillItems.push({
+        description: 'DOCTOR FEES',
+        quantity: billing.doctor_consultation.days,
+        unitPrice: billing.doctor_consultation.consultation_fee,
+        total: billing.summary.doctor_consultation_total
       });
+      ipBillTotal += billing.summary.doctor_consultation_total;
     }
 
-    // Doctor Services - Group duplicate services
-    if (billing.summary.doctor_services_total > 0 && billing.doctor_services.length > 0) {
-      const groupedServices = billing.doctor_services.reduce((acc: any, service: any) => {
-        const key = service.service_type;
-        if (acc[key]) {
-          acc[key].quantity += service.quantity;
-          acc[key].total += service.total_amount;
-          acc[key].doctors.push(service.doctor_name);
-        } else {
-          acc[key] = {
-            description: service.service_type,
-            quantity: service.quantity,
-            unitPrice: service.fee,
-            total: service.total_amount,
-            doctors: [service.doctor_name]
-          };
+    // Bed Charges
+    if (billing.summary.bed_charges_total > 0) {
+      ipBillItems.push({
+        description: 'BED CHARGES',
+        quantity: billing.bed_charges.days,
+        unitPrice: billing.bed_charges.daily_rate,
+        total: billing.summary.bed_charges_total
+      });
+      ipBillTotal += billing.summary.bed_charges_total;
+    }
+
+    // Nursing Charges & Other items that might be in doctor_services but belong to IP BILL
+    if (billing.doctor_services && billing.doctor_services.length > 0) {
+      billing.doctor_services.forEach(s => {
+        const ipBillKeywords = ['NURSING', 'SUGAR', 'MONITORING', 'DRESSING', 'NEBULIZATION'];
+        const isIPBillItem = ipBillKeywords.some(kw => s.service_type.toUpperCase().includes(kw));
+        
+        if (isIPBillItem) {
+          ipBillItems.push({
+            description: s.service_type.toUpperCase(),
+            quantity: s.quantity,
+            unitPrice: s.fee,
+            total: s.total_amount
+          });
+          ipBillTotal += s.total_amount;
         }
-        return acc;
-      }, {});
-
-      const serviceItems = Object.values(groupedServices).map((item: any) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        total: item.total,
-        doctors: item.doctors
-      }));
-
-      departments.push({
-        name: 'Professional Services',
-        charges: billing.summary.doctor_services_total,
-        items: serviceItems
       });
     }
 
-    // Pharmacy - Group duplicate medicines
+    if (ipBillItems.length > 0) {
+      departments.push({
+        id: 'room_board',
+        name: 'IP BILL',
+        charges: ipBillTotal,
+        items: ipBillItems
+      });
+    }
+
+    // Clinical Chemistry & Haematology (Laboratory)
+    if (billing.summary.lab_total > 0 && billing.lab_billing.length > 0) {
+      const labItems: any[] = [];
+      if (isSummarized) {
+        const totalQty = billing.lab_billing.reduce((sum: number, order: any) => sum + (order.tests?.length || 0), 0);
+        labItems.push({
+          description: 'LABORATORY BILL',
+          quantity: totalQty,
+          unitPrice: 0,
+          total: billing.summary.lab_total
+        });
+      } else {
+        billing.lab_billing.forEach((order: any) => {
+          (order.tests || []).forEach((test: any) => {
+            labItems.push({
+              description: test.test_name.toUpperCase(),
+              quantity: 1,
+              unitPrice: test.test_cost,
+              total: test.test_cost
+            });
+          });
+        });
+      }
+
+      departments.push({
+        id: 'laboratory',
+        name: 'Clinical Chemistry & Haematology',
+        charges: billing.summary.lab_total,
+        items: labItems
+      });
+    }
+
+    // Pharmacy - SUMMARIZED
     if (billing.summary.pharmacy_total > 0 && billing.pharmacy_billing.length > 0) {
-      const pharmacyItems = billing.pharmacy_billing.flatMap((pb: any) => 
-        (pb.items || []).map((item: any) => ({
-          description: item.medicine_name,
-          quantity: item.quantity,
-          unitPrice: item.unit_price,
-          total: item.total
-        }))
-      );
-
-      // Group duplicate medicines
-      const groupedMedicines = pharmacyItems.reduce((acc: any, item: any) => {
-        const key = item.description;
-        if (acc[key]) {
-          acc[key].quantity += item.quantity;
-          acc[key].total += item.total;
-        } else {
-          acc[key] = { ...item };
-        }
-        return acc;
-      }, {});
+      const totalQty = billing.pharmacy_billing.reduce((sum: number, pb: any) => 
+        sum + (pb.items || []).reduce((itemSum: number, item: any) => itemSum + item.quantity, 0)
+      , 0);
       
       departments.push({
+        id: 'pharmacy',
         name: 'Pharmacy',
         charges: billing.summary.pharmacy_total,
-        items: Object.values(groupedMedicines)
+        items: [{
+          description: 'PHARMACY BILL',
+          quantity: totalQty,
+          unitPrice: 0,
+          total: billing.summary.pharmacy_total
+        }]
       });
     }
 
-    // Laboratory - Group duplicate tests
-    if (billing.summary.lab_total > 0 && billing.lab_billing.length > 0) {
-      const labItems = billing.lab_billing.flatMap((order: any) =>
-        (order.tests || []).map((test: any) => ({
-          description: test.test_name,
-          quantity: 1,
-          unitPrice: test.test_cost,
-          total: test.test_cost
-        }))
-      );
+    // Other Hospital Charges
+    const miscItems: any[] = [];
+    let miscTotal = 0;
 
-      // Group duplicate tests
-      const groupedTests = labItems.reduce((acc: any, test: any) => {
-        const key = test.description;
-        if (acc[key]) {
-          acc[key].quantity += test.quantity;
-          acc[key].total += test.total;
-        } else {
-          acc[key] = { ...test };
-        }
-        return acc;
-      }, {});
-      
+    if (isSummarized) {
+      let totalQty = 0;
+      if (billing.doctor_services && billing.doctor_services.length > 0) {
+        billing.doctor_services.forEach(s => {
+          const ipBillKeywords = ['NURSING', 'SUGAR', 'MONITORING', 'DRESSING', 'NEBULIZATION'];
+          const isIPBillItem = ipBillKeywords.some(kw => s.service_type.toUpperCase().includes(kw));
+          if (!isIPBillItem) {
+            miscTotal += s.total_amount;
+            totalQty += s.quantity;
+          }
+        });
+      }
+      if (billing.summary.other_charges_total > 0) {
+        (billing.other_charges || []).forEach((charge: any) => {
+          miscTotal += charge.amount;
+          totalQty += (charge.days || charge.quantity || 1);
+        });
+      }
+      if (miscTotal > 0) {
+        miscItems.push({
+          description: 'OTHER HOSPITAL CHARGES',
+          quantity: totalQty,
+          unitPrice: 0,
+          total: miscTotal
+        });
+      }
+    } else {
+      if (billing.doctor_services && billing.doctor_services.length > 0) {
+        billing.doctor_services.forEach(s => {
+          const ipBillKeywords = ['NURSING', 'SUGAR', 'MONITORING', 'DRESSING', 'NEBULIZATION'];
+          const isIPBillItem = ipBillKeywords.some(kw => s.service_type.toUpperCase().includes(kw));
+          
+          if (!isIPBillItem) {
+            miscItems.push({
+              description: s.service_type.toUpperCase(),
+              quantity: s.quantity,
+              unitPrice: s.fee,
+              total: s.total_amount
+            });
+            miscTotal += s.total_amount;
+          }
+        });
+      }
+
+      if (billing.summary.other_charges_total > 0) {
+        (billing.other_charges || []).forEach((charge: any) => {
+          miscItems.push({
+            description: charge.service_name.toUpperCase(),
+            quantity: charge.days || charge.quantity || 1,
+            unitPrice: charge.rate,
+            total: charge.amount
+          });
+          miscTotal += charge.amount;
+        });
+      }
+    }
+
+    if (miscItems.length > 0) {
       departments.push({
-        name: 'Laboratory',
-        charges: billing.summary.lab_total,
-        items: Object.values(groupedTests)
+        id: 'other_bills',
+        name: 'Other Hospital Charges',
+        charges: miscTotal,
+        items: miscItems
       });
     }
-
-    // Radiology - Group duplicate scans
+    
+    // Radiology - SUMMARIZED (Keeping this summarized unless user asks otherwise)
     if (billing.summary.radiology_total > 0 && billing.radiology_billing.length > 0) {
-      const radiologyItems = billing.radiology_billing.flatMap((rb: any) =>
-        (rb.scans || []).map((scan: any) => ({
-          description: scan.scan_name,
-          quantity: 1,
-          unitPrice: scan.scan_cost,
-          total: scan.scan_cost
-        }))
-      );
-
-      // Group duplicate scans
-      const groupedScans = radiologyItems.reduce((acc: any, scan: any) => {
-        const key = scan.description;
-        if (acc[key]) {
-          acc[key].quantity += scan.quantity;
-          acc[key].total += scan.total;
-        } else {
-          acc[key] = { ...scan };
-        }
-        return acc;
-      }, {});
+      const totalQty = billing.radiology_billing.reduce((sum: number, rb: any) => sum + (rb.scans?.length || 0), 0);
       
       departments.push({
+        id: 'radiology',
         name: 'Radiology & Imaging',
         charges: billing.summary.radiology_total,
-        items: Object.values(groupedScans)
-      });
-    }
-
-    // IP Entered Bill
-    if (billing.summary.other_charges_total > 0) {
-      const otherChargeItems = (billing.other_charges || []).map((charge: any) => ({
-        description: charge.service_name,
-        quantity: charge.days || charge.quantity || 1,
-        unitPrice: charge.rate,
-        total: charge.amount
-      }));
-
-      departments.push({
-        name: 'IP Entered Bill',
-        charges: billing.summary.other_charges_total,
-        items: otherChargeItems.length > 0 ? otherChargeItems : [
-          {
-            description: 'Miscellaneous Charges',
-            quantity: 1,
-            unitPrice: billing.summary.other_charges_total,
-            total: billing.summary.other_charges_total
-          }
-        ]
+        items: [{
+          description: 'RADIOLOGY BILL',
+          quantity: totalQty,
+          unitPrice: 0,
+          total: billing.summary.radiology_total
+        }]
       });
     }
 
     return departments;
   };
 
-  const departments = getDepartmentBreakdown();
+  const allDepartments = getDepartmentBreakdown();
+  const departments = allDepartments.filter(d => 
+    selectedDepartments.length === 0 || selectedDepartments.includes(d.id)
+  );
+
+  const totalSelectedCharges = departments.reduce((sum, d) => sum + d.charges, 0);
 
   const printContent = (
     <div className="bg-white text-black print-template hidden print:block print-portal-root">
       <style jsx global>{`
         @media print {
-          /* Reset body */
           body {
             margin: 0;
             padding: 0;
@@ -225,304 +281,242 @@ export function IPBreakdownBillPrint({ billing }: IPBreakdownBillPrintProps) {
             overflow: visible;
           }
           
-          /* Hide EVERYTHING in the body first */
           body > * {
             display: none !important;
           }
 
-          /* But show our portal root */
           body > .print-portal-root {
             display: block !important;
             position: relative;
-            top: auto;
-            left: auto;
             width: 100%;
             height: auto;
             margin: 0;
             padding: 0;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 11pt;
-            line-height: 1.5;
+            font-size: 10pt;
+            line-height: 1.4;
             color: black;
             background: white;
             z-index: 9999;
             visibility: visible;
           }
 
-          /* Explicitly hide standard app roots just in case */
-          #root, #modal-root {
-            display: none !important;
-          }
-
           @page {
             size: A4;
-            margin: 20mm;
+            margin: ${isLetterhead ? '0' : '15mm'};
           }
 
-          .section-break {
-            break-inside: avoid;
-            page-break-inside: avoid;
-            margin-bottom: 2rem;
-          }
-          
-          .force-break {
-            break-before: page;
-            page-break-before: always;
+          .letterhead-padding {
+            padding-top: 6cm; 
+            padding-left: 1.5cm;
+            padding-right: 1.5cm;
+            padding-bottom: 2cm;
           }
 
-          .page-break {
-            break-after: page;
-            page-break-after: always;
-            page-break-inside: avoid;
-          }
-
-          .no-break {
-            page-break-inside: avoid;
+          .standard-padding {
+            padding: 5mm;
           }
 
           .print-portal-root table {
             width: 100%;
             border-collapse: collapse;
-            margin: 10px 0;
-          }
-
-          .print-portal-root th,
-          .print-portal-root td {
-            border: 1px solid #000;
-            padding: 8px;
-            text-align: left;
+            margin: 4px 0;
           }
 
           .print-portal-root th {
-            background-color: #f0f0f0;
-            font-weight: bold;
-          }
-
-          .print-portal-root .text-center {
-            text-align: center;
-          }
-
-          .print-portal-root .text-right {
-            text-align: right;
-          }
-
-          .print-portal-root .font-bold {
-            font-weight: bold;
-          }
-
-          .print-portal-root .text-lg {
-            font-size: 18px;
-          }
-
-          .print-portal-root .text-xl {
-            font-size: 20px;
-          }
-
-          .print-portal-root .mb-4 {
-            margin-bottom: 16px;
-          }
-
-          .print-portal-root .mt-4 {
-            margin-top: 16px;
-          }
-
-          .print-portal-root .patient-info-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 0;
-            font-size: 8pt;
-          }
-
-          .print-portal-root .patient-info-table th,
-          .print-portal-root .patient-info-table td {
-            border: 1px solid #000;
-            padding: 3px 5px;
+            border-top: 1px solid #000;
+            border-bottom: 1px solid #000;
+            padding: 8px 4px;
             text-align: left;
+            font-size: 9pt;
+            font-weight: bold;
           }
 
-          .print-portal-root .patient-info-table th {
-            background-color: #f0f0f0;
+          .print-portal-root td {
+            padding: 6px 4px;
+            text-align: left;
+            font-size: 9pt;
+          }
+
+          .print-portal-root .text-center { text-align: center; }
+          .print-portal-root .text-right { text-align: right; }
+          .print-portal-root .font-bold { font-weight: bold; }
+          
+          .department-section {
+            margin-bottom: 5px;
+          }
+
+          .department-header {
+            font-weight: bold;
+            font-size: 10pt;
+            margin-top: 5px;
+            margin-bottom: 2px;
+            text-decoration: underline;
+          }
+
+          .department-total {
+            text-align: right;
+            font-weight: bold;
+            padding: 4px;
+            border-top: 1px solid #000;
+            width: 150px;
+            margin-left: auto;
+          }
+
+          .summary-box {
+            margin-top: 15px;
+            border-top: 1px solid #000;
+            padding-top: 8px;
+          }
+
+          .signature-section {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+          }
+
+          .signature-box {
+            width: 200px;
+            text-align: center;
+            padding-top: 40px;
             font-weight: bold;
             font-size: 9pt;
           }
 
-          /* Remove all spaces between sections */
-          .print-portal-root .department-section {
-            margin: 0;
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-
-          /* Remove top margins */
-          .print-portal-root .department-section:first-child {
-            margin-top: 0;
-          }
-
-          /* Remove spaces on new pages */
-          @media print {
-            .print-portal-root .department-section {
-              break-before: auto;
-              page-break-before: auto;
-              margin-top: 0;
-            }
-          }
-
-          .print-portal-root .department-header {
-            font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 5px;
-          }
-
-          .print-portal-root .department-total {
-            text-align: right;
-            font-weight: bold;
-            margin: 5px 0 0 0;
-          }
-
-          .print-portal-root .final-summary {
-            margin: 0;
-            border: 2px solid #000;
-            padding: 15px;
-          }
-
-          .print-portal-root .print-title {
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 15px;
-          }
-
-          .print-portal-root .final-summary-row {
+          .stamp-container {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
+            justify-content: center;
+            margin-top: 20px;
           }
 
-          .print-portal-root .final-summary-total {
-            font-weight: bold;
-            border-top: 2px solid #000;
-            padding-top: 10px;
+          .paid-stamp {
+            border: 4px solid #000;
+            padding: 10px 40px;
+            font-size: 20pt;
+            font-weight: 900;
+            transform: rotate(-10deg);
+            opacity: 0.8;
           }
         }
       `}</style>
 
-      <div className="p-6">
-        {/* Patient Information Table - Two Column Side by Side Layout */}
-        <div className="section-break">
-          <table className="patient-info-table">
-            <thead>
-              <tr>
-                <th colSpan={4} className="text-center font-bold">PATIENT INFORMATION</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="font-bold" style={{width: '15%'}}>Name</td>
-                <td style={{width: '35%'}}>{billing.patient?.name || 'N/A'}</td>
-                <td className="font-bold" style={{width: '15%'}}>Age & Sex</td>
-                <td style={{width: '35%'}}>{billing.patient?.age || 'N/A'} Yrs / {billing.patient?.gender || 'N/A'}</td>
-              </tr>
-              <tr>
-                <td className="font-bold">Address</td>
-                <td colSpan={3}>{billing.patient?.address || 'N/A'}</td>
-              </tr>
-              <tr>
-                <td className="font-bold">O.P. No.</td>
-                <td>{billing.patient?.patient_id || 'N/A'}</td>
-                <td className="font-bold">I.P. No.</td>
-                <td>{billing.admission?.ip_number || 'N/A'}</td>
-              </tr>
-              <tr>
-                <td className="font-bold">Date of Admission</td>
-                <td>{formatDate(billing.admission?.admission_date)}</td>
-                <td className="font-bold">Date of Discharge</td>
-                <td>{formatDate(billing.admission?.discharge_date)}</td>
-              </tr>
-              <tr>
-                <td className="font-bold">Room/Bed</td>
-                <td>{billing.admission?.room_number || 'N/A'} / {billing.admission?.bed_number || 'N/A'}</td>
-                <td className="font-bold">Bill No.</td>
-                <td>BREAKDOWN-{billing.admission?.ip_number || 'N/A'}</td>
-              </tr>
-            </tbody>
-          </table>
+      <div className={isLetterhead ? 'letterhead-padding' : 'standard-padding'}>
+        {!isLetterhead && (
+          <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ height: '96px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                <img 
+                  src="/images/logo.png" 
+                  alt="Annam Hospital Logo" 
+                  style={{ height: '100%', width: 'auto', objectFit: 'contain' }}
+                />
+              </div>
+              
+              <div style={{ textAlign: 'center', fontSize: '10pt', lineHeight: '1.2', color: 'black' }}>
+                <p style={{ fontWeight: 'bold', margin: '0' }}>ANNAM MULTISPECIALITY HOSPITAL</p>
+                <p style={{ margin: '2px 0' }}>2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk,</p>
+                <p style={{ margin: '2px 0' }}>Thoothukudi - 628 216. <span style={{ fontWeight: 'bold' }}>Cell : 86818 50592, 86819 50592</span></p>
+                <p style={{ margin: '2px 0', fontSize: '9pt' }}>Email: annammultispecialityhospital@gmail.com</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Standardized Header Style from IPBillingView */}
+        <div className="text-center mb-8 mt-2">
+          <h3 className="text-[14pt] font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-12 py-1">
+            {isSummarized ? 'Final Billing Statement' : 'Inpatient Billing'}
+          </h3>
         </div>
 
-        {/* Department-wise Breakdown */}
-        {departments.map((department, deptIndex) => (
-          <div key={deptIndex} className="department-section">
-            <div className="department-header">
-              {department.name}
-            </div>
-            
-            <div className="text-center" style={{marginBottom: '10px'}}>
-              {department.items.length} items
-            </div>
+        <div className="grid grid-cols-2 gap-4 mb-4 text-[9pt]">
+          {/* Left Column - Patient Information */}
+          <div className="border border-black p-3 space-y-1">
+            <h3 className="font-bold uppercase text-[10pt] mb-2 underline">Patient Information</h3>
+            <div className="flex"><span className="font-bold w-24">IP No</span><span>: {billing.admission.ip_number}</span></div>
+            <div className="flex"><span className="font-bold w-24">UH ID</span><span>: {billing.patient.patient_id}</span></div>
+            <div className="flex"><span className="font-bold w-24">Patient Name</span><span className="uppercase">: {billing.patient.name}</span></div>
+            <div className="flex"><span className="font-bold w-24">Age / Gender</span><span>: {billing.patient.age} / {billing.patient.gender}</span></div>
+          </div>
 
-            <table className="print-table">
+          {/* Right Column - Bill Details */}
+          <div className="border border-black p-3 space-y-1">
+            <h3 className="font-bold uppercase text-[10pt] mb-2 underline">Bill Details</h3>
+            <div className="flex"><span className="font-bold w-28">Bill Date</span><span>: {formatDate(new Date().toISOString())}</span></div>
+            <div className="flex"><span className="font-bold w-28">Doctor Name</span><span className="uppercase">: DR.{billing.doctor_consultation.doctor_name}</span></div>
+            <div className="flex"><span className="font-bold w-28">Payment Status</span><span className="uppercase">: {billing.status}</span></div>
+          </div>
+        </div>
+
+        {/* Department Breakdowns */}
+        {departments.map((dept) => (
+          <div key={dept.id} className="department-section">
+            <div className="department-header">{dept.name}</div>
+            <table>
               <thead>
                 <tr>
-                  <th style={{width: '50'}}>S.No</th>
-                  <th>
-                    {department.name === 'Professional Services' ? 'Service Category' : 
-                     department.name === 'Pharmacy' ? 'Medicine Name' :
-                     department.name === 'Laboratory' ? 'Test Name' :
-                     department.name === 'Radiology & Imaging' ? 'Scan Name' : 
-                     department.name === 'IP Entered Bill' ? 'Charges Name' : 'Description'}
-                  </th>
-                  {department.name === 'Professional Services' && (
-                    <th style={{width: '150'}}>Doctors</th>
-                  )}
-                  <th style={{width: '60'}} className="text-center">
-                    {department.name === 'Room & Board' ? 'Days' : 'Qty'}
-                  </th>
-                  <th style={{width: '100'}} className="text-right">Unit Price</th>
-                  <th style={{width: '100'}} className="text-right">Total</th>
+                  <th style={{width: '10%'}}>SERVICE</th>
+                  <th style={{width: '50%'}}></th>
+                  <th style={{width: '15%'}} className="text-right">RATE</th>
+                  <th style={{width: '10%'}} className="text-center">QTY</th>
+                  <th style={{width: '15%'}} className="text-right">AMOUNT</th>
                 </tr>
               </thead>
               <tbody>
-                {department.items.map((item: any, itemIndex) => (
-                  <tr key={itemIndex}>
-                    <td className="text-center">{itemIndex + 1}</td>
-                    <td>{item.description}</td>
-                    {department.name === 'Professional Services' && (
-                      <td className="text-xs">{item.doctors?.join(', ') || '-'}</td>
-                    )}
-                    <td className="text-center">{item.quantity}</td>
-                    <td className="text-right">{formatCurrency(item.unitPrice)}</td>
-                    <td className="text-right">{formatCurrency(item.total)}</td>
+                {dept.items.map((item: any, i: number) => (
+                  <tr key={i}>
+                    <td colSpan={2} className="uppercase">{item.description}</td>
+                    <td className="text-right">
+                      {item.unitPrice > 0 ? item.unitPrice.toLocaleString('en-IN', {minimumFractionDigits: 2}) : ''}
+                    </td>
+                    <td className="text-center">{item.quantity > 0 ? item.quantity : ''}</td>
+                    <td className="text-right font-bold">{item.total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            <div className="department-total text-right">
-              Department Total: {formatCurrency(department.charges)}
+            <div className="department-total">
+              {dept.charges.toLocaleString('en-IN', {minimumFractionDigits: 2})}
             </div>
           </div>
         ))}
 
-        {/* Final Summary */}
-        <div className="final-summary">
-          <div className="print-title" style={{marginBottom: '15px'}}>Final Summary</div>
-          
-          <div className="final-summary-row">
-            <span>Total Charges:</span>
-            <span>{formatCurrency(billing.summary.bed_charges_total + billing.summary.doctor_consultation_total + billing.summary.doctor_services_total + billing.summary.pharmacy_total + billing.summary.lab_total + billing.summary.radiology_total + billing.summary.other_charges_total)}</span>
+        {/* Final Summary Box */}
+        <div className="mt-6 border-t border-black pt-4">
+          <div className="flex justify-between items-center font-bold text-[10pt]">
+            <div className="flex-1">
+              <span>Total Bill Amount : </span>
+              <span className="ml-4">{formatCurrency(totalSelectedCharges).replace('₹', '')}/-</span>
+            </div>
+            <div className="text-right w-48 border-t-2 border-black pt-2">
+              {totalSelectedCharges.toLocaleString('en-IN', {minimumFractionDigits: 2})}/-
+            </div>
           </div>
           
-          <div className="final-summary-row">
-            <span>Advance Paid:</span>
-            <span>{formatCurrency(billing.summary.advance_paid)}</span>
+          <div className="mt-4 uppercase text-[9pt] font-black italic">
+            Total Amount {numberToWords(Math.round(totalSelectedCharges))}
           </div>
-          
-          <div className="final-summary-row">
-            <span>Discount:</span>
-            <span>{formatCurrency(billing.summary.discount)}</span>
+        </div>
+  
+        {/* Payment Status Stamp */}
+        <div className="stamp-container">
+          <div className="paid-stamp">
+            {billing.status === 'paid' ? 'CASH PAID' : 
+             billing.status === 'partial' ? 'PARTIAL PAID' : 'PENDING'}
           </div>
-          
-          <div className="final-summary-row final-summary-total">
-            <span>Net Payable:</span>
-            <span>{formatCurrency(billing.summary.net_payable)}</span>
+        </div>
+
+        {/* Signatures */}
+        <div className="signature-section">
+          <div className="signature-box flex flex-col items-center">
+             <div className="mb-4">
+                <img src="/images/signature.png" alt="" className="h-12 w-auto opacity-0" />
+             </div>
+             <div className="border-t border-black w-full">Authorized Signatory</div>
+          </div>
+          <div className="signature-box flex flex-col items-center">
+             <div className="mb-4 h-12"></div>
+             <div className="border-t border-black w-full">Patient / Attender</div>
           </div>
         </div>
       </div>

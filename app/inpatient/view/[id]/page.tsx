@@ -1069,7 +1069,7 @@ export default function IPDetailPage() {
                   {
                     label: 'Billing Breakdown', desc: 'Department-wise cost breakdown',
                     icon: FileText, color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100',
-                    href: `/inpatient/billing-breakdown/${allocationId}`
+                    href: `/inpatient/billing/${allocationId}`
                   },
                   ...(isActive ? [{
                     label: 'Discharge Patient', desc: 'Create discharge summary',
@@ -1651,7 +1651,7 @@ export default function IPDetailPage() {
                     <Receipt className="h-4 w-4" /> View Full Bill
                   </button>
                 </Link>
-                <Link href={`/inpatient/billing-breakdown/${allocationId}`}>
+                <Link href={`/inpatient/billing/${allocationId}`}>
                   <button className="flex items-center gap-1.5 px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-all shadow-sm hover:shadow-md">
                     <FileText className="h-4 w-4" /> Breakdown Bill
                   </button>

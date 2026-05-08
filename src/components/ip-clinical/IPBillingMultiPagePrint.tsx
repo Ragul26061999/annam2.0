@@ -171,32 +171,30 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
       {/* PAGE 1: SUMMARY */}
       <div className="section-break">
         {/* Header Block - Matching Discharge Summary Style */}
-        <div className="flex flex-col items-center justify-center mb-2">
-          {/* Logo */}
-          <div className="h-28 w-full flex items-center justify-center mb-2">
-             <img 
-               src="/images/logo.png" 
-               alt="Annam Hospital Logo" 
-               className="h-full w-auto object-contain"
-             />
-          </div>
-          
-          <div className="text-center">
-            <p className="text-sm font-semibold text-gray-800">2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk,</p>
-            <p className="text-sm font-semibold text-gray-800">Thoothukudi - 628 216.</p>
-            <div className="text-sm text-gray-800 mt-1 flex flex-col items-center justify-center">
-              <span className="font-bold">Cell: 8681850592, 8681950592</span>
-              <span>Email: annammultispecialityhospital@gmail.com</span>
+        <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ height: '96px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+              <img 
+                src="/images/logo.png" 
+                alt="Annam Hospital Logo" 
+                style={{ height: '100%', width: 'auto', objectFit: 'contain' }}
+              />
+            </div>
+            
+            <div style={{ textAlign: 'center', fontSize: '10pt', lineHeight: '1.2', color: 'black' }}>
+              <p style={{ fontWeight: 'bold', margin: '0' }}>ANNAM MULTISPECIALITY HOSPITAL</p>
+              <p style={{ margin: '2px 0' }}>2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk,</p>
+              <p style={{ margin: '2px 0' }}>Thoothukudi - 628 216. <span style={{ fontWeight: 'bold' }}>Cell : 86818 50592, 86819 50592</span></p>
+              <p style={{ margin: '2px 0', fontSize: '9pt' }}>Email: annammultispecialityhospital@gmail.com</p>
             </div>
           </div>
-          
-          <div className="text-center mt-4 pb-2 border-b-2 border-gray-800">
-            <h2 className="text-lg font-bold uppercase inline-block px-4 pb-1 text-blue-900 tracking-wider">
-              IP BILLING SUMMARY
+        </div>  
+          <div className="text-center mt-6 mb-8">
+            <h2 className="text-[16pt] font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-12 py-1">
+              Inpatient Billing
             </h2>
           </div>
-        </div>
-
+        
         {/* Patient Identification - Matching Discharge Summary Format */}
         <div className="section-break mb-8">
           <div className="flex gap-8 text-sm font-medium pt-4">
@@ -464,37 +462,38 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
             <p className="text-xs text-gray-600">Bill Number: {billing.bill_number} | Patient: {billing.patient.name}</p>
           </div>
 
-          {billing.pharmacy_billing.map((pb, pbIdx) => (
-            <div key={pbIdx} className="mb-4">
-              <h3 className="font-bold">Pharmacy Bill: {pb.bill_number} (Date: {formatDate(pb.bill_date)})</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>S.No</th>
-                    <th>Medicine Name</th>
-                    <th className="text-center">Quantity</th>
-                    <th className="text-right">Unit Price</th>
-                    <th className="text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pb.items.map((item, itemIdx) => (
-                    <tr key={itemIdx}>
-                      <td>{itemIdx + 1}</td>
-                      <td>{item.medicine_name}</td>
-                      <td className="text-center">{item.quantity}</td>
-                      <td className="text-right">{formatCurrency(item.unit_price)}</td>
-                      <td className="text-right">{formatCurrency(item.total)}</td>
+          {(() => {
+            const totalQty = billing.pharmacy_billing.reduce((sum, pb) => 
+              sum + (pb.items || []).reduce((itemSum, item) => itemSum + item.quantity, 0)
+            , 0);
+            return (
+              <div className="mb-4">
+                <h3 className="font-bold">Pharmacy Summary</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>S.No</th>
+                      <th>Description</th>
+                      <th className="text-center">Total Quantity</th>
+                      <th className="text-right">Total Amount</th>
                     </tr>
-                  ))}
-                  <tr className="font-bold">
-                    <td colSpan={4} className="text-right">Bill Total:</td>
-                    <td className="text-right">{formatCurrency(pb.total_amount)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          ))}
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>1</td>
+                      <td>PHARMACY BILL (CONSOLIDATED)</td>
+                      <td className="text-center">{totalQty}</td>
+                      <td className="text-right">{formatCurrency(billing.summary.pharmacy_total)}</td>
+                    </tr>
+                    <tr className="font-bold text-lg">
+                      <td colSpan={3} className="text-right">TOTAL PHARMACY CHARGES:</td>
+                      <td className="text-right">{formatCurrency(billing.summary.pharmacy_total)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
           <div className="mt-4">
             <table>
@@ -543,36 +542,33 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
             <p className="text-xs text-gray-600">Bill Number: {billing.bill_number} | Patient: {billing.patient.name}</p>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Order Number</th>
-                <th>Test Name</th>
-                <th>Order Date</th>
-                <th className="text-right">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {billing.lab_billing.map((lb, lbIdx) => (
-                <React.Fragment key={lbIdx}>
-                  {lb.tests.map((test, testIdx) => (
-                    <tr key={`${lbIdx}-${testIdx}`}>
-                      <td>{lbIdx + 1}.{testIdx + 1}</td>
-                      <td>{lb.order_number}</td>
-                      <td>{test.test_name}</td>
-                      <td>{formatDate(lb.order_date)}</td>
-                      <td className="text-right">{formatCurrency(test.test_cost)}</td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-              <tr className="font-bold text-lg">
-                <td colSpan={4} className="text-right">TOTAL LABORATORY CHARGES:</td>
-                <td className="text-right">{formatCurrency(billing.summary.lab_total)}</td>
-              </tr>
-            </tbody>
-          </table>
+          {(() => {
+            const totalQty = billing.lab_billing.reduce((sum, order) => sum + (order.tests?.length || 0), 0);
+            return (
+              <table>
+                <thead>
+                  <tr>
+                    <th>S.No</th>
+                    <th>Description</th>
+                    <th className="text-center">Total Tests</th>
+                    <th className="text-right">Total Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1</td>
+                    <td>LABORATORY BILL (CONSOLIDATED)</td>
+                    <td className="text-center">{totalQty}</td>
+                    <td className="text-right">{formatCurrency(billing.summary.lab_total)}</td>
+                  </tr>
+                  <tr className="font-bold text-lg">
+                    <td colSpan={3} className="text-right">TOTAL LABORATORY CHARGES:</td>
+                    <td className="text-right">{formatCurrency(billing.summary.lab_total)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       )}
 
@@ -610,36 +606,33 @@ export function IPBillingMultiPagePrint({ billing }: IPBillingMultiPagePrintProp
             <p className="text-xs text-gray-600">Bill Number: {billing.bill_number} | Patient: {billing.patient.name}</p>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Order Number</th>
-                <th>Scan Name</th>
-                <th>Order Date</th>
-                <th className="text-right">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {billing.radiology_billing.map((rb, rbIdx) => (
-                <React.Fragment key={rbIdx}>
-                  {rb.scans.map((scan, scanIdx) => (
-                    <tr key={`${rbIdx}-${scanIdx}`}>
-                      <td>{rbIdx + 1}.{scanIdx + 1}</td>
-                      <td>{rb.order_number}</td>
-                      <td>{scan.scan_name}</td>
-                      <td>{formatDate(rb.order_date)}</td>
-                      <td className="text-right">{formatCurrency(scan.scan_cost)}</td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-              <tr className="font-bold text-lg">
-                <td colSpan={4} className="text-right">TOTAL RADIOLOGY CHARGES:</td>
-                <td className="text-right">{formatCurrency(billing.summary.radiology_total)}</td>
-              </tr>
-            </tbody>
-          </table>
+          {(() => {
+            const totalQty = billing.radiology_billing.reduce((sum, rb) => sum + (rb.scans?.length || 0), 0);
+            return (
+              <table>
+                <thead>
+                  <tr>
+                    <th>S.No</th>
+                    <th>Description</th>
+                    <th className="text-center">Total Scans</th>
+                    <th className="text-right">Total Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1</td>
+                    <td>RADIOLOGY BILL (CONSOLIDATED)</td>
+                    <td className="text-center">{totalQty}</td>
+                    <td className="text-right">{formatCurrency(billing.summary.radiology_total)}</td>
+                  </tr>
+                  <tr className="font-bold text-lg">
+                    <td colSpan={3} className="text-right">TOTAL RADIOLOGY CHARGES:</td>
+                    <td className="text-right">{formatCurrency(billing.summary.radiology_total)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       )}
 

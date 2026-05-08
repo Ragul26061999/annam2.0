@@ -1050,7 +1050,7 @@ export default function InpatientPage() {
                                 <Receipt className="h-3 w-3" /> Bill
                               </button>
                             </Link>
-                            <Link href={`/inpatient/billing-breakdown/${allocation.id}`}>
+                            <Link href={`/inpatient/billing/${allocation.id}`}>
                               <button className="text-xs px-3 py-1.5 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-xl flex items-center gap-1 font-semibold border border-violet-200">
                                 <FileText className="h-3 w-3" /> Breakdown
                               </button>

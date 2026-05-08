@@ -879,30 +879,33 @@ export async function getIPComprehensiveBilling(
       .gte('created_at', admissionDate)
       .lte('created_at', dischargeDate);
 
-    const otherBillsWithStatus = (otherBills || []).map((bill: any, index: number) => {
-      const statusOptions: ('paid' | 'pending' | 'partial')[] = ['paid', 'pending', 'partial'];
-      const randomStatus = statusOptions[Math.floor(Math.random() * statusOptions.length)];
-      
+    const otherBillsWithStatus = (otherBills || []).map((bill: any) => {
+      // Use the actual payment status from the bill record if available
+      const billStatus = bill.payment_status || bill.status || 'pending';
       return {
         ...bill,
-        status: randomStatus // Random status for demonstration
+        status: billStatus.toLowerCase()
       };
     });
 
-    const otherCharges: IPBillingItem[] = [
+    const otherCharges: any[] = [
       // otherItems are already normalized to { service_name, rate, quantity, days, amount } 
       ...(otherItems || []).map((item: any) => ({
         service_name: item.service_name,
         rate: Number(item.rate || 0),
         quantity: Number(item.quantity || item.qty || 1),
         days: Number(item.days || item.quantity || item.qty || 1),
-        amount: Number(item.amount || item.total_amount || 0)
+        amount: Number(item.amount || item.total_amount || 0),
+        billNumber: 'N/A',
+        status: 'pending'
       })),
       ...(otherBillsWithStatus || []).map((bill: any) => ({
         service_name: `${bill.charge_category}: ${bill.charge_description}`,
         rate: Number(bill.unit_price),
         quantity: Number(bill.quantity),
-        amount: Number(bill.total_amount)
+        amount: Number(bill.total_amount),
+        billNumber: bill.bill_number,
+        status: bill.status
       }))
     ];
 
