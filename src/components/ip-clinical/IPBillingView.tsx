@@ -1864,7 +1864,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                       </div>
                       
                       <div style={{ textAlign: 'center', fontSize: '10pt', lineHeight: '1.2', color: 'black' }}>
-                        <p style={{ fontWeight: 'bold', margin: '0' }}>ANNAM MULTISPECIALITY HOSPITAL</p>
                         <p style={{ margin: '2px 0' }}>2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk,</p>
                         <p style={{ margin: '2px 0' }}>Thoothukudi - 628 216. <span style={{ fontWeight: 'bold' }}>Cell : 86818 50592, 86819 50592</span></p>
                         <p style={{ margin: '2px 0', fontSize: '9pt' }}>Email: annammultispecialityhospital@gmail.com</p>
