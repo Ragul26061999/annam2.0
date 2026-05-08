@@ -423,8 +423,8 @@ export function IPBreakdownBillPrint({
         )}
 
         {/* Standardized Header Style from IPBillingView */}
-        <div className="text-center mb-8 mt-2">
-          <h3 className="text-[14pt] font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-12 py-1">
+        <div className="text-center mb-6 mt-2">
+          <h3 className="text-[16pt] font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-12 py-1">
             {isSummarized ? 'Final Billing Statement' : 'Inpatient Billing'}
           </h3>
         </div>
@@ -443,8 +443,9 @@ export function IPBreakdownBillPrint({
           <div className="border border-black p-3 space-y-1">
             <h3 className="font-bold uppercase text-[10pt] mb-2 underline">Bill Details</h3>
             <div className="flex"><span className="font-bold w-28">Bill Date</span><span>: {formatDate(new Date().toISOString())}</span></div>
-            <div className="flex"><span className="font-bold w-28">Doctor Name</span><span className="uppercase">: DR.{billing.doctor_consultation.doctor_name}</span></div>
-            <div className="flex"><span className="font-bold w-28">Payment Status</span><span className="uppercase">: {billing.status}</span></div>
+            <div className="flex"><span className="font-bold w-28">Doctor Name</span><span className="uppercase">: DR.{billing.doctor_consultation.doctor_name || 'N/A'}</span></div>
+            <div className="flex"><span className="font-bold w-28">Payment Status</span><span className="uppercase">: {billing.status.toUpperCase()}</span></div>
+            <div className="flex"><span className="font-bold w-28">Room/Bed</span><span className="uppercase">: {billing.admission.room_number} / {billing.admission.bed_number}</span></div>
           </div>
         </div>
 

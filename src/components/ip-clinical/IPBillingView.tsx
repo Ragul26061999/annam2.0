@@ -734,24 +734,24 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
               <>
                 <button
                   onClick={() => handlePrint(true, true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm text-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition-all font-bold shadow-sm text-sm"
                 >
-                  <Printer className="h-4 w-4 text-slate-400" />
+                  <Printer className="h-4 w-4" />
                   Standard Print
                 </button>
                 <button
                   onClick={() => handlePrint(false, true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm text-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-all font-bold shadow-sm text-sm"
                 >
-                  <FileText className="h-4 w-4 text-teal-500" />
-                  Letterhead
+                  <FileText className="h-4 w-4" />
+                  Letterhead Print
                 </button>
                 <button
                   onClick={() => handlePrint(true, false)}
                   className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm text-sm"
                 >
                   <List className="h-4 w-4 text-slate-400" />
-                  Detailed Print
+                  Multi-Page Detail
                 </button>
               </>
             )}
@@ -1810,86 +1810,92 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
         </div>
       </div>
     )}
-
       {/* Billing Print Templates */}
       {activeTab === 'billing' && (
         <>
-          {/* Multi-Page Print Template - Only show if not letterhead template */}
+          {/* Multi-Page Print Template - Only show if specifically selected (isLetterheadTemplate is false here means Multi-Page) */}
           {!isLetterheadTemplate && <IPBillingMultiPagePrint billing={billing} />}
 
-          {/* Letterhead / Single Page Print Template */}
+          {/* Standard / Letterhead Print Template */}
           {isLetterheadTemplate && (
-            <div className="print-only-template hidden print:block">
-              <div className="print-container bg-white font-sans text-slate-900">
-                {/* Official Letterhead Header Area (Reserved 5.9cm space) */}
-                <div className="hospital-header-area">
-                  {printWithHeader && (
-                    <div className="text-center">
-                      <div className="flex justify-center mb-2">
-                        <img src="/images/logo.png" alt="Annam Hospital Logo" className="h-24 w-auto object-contain" />
+            <div className="print-only-template hidden print:block bg-white text-black font-sans">
+              <style jsx global>{`
+                @media print {
+                  body * {
+                    visibility: hidden !important;
+                  }
+                  .print-only-template, .print-only-template * {
+                    visibility: visible !important;
+                  }
+                  @page {
+                    size: A4;
+                    margin: ${printWithHeader ? '15mm' : '0'};
+                  }
+                  .print-only-template {
+                    position: absolute !important;
+                    left: 0 !important;
+                    top: 0 !important;
+                    width: 100% !important;
+                    min-height: 297mm;
+                    padding: ${printWithHeader ? '0' : '6cm 1.5cm 2cm 1.5cm'} !important;
+                    margin: 0 !important;
+                    box-sizing: border-box !important;
+                    background: white !important;
+                    z-index: 9999;
+                    print-color-adjust: exact;
+                  }
+                  .standard-padding {
+                    padding: 5mm;
+                  }
+                }
+              `}</style>
+
+              <div className={printWithHeader ? 'standard-padding' : ''}>
+                {/* Hospital Header */}
+                {printWithHeader && (
+                  <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ height: '96px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                        <img 
+                          src="/images/logo.png" 
+                          alt="Annam Hospital Logo" 
+                          style={{ height: '100%', width: 'auto', objectFit: 'contain' }}
+                        />
                       </div>
-                      <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Annam Multispeciality Hospital</h2>
-                      <p className="text-[10px] font-bold text-slate-600 mt-1">
-                        2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk, Thoothukudi - 628 216.
-                      </p>
-                      <p className="text-[10px] font-bold text-slate-600">
-                        Cell: 8681850592, 8681950592 | Email: annammultispecialityhospital@gmail.com
-                      </p>
+                      
+                      <div style={{ textAlign: 'center', fontSize: '10pt', lineHeight: '1.2', color: 'black' }}>
+                        <p style={{ fontWeight: 'bold', margin: '0' }}>ANNAM MULTISPECIALITY HOSPITAL</p>
+                        <p style={{ margin: '2px 0' }}>2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk,</p>
+                        <p style={{ margin: '2px 0' }}>Thoothukudi - 628 216. <span style={{ fontWeight: 'bold' }}>Cell : 86818 50592, 86819 50592</span></p>
+                        <p style={{ margin: '2px 0', fontSize: '9pt' }}>Email: annammultispecialityhospital@gmail.com</p>
+                      </div>
                     </div>
-                  )}
-                </div>
+                    <div style={{ width: '100%', height: '1px', backgroundColor: '#000', marginTop: '15px' }}></div>
+                  </div>
+                )}
 
                 <div className="text-center mb-8 mt-2">
-                  <h3 className="text-[14pt] font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-12 py-1">
+                  <h3 className="text-[16pt] font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-12 py-1">
                     Inpatient Billing
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-6 text-[12px] px-2">
-                  <div className="space-y-3">
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-24 flex-shrink-0">Patient Name</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 font-extrabold uppercase ml-1 pb-0.5">{billing.patient.name}</span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-24 flex-shrink-0">Address</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 uppercase ml-1 pb-0.5 text-[11px] truncate">{billing.patient.address || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-24 flex-shrink-0">Consultant</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 font-extrabold uppercase ml-1 pb-0.5">{billing.doctor_consultation.doctor_name || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-24 flex-shrink-0">Room/Bed</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">Room {billing.admission.room_number} / Bed {billing.admission.bed_number}</span>
-                    </div>
+                <div className="grid grid-cols-2 gap-4 mb-4 text-[9pt]">
+                  {/* Left Column - Patient Information */}
+                  <div className="border border-black p-3 space-y-1">
+                    <h3 className="font-bold uppercase text-[10pt] mb-2 underline">Patient Information</h3>
+                    <div className="flex"><span className="font-bold w-24">IP No</span><span>: {billing.admission.ip_number}</span></div>
+                    <div className="flex"><span className="font-bold w-24">UH ID</span><span>: {billing.patient.patient_id}</span></div>
+                    <div className="flex"><span className="font-bold w-24">Patient Name</span><span className="uppercase">: {billing.patient.name}</span></div>
+                    <div className="flex"><span className="font-bold w-24">Age / Gender</span><span>: {billing.patient.age} / {billing.patient.gender}</span></div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-32 flex-shrink-0">Age & Sex</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">{billing.patient.age} Yrs / {billing.patient.gender}</span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-32 flex-shrink-0">O.P. No / UHID</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 font-mono font-bold ml-1 pb-0.5">{billing.patient.patient_id}</span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-32 flex-shrink-0">I.P. No</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 font-mono font-bold ml-1 pb-0.5">{billing.admission.ip_number}</span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="font-bold w-32 flex-shrink-0">Bill Date</span>
-                      <span className="font-normal w-4">:</span>
-                      <span className="flex-1 border-b border-slate-200 font-bold ml-1 pb-0.5">{formatDate(new Date().toISOString())}</span>
-                    </div>
+                  {/* Right Column - Bill Details */}
+                  <div className="border border-black p-3 space-y-1">
+                    <h3 className="font-bold uppercase text-[10pt] mb-2 underline">Bill Details</h3>
+                    <div className="flex"><span className="font-bold w-28">Bill Date</span><span>: {new Date().toLocaleDateString('en-GB')}</span></div>
+                    <div className="flex"><span className="font-bold w-28">Doctor Name</span><span className="uppercase">: DR. {billing.doctor_consultation.doctor_name || 'N/A'}</span></div>
+                    <div className="flex"><span className="font-bold w-28">Room/Bed</span><span className="uppercase">: {billing.admission.room_number} / {billing.admission.bed_number}</span></div>
                   </div>
                 </div>
 
@@ -1991,60 +1997,6 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                    <p className="text-[9px] font-bold text-slate-400 uppercase italic tracking-wider">Computer generated provisional bill • This is not an official receipt • Subject to Hospital Terms</p>
                 </div>
               </div>
-
-              <style jsx global>{`
-                @media print {
-                  body * {
-                    visibility: hidden;
-                    -webkit-print-color-adjust: exact;
-                    print-color-adjust: exact;
-                  }
-                  .print-only-template, .print-only-template * {
-                    visibility: visible;
-                  }
-                  .print-only-template {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    width: 20.6cm;
-                    height: 28.5cm;
-                    display: block !important;
-                    padding: 0 !important;
-                    margin: 0 !important;
-                    z-index: 9999;
-                  }
-                  @page {
-                    size: 20.6cm 28.5cm;
-                    margin: 0;
-                  }
-                  .print-container {
-                    width: 20.6cm;
-                    height: 28.5cm;
-                    padding-left: 1.2cm;
-                    padding-right: 1.2cm;
-                    padding-bottom: 1.5cm;
-                    position: relative;
-                    box-sizing: border-box;
-                    background: white !important;
-                    display: flex;
-                    flex-direction: column;
-                  }
-                  .hospital-header-area {
-                    height: ${printWithHeader ? 'auto' : '5.9cm'};
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: center;
-                    align-items: center;
-                    overflow: hidden;
-                    margin-bottom: ${printWithHeader ? '10px' : '0'};
-                  }
-                  .hospital-header-area:empty {
-                    border-bottom: none;
-                  }
-                  table { width: 100%; border-collapse: collapse; }
-                  th, td { border-bottom: 1px solid #f0f0f0; }
-                }
-              `}</style>
             </div>
           )}
         </>
