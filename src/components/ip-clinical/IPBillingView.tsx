@@ -1813,7 +1813,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
       {/* Billing Print Templates */}
       {activeTab === 'billing' && (
         <>
-          {/* Multi-Page Print Template - Only show if specifically selected (isLetterheadTemplate is false here means Multi-Page) */}
+          {/* Multi-Page Print Template - Only show if specially selected (isLetterheadTemplate is false here means Multi-Page) */}
           {!isLetterheadTemplate && <IPBillingMultiPagePrint billing={billing} />}
 
           {/* Standard / Letterhead Print Template */}
