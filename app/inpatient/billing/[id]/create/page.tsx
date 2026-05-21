@@ -1191,23 +1191,32 @@ export default function IPNewBillingPage() {
       {/* PRINT ONLY SECTION - Styled like Discharge Summary */}
       <div className="print-only-template hidden">
         <div className="print-container bg-white font-sans text-slate-900">
-          {/* Official Letterhead Header Area (Reserved 5.9cm space) */}
-          <div className="hospital-header-area" style={{ height: '5.9cm', minHeight: '5.9cm' }}>
-            <div className="text-center w-full" style={{ opacity: printWithHeader ? 1 : 0 }}>
-              <div className="flex justify-center mb-2">
-                <img src="/images/logo.png" alt="Annam Hospital Logo" className="h-20 w-auto object-contain" />
-              </div>
-              <p className="text-sm font-bold text-slate-600 mt-1">
-                2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk, Thoothukudi - 628 216.
-              </p>
-              <p className="text-sm font-bold text-slate-600">
-                Cell: 8681850592, 8681950592 | Email: annammultispecialityhospital@gmail.com
-              </p>
-            </div>
-          </div>
-
-          <div className="text-center mb-6 mt-2">
-            <h3 className="text-lg font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-10 py-1">Inpatient Billing</h3>
+          <table className="w-full border-none">
+            <thead className="table-header-group">
+              <tr>
+                <td className="border-none p-0">
+                  {/* Official Letterhead Header Area (Reserved 5.9cm space) */}
+                  <div className="hospital-header-area" style={{ height: '5.9cm', minHeight: '5.9cm' }}>
+                    <div className="text-center w-full" style={{ opacity: printWithHeader ? 1 : 0 }}>
+                      <div className="flex justify-center mb-2">
+                        <img src="/images/logo.png" alt="Annam Hospital Logo" className="h-20 w-auto object-contain" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-600 mt-1">
+                        2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk, Thoothukudi - 628 216.
+                      </p>
+                      <p className="text-sm font-bold text-slate-600">
+                        Cell: 8681850592, 8681950592 | Email: annammultispecialityhospital@gmail.com
+                      </p>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </thead>
+            <tbody className="table-row-group">
+              <tr>
+                <td className="border-none p-0">
+                  <div className="text-center mb-6 mt-2">
+                    <h3 className="text-lg font-black text-[#2980b9] uppercase tracking-[0.2em] border-y-2 border-[#2980b9] inline-block px-10 py-1">Inpatient Billing</h3>
           </div>
 
           <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-6 text-[12px] px-2">
@@ -1340,6 +1349,10 @@ export default function IPNewBillingPage() {
           <div className="mt-auto pt-8 text-center">
              <p className="text-[9px] font-bold text-slate-400 uppercase italic tracking-wider">Computer generated provisional bill • This is not an official receipt • Subject to Hospital Terms</p>
           </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
