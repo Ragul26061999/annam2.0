@@ -1192,21 +1192,18 @@ export default function IPNewBillingPage() {
       <div className="print-only-template hidden">
         <div className="print-container bg-white font-sans text-slate-900">
           {/* Official Letterhead Header Area (Reserved 5.9cm space) */}
-          <div className="hospital-header-area">
-            {printWithHeader && (
-              <div className="text-center">
-                <div className="flex justify-center mb-2">
-                  <img src="/images/logo.png" alt="Annam Hospital Logo" className="h-16 w-auto object-contain" />
-                </div>
-                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Annam Multispeciality Hospital</h2>
-                <p className="text-[10px] font-bold text-slate-600 mt-1">
-                  2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk, Thoothukudi - 628 216.
-                </p>
-                <p className="text-[10px] font-bold text-slate-600">
-                  Cell: 8681850592, 8681950592 | Email: annammultispecialityhospital@gmail.com
-                </p>
+          <div className="hospital-header-area" style={{ height: '5.9cm', minHeight: '5.9cm' }}>
+            <div className="text-center w-full" style={{ opacity: printWithHeader ? 1 : 0 }}>
+              <div className="flex justify-center mb-2">
+                <img src="/images/logo.png" alt="Annam Hospital Logo" className="h-20 w-auto object-contain" />
               </div>
-            )}
+              <p className="text-sm font-bold text-slate-600 mt-1">
+                2/300, Rajkanna Nagar, Veerapandianpatnam, Tiruchendur Taluk, Thoothukudi - 628 216.
+              </p>
+              <p className="text-sm font-bold text-slate-600">
+                Cell: 8681850592, 8681950592 | Email: annammultispecialityhospital@gmail.com
+              </p>
+            </div>
           </div>
 
           <div className="text-center mb-6 mt-2">
@@ -1346,7 +1343,7 @@ export default function IPNewBillingPage() {
         </div>
       </div>
 
-      <style jsx global>{`
+      <style>{`
         @media print {
           body * {
             visibility: hidden;
