@@ -1829,7 +1829,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                   }
                   @page {
                     size: A4;
-                    margin: ${printWithHeader ? '15mm' : '0'};
+                    margin: ${printWithHeader ? '15mm' : '6cm 1.5cm 2cm 1.5cm'};
                   }
                   .print-only-template {
                     position: absolute !important;
@@ -1837,7 +1837,7 @@ export default function IPBillingView({ bedAllocationId, patient, bedAllocation 
                     top: 0 !important;
                     width: 100% !important;
                     min-height: 297mm;
-                    padding: ${printWithHeader ? '0' : '6cm 1.5cm 2cm 1.5cm'} !important;
+                    padding: 0 !important;
                     margin: 0 !important;
                     box-sizing: border-box !important;
                     background: white !important;

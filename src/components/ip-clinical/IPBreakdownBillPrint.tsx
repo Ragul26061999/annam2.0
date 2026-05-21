@@ -303,14 +303,11 @@ export function IPBreakdownBillPrint({
 
           @page {
             size: A4;
-            margin: ${isLetterhead ? '0' : '15mm'};
+            margin: ${isLetterhead ? '6cm 1.5cm 2cm 1.5cm' : '15mm'};
           }
 
           .letterhead-padding {
-            padding-top: 6cm; 
-            padding-left: 1.5cm;
-            padding-right: 1.5cm;
-            padding-bottom: 2cm;
+            padding: 0;
           }
 
           .standard-padding {
